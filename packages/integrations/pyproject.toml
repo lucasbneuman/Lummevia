@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lummevia-integrations"
+version = "0.1.0"
+description = "Integration skeletons for Lummevia OS."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic==2.11.4",
+]
+
+[tool.setuptools]
+packages = [
+    "lummevia_integrations",
+    "lummevia_integrations.github",
+    "lummevia_integrations.phoenix",
+    "lummevia_integrations.youtrack",
+]

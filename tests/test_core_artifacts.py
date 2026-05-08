@@ -1,0 +1,299 @@
+import json
+
+import pytest
+from pydantic import ValidationError
+
+from lummevia_core import (
+    AgentRole,
+    ArtifactStatus,
+    BusinessBrief,
+    ExecutionPackage,
+    ImplementationPackage,
+    Priority,
+    QualityApproval,
+    ValidationPackage,
+    ValidationStatus,
+    WorkflowRun,
+    WorkflowRunEvent,
+    WorkflowRunStatus,
+)
+
+
+def test_business_brief_accepts_valid_payload() -> None:
+    artifact = BusinessBrief(
+        issue_id="LUM-101",
+        project="lummevia-os",
+        objective="Reduce manual triage time",
+        problem="Briefs arrive with inconsistent structure",
+        expected_impact="Faster handoff from PM to PO",
+        priority=Priority.HIGH,
+        constraints=["No external integrations"],
+        non_goals=["Implement runtime agents"],
+        kpis=["Triage time under 10 minutes"],
+    )
+
+    assert artifact.issue_id == "LUM-101"
+    assert artifact.priority == Priority.HIGH
+
+
+def test_execution_package_accepts_valid_payload() -> None:
+    artifact = ExecutionPackage(
+        issue_id="LUM-102",
+        project="lummevia-os",
+        technical_story="Model core workflow artifacts as shared contracts",
+        acceptance_criteria=["Artifacts can be instantiated"],
+        edge_cases=["Missing required fields raise validation errors"],
+        testing_scenarios=["Serialize each artifact to JSON"],
+        architecture_decisions=["Keep schemas independent from router"],
+        task_checklist=["Create models", "Create tests"],
+        dev_prompts=["Implement Pydantic models"],
+    )
+
+    assert artifact.project == "lummevia-os"
+    assert artifact.task_checklist == ["Create models", "Create tests"]
+
+
+def test_implementation_package_accepts_valid_payload() -> None:
+    artifact = ImplementationPackage(
+        issue_id="LUM-103",
+        project="lummevia-os",
+        branch="feature/core-artifacts",
+        commits=["abc1234"],
+        files_changed=["packages/core/lummevia_core/artifacts.py"],
+        tests_run=["pytest tests/test_core_artifacts.py"],
+        summary="Implemented artifact schemas",
+        risks=["Future integration contract may evolve"],
+    )
+
+    assert artifact.branch == "feature/core-artifacts"
+    assert artifact.commits == ["abc1234"]
+
+
+def test_validation_package_accepts_valid_payload() -> None:
+    artifact = ValidationPackage(
+        issue_id="LUM-104",
+        project="lummevia-os",
+        status=ValidationStatus.PASSED,
+        bugs_found=[],
+        scenarios_validated=["BusinessBrief serialization"],
+        feedback="Validation completed successfully",
+        risks=[],
+    )
+
+    assert artifact.status == ValidationStatus.PASSED
+    assert artifact.bugs_found == []
+
+
+def test_quality_approval_accepts_valid_payload() -> None:
+    artifact = QualityApproval(
+        issue_id="LUM-105",
+        project="lummevia-os",
+        status=ValidationStatus.PASSED,
+        architecture_ok=True,
+        standards_ok=True,
+        pr_ok=True,
+        observations=["Aligned with documented workflow"],
+    )
+
+    assert artifact.pr_ok is True
+    assert artifact.observations == ["Aligned with documented workflow"]
+
+
+def test_workflow_run_event_accepts_valid_payload() -> None:
+    event = WorkflowRunEvent(
+        event_id="evt-001",
+        step_name="founder_input",
+        status=WorkflowRunStatus.CREATED,
+        message="Workflow run created for diagnostic purposes.",
+        metadata={"source": "mock-endpoint"},
+    )
+
+    assert event.step_name == "founder_input"
+    assert event.status == WorkflowRunStatus.CREATED
+
+
+def test_workflow_run_accepts_valid_payload() -> None:
+    run = WorkflowRun(
+        run_id="run-001",
+        workflow_name="development",
+        project="lummevia-os",
+        issue_id="OS-1",
+        status=WorkflowRunStatus.CREATED,
+        current_step="founder_input",
+        events=[
+            WorkflowRunEvent(
+                event_id="evt-001",
+                step_name="founder_input",
+                status=WorkflowRunStatus.CREATED,
+                message="Workflow run created for diagnostic purposes.",
+                metadata={"source": "mock-endpoint"},
+            )
+        ],
+        metadata={"diagnostic": True},
+    )
+
+    assert run.workflow_name == "development"
+    assert run.events[0].event_id == "evt-001"
+
+
+@pytest.mark.parametrize(
+    ("artifact_cls", "payload"),
+    [
+        (
+            BusinessBrief,
+            {
+                "project": "lummevia-os",
+                "objective": "Objective",
+                "problem": "Problem",
+                "expected_impact": "Impact",
+                "priority": Priority.MEDIUM,
+                "constraints": [],
+                "non_goals": [],
+                "kpis": [],
+            },
+        ),
+        (
+            ExecutionPackage,
+            {
+                "project": "lummevia-os",
+                "technical_story": "Story",
+                "acceptance_criteria": [],
+                "edge_cases": [],
+                "testing_scenarios": [],
+                "architecture_decisions": [],
+                "task_checklist": [],
+                "dev_prompts": [],
+            },
+        ),
+        (
+            ImplementationPackage,
+            {
+                "project": "lummevia-os",
+                "branch": "feature/test",
+                "commits": [],
+                "files_changed": [],
+                "tests_run": [],
+                "summary": "Summary",
+                "risks": [],
+            },
+        ),
+        (
+            ValidationPackage,
+            {
+                "project": "lummevia-os",
+                "status": ValidationStatus.PENDING,
+                "bugs_found": [],
+                "scenarios_validated": [],
+                "feedback": "Pending validation",
+                "risks": [],
+            },
+        ),
+        (
+            QualityApproval,
+            {
+                "project": "lummevia-os",
+                "status": ValidationStatus.PENDING,
+                "architecture_ok": False,
+                "standards_ok": False,
+                "pr_ok": False,
+                "observations": [],
+            },
+        ),
+    ],
+)
+def test_artifacts_require_issue_id(artifact_cls, payload) -> None:
+    with pytest.raises(ValidationError):
+        artifact_cls(**payload)
+
+
+def test_business_brief_rejects_invalid_priority() -> None:
+    with pytest.raises(ValidationError):
+        BusinessBrief(
+            issue_id="LUM-106",
+            project="lummevia-os",
+            objective="Objective",
+            problem="Problem",
+            expected_impact="Impact",
+            priority="URGENT",
+            constraints=[],
+            non_goals=[],
+            kpis=[],
+        )
+
+
+def test_validation_package_rejects_invalid_status() -> None:
+    with pytest.raises(ValidationError):
+        ValidationPackage(
+            issue_id="LUM-107",
+            project="lummevia-os",
+            status="DONE",
+            bugs_found=[],
+            scenarios_validated=[],
+            feedback="Feedback",
+            risks=[],
+        )
+
+
+def test_workflow_run_rejects_invalid_status() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowRun(
+            run_id="run-002",
+            workflow_name="development",
+            project="lummevia-os",
+            issue_id="OS-2",
+            status="DONE",
+            current_step=None,
+            events=[],
+            metadata={},
+        )
+
+
+def test_artifact_status_rejects_invalid_value() -> None:
+    with pytest.raises(ValueError):
+        ArtifactStatus("ARCHIVED")
+
+
+def test_agent_role_rejects_invalid_value() -> None:
+    with pytest.raises(ValueError):
+        AgentRole("INVALID")
+
+
+def test_agent_role_accepts_founder_value() -> None:
+    assert AgentRole("FOUNDER") == AgentRole.FOUNDER
+
+
+def test_models_export_to_dict_and_json() -> None:
+    artifact = QualityApproval(
+        issue_id="LUM-108",
+        project="lummevia-os",
+        status=ValidationStatus.PASSED,
+        architecture_ok=True,
+        standards_ok=True,
+        pr_ok=True,
+        observations=["Ready for final PO review"],
+    )
+
+    exported = artifact.model_dump(mode="json")
+    exported_json = artifact.model_dump_json()
+
+    assert exported["status"] == "PASSED"
+    assert json.loads(exported_json)["status"] == "PASSED"
+
+
+def test_workflow_run_exports_to_dict_and_json() -> None:
+    run = WorkflowRun(
+        run_id="run-003",
+        workflow_name="development",
+        project="lummevia-os",
+        issue_id="OS-3",
+        status=WorkflowRunStatus.CREATED,
+        current_step=None,
+        events=[],
+        metadata={"diagnostic": True},
+    )
+
+    exported = run.model_dump(mode="json")
+    exported_json = run.model_dump_json()
+
+    assert exported["status"] == "CREATED"
+    assert json.loads(exported_json)["workflow_name"] == "development"
