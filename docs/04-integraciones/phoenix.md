@@ -71,3 +71,35 @@ Phoenix debe permanecer desacoplado de:
 - ownership de agentes
 - lógica de negocio
 - estructura documental
+
+## Modos de despliegue
+
+Phoenix puede correr de dos formas sin cambiar la arquitectura actual del runtime:
+
+- local en `docker compose` para desarrollo del repositorio
+- externo como servicio compartido desplegado en Coolify
+
+El Phoenix local existe para facilitar desarrollo y validaciones del stack. El Phoenix externo existe para entornos compartidos donde varios despliegues de Lummevia OS deben apuntar a una misma capa de observabilidad.
+
+## ConfiguraciÃ³n base
+
+La configuraciÃ³n de Lummevia OS para Phoenix debe apoyarse en estas variables:
+
+- `PHOENIX_BASE_URL`: URL base que usarÃ¡ el sistema para conectarse a Phoenix. Para entornos externos en Coolify esta debe considerarse la referencia principal.
+- `PHOENIX_HOST`: host de Phoenix. En desarrollo local normalmente es `phoenix`.
+- `PHOENIX_PORT`: puerto HTTP de Phoenix. En desarrollo local normalmente es `6006`.
+
+ConvenciÃ³n recomendada:
+
+- desarrollo local: `PHOENIX_HOST=phoenix`, `PHOENIX_PORT=6006`, `PHOENIX_BASE_URL=http://phoenix:6006`
+- despliegue compartido con Coolify: mantener `PHOENIX_BASE_URL` apuntando a la URL publicada del servicio y ajustar `PHOENIX_HOST` y `PHOENIX_PORT` solo como metadata operativa coherente con ese despliegue
+
+## Alcance actual
+
+En esta etapa:
+
+- Lummevia OS solo deja preparada la configuraciÃ³n para Phoenix local o externo
+- no se agrega instrumentaciÃ³n real
+- no se instala Phoenix en una carpeta aparte dentro del repositorio
+- no se modifica LangGraph
+- no se cambia la arquitectura del runtime

@@ -9,7 +9,9 @@ En esta etapa el repositorio ya integra un primer runtime real basado en LangGra
 - `orchestrator-api`: API FastAPI minima con endpoints de salud y metadata.
 - `postgres`: base de datos del runtime para iteraciones futuras.
 - `redis`: cache y coordinacion liviana para el runtime futuro.
-- `phoenix`: servicio local de observabilidad listo para futuras integraciones.
+- `phoenix`: servicio local de observabilidad para desarrollo, listo para futuras integraciones.
+
+Phoenix tambiÃ©n puede correr como servicio externo desplegado en Coolify para uso compartido entre entornos, sin mover su instalaciÃ³n a una carpeta aparte de este repositorio.
 
 ## Estructura principal
 
@@ -268,6 +270,13 @@ Variables base:
 - `REDIS_HOST`, `REDIS_PORT`
 - `PHOENIX_HOST`, `PHOENIX_PORT`, `PHOENIX_BASE_URL`
 
+ConvenciÃ³n recomendada para Phoenix:
+
+- desarrollo local con `docker compose`: `PHOENIX_HOST=phoenix`, `PHOENIX_PORT=6006`, `PHOENIX_BASE_URL=http://phoenix:6006`
+- Phoenix externo en Coolify: usar la URL publicada en `PHOENIX_BASE_URL`, por ejemplo `https://phoenix.example.com`
+
+`PHOENIX_BASE_URL` debe considerarse la referencia principal para la conexiÃ³n. `PHOENIX_HOST` y `PHOENIX_PORT` mantienen una configuraciÃ³n explÃ­cita y consistente para el caso local y para metadata operativa en despliegues externos.
+
 Variables opcionales por ahora:
 
 - `YOUTRACK_BASE_URL`, `YOUTRACK_TOKEN`
@@ -275,11 +284,13 @@ Variables opcionales por ahora:
 
 YouTrack y GitHub todavia no son obligatorios para levantar `orchestrator-api`. Sus tokens y URLs pueden quedar vacios mientras las integraciones sigan siendo skeletons contractuales.
 
-3. Levantar el stack:
+3. Levantar el stack local de desarrollo:
 
 ```powershell
 docker compose -f infra/compose/docker-compose.yml up --build
 ```
+
+Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para un entorno compartido con Phoenix desplegado en Coolify, la API debe configurarse con `PHOENIX_BASE_URL` apuntando al servicio externo y no necesita otra instalaciÃ³n de Phoenix dentro de este repositorio.
 
 ## Endpoints disponibles
 
@@ -318,7 +329,7 @@ El endpoint `POST /workflow-runs/mock` tambien es solo de diagnostico. Devuelve 
 
 No ejecuta workflows reales, no persiste estado, no usa base de datos y no conecta integraciones externas.
 
-Por defecto la API queda disponible en [http://localhost:8000](http://localhost:8000) y Phoenix en [http://localhost:6006](http://localhost:6006).
+Por defecto la API queda disponible en [http://localhost:8000](http://localhost:8000) y Phoenix local en [http://localhost:6006](http://localhost:6006).
 
 ## Comandos basicos
 

@@ -18,6 +18,7 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
       PHOENIX_HOST: ${PHOENIX_HOST:-phoenix}
       PHOENIX_PORT: ${PHOENIX_PORT:-6006}
+      PHOENIX_BASE_URL: ${PHOENIX_BASE_URL:-http://phoenix:6006}
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:

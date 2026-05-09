@@ -77,6 +77,20 @@ def test_settings_load_safe_values_from_env() -> None:
     )
 
 
+def test_settings_build_phoenix_base_url_from_host_and_port_when_not_provided() -> None:
+    settings = load_settings(
+        {
+            "PHOENIX_HOST": "phoenix.coolify.internal",
+            "PHOENIX_PORT": "7443",
+            "PHOENIX_BASE_URL": "",
+        }
+    )
+
+    assert settings.phoenix.host == "phoenix.coolify.internal"
+    assert settings.phoenix.port == 7443
+    assert settings.phoenix.base_url == "http://phoenix.coolify.internal:7443"
+
+
 def test_env_example_contains_expected_configuration_variables() -> None:
     env_example = (Path(__file__).resolve().parents[1] / ".env.example").read_text(
         encoding="utf-8"
