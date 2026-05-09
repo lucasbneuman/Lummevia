@@ -9,6 +9,17 @@ from lummevia_agents.execution import (
     ModelProvider,
 )
 from lummevia_agents.exceptions import AgentError, AgentNotImplementedError
+from lummevia_agents.prompts import (
+    ContextBuilder,
+    PromptContext,
+    PromptExecutionRequest,
+    PromptExecutionResult,
+    PromptPipeline,
+    PromptPipelineError,
+    PromptRegistry,
+    PromptTemplate,
+    PromptTemplateNotFoundError,
+)
 from lummevia_agents.pm import PMAgent
 from lummevia_agents.po import POAgent
 from lummevia_agents.qa import QAAgent
@@ -28,8 +39,17 @@ __all__ = [
     "ModelExecutionResult",
     "ModelExecutor",
     "ModelProvider",
+    "ContextBuilder",
     "PMAgent",
     "POAgent",
+    "PromptContext",
+    "PromptExecutionRequest",
+    "PromptExecutionResult",
+    "PromptPipeline",
+    "PromptPipelineError",
+    "PromptRegistry",
+    "PromptTemplate",
+    "PromptTemplateNotFoundError",
     "QAAgent",
     "QCAgent",
 ]

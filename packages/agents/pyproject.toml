@@ -14,4 +14,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["lummevia_agents"]
+packages = ["lummevia_agents", "lummevia_agents.prompts"]

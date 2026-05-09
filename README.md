@@ -186,6 +186,44 @@ En esta etapa:
 - no ejecutan el workflow real por si mismos
 - no hay llamadas reales a modelos ni integraciones externas
 
+### Prompt Pipeline
+
+La primera capa de pipeline de prompts vive en `packages/agents/lummevia_agents/prompts/`.
+
+Incluye:
+
+- `PromptTemplate` para declarar rol, artefacto destino, system prompt e instrucciones base
+- `PromptRegistry` para resolver templates por `role + target_artifact`
+- `ContextBuilder` para armar contexto minimo desde `project`, `issue_id`, `role`, `available_artifacts` y `metadata`
+- `PromptPipeline` para renderizar prompt final, ejecutar `ModelExecutor` y devolver un resultado estructurado
+
+Los templates iniciales cubren:
+
+- `PM -> BusinessBrief`
+- `PO -> ExecutionPackage`
+- `DEV -> ImplementationPackage`
+- `QA -> ValidationPackage`
+- `QC -> QualityApproval`
+
+Flujo actual:
+
+```text
+PromptExecutionRequest
+-> PromptRegistry
+-> ContextBuilder
+-> PromptTemplate.render(...)
+-> ModelExecutor
+-> fake structured output validado con artifacts de core
+```
+
+En esta etapa:
+
+- el pipeline sigue usando `FakeModelProvider`
+- los outputs estructurados son mocks validos contra Pydantic
+- no existe parsing real de respuesta LLM
+- no hay prompts productivos definitivos
+- no hay integracion real con OpenRouter, DeepSeek, YouTrack, GitHub o Phoenix desde esta capa
+
 ### Model Execution Abstraction
 
 La primera capa de ejecucion de modelos vive en `packages/agents/lummevia_agents/execution.py`.
