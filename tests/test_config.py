@@ -21,6 +21,10 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.youtrack.token is None
     assert settings.github.token is None
     assert settings.github.org is None
+    assert settings.runtime_persistence.enabled is False
+    assert settings.runtime_persistence.database_url == (
+        "postgresql+psycopg://lummevia:lummevia@postgres:5432/lummevia"
+    )
 
 
 def test_settings_load_safe_values_from_env() -> None:
@@ -44,6 +48,8 @@ def test_settings_load_safe_values_from_env() -> None:
             "YOUTRACK_TOKEN": "yt-token",
             "GITHUB_TOKEN": "gh-token",
             "GITHUB_ORG": "lummevia",
+            "RUNTIME_PERSISTENCE_ENABLED": "true",
+            "RUNTIME_DATABASE_URL": "postgresql+psycopg://tester:secret@db.internal:5544/lummevia_test",
         }
     )
 
@@ -65,6 +71,10 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.youtrack.token == "yt-token"
     assert settings.github.token == "gh-token"
     assert settings.github.org == "lummevia"
+    assert settings.runtime_persistence.enabled is True
+    assert settings.runtime_persistence.database_url == (
+        "postgresql+psycopg://tester:secret@db.internal:5544/lummevia_test"
+    )
 
 
 def test_env_example_contains_expected_configuration_variables() -> None:
@@ -91,6 +101,8 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "YOUTRACK_TOKEN=",
         "GITHUB_TOKEN=",
         "GITHUB_ORG=",
+        "RUNTIME_PERSISTENCE_ENABLED=",
+        "RUNTIME_DATABASE_URL=",
     ]
 
     for variable in expected_variables:

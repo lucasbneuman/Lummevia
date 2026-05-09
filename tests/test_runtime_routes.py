@@ -94,3 +94,93 @@ def test_runtime_get_returns_404_for_missing_run() -> None:
     assert response.json() == {
         "detail": "Runtime run 'run-missing' not found.",
     }
+
+
+def test_runtime_post_persists_final_run_when_repository_is_active(monkeypatch) -> None:
+    from app.api.routes import runtime as runtime_routes
+    from lummevia_runtime import DevelopmentRuntime
+    from lummevia_runtime.persistence import (
+        SqlAlchemyWorkflowRunRepository,
+        create_database_engine,
+        create_session_factory,
+        create_tables,
+    )
+
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    create_tables(engine)
+    repository = SqlAlchemyWorkflowRunRepository(create_session_factory(engine))
+    monkeypatch.setattr(
+        runtime_routes,
+        "runtime_service",
+        DevelopmentRuntime(repository=repository),
+    )
+    monkeypatch.setattr(runtime_routes, "runtime_repository", repository)
+
+    response = client.post(
+        "/runtime/development/run",
+        json={
+            "project": "lummevia-os",
+            "issue_id": "OS-103",
+        },
+    )
+
+    assert response.status_code == 200
+    run_id = response.json()["run"]["run_id"]
+    recovered = repository.get_run(run_id)
+
+    assert recovered.run.run_id == run_id
+    assert recovered.run.status.value == "COMPLETED"
+
+
+def test_runtime_get_falls_back_to_persisted_run(monkeypatch) -> None:
+    from app.api.routes import runtime as runtime_routes
+    from lummevia_runtime import DevelopmentRuntime
+    from lummevia_runtime.persistence import (
+        SqlAlchemyWorkflowRunRepository,
+        create_database_engine,
+        create_session_factory,
+        create_tables,
+    )
+
+    runtime = DevelopmentRuntime()
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-104")
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    create_tables(engine)
+    repository = SqlAlchemyWorkflowRunRepository(create_session_factory(engine))
+    repository.save_run(state)
+
+    monkeypatch.setattr(runtime_routes, "runtime_service", DevelopmentRuntime())
+    monkeypatch.setattr(runtime_routes, "runtime_repository", repository)
+
+    response = client.get(f"/runtime/development/run/{state.run.run_id}")
+
+    assert response.status_code == 200
+    assert response.json()["run"]["run_id"] == state.run.run_id
+    assert response.json()["run"]["issue_id"] == "OS-104"
+
+
+def test_runtime_list_returns_persisted_runs_when_repository_is_active(monkeypatch) -> None:
+    from app.api.routes import runtime as runtime_routes
+    from lummevia_runtime import DevelopmentRuntime
+    from lummevia_runtime.persistence import (
+        SqlAlchemyWorkflowRunRepository,
+        create_database_engine,
+        create_session_factory,
+        create_tables,
+    )
+
+    runtime = DevelopmentRuntime()
+    first = runtime.start_run(project="lummevia-os", issue_id="OS-105")
+    second = runtime.start_run(project="lummevia-os", issue_id="OS-106")
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    create_tables(engine)
+    repository = SqlAlchemyWorkflowRunRepository(create_session_factory(engine))
+    repository.save_run(first)
+    repository.save_run(second)
+
+    monkeypatch.setattr(runtime_routes, "runtime_repository", repository)
+
+    response = client.get("/runtime/development/runs")
+
+    assert response.status_code == 200
+    assert [run["run"]["issue_id"] for run in response.json()[:2]] == ["OS-106", "OS-105"]
