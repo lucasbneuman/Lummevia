@@ -1,8 +1,8 @@
 # Lummevia OS
 
-Bootstrap tecnico minimo del runtime inicial del orquestador.
+Bootstrap tecnico del runtime inicial del orquestador.
 
-En esta etapa el repositorio solo prepara la base para iterar sobre el runtime. No incluye LangGraph, agentes reales, integraciones reales, observabilidad instrumentada ni logica de negocio.
+En esta etapa el repositorio ya integra un primer runtime real basado en LangGraph para ejecutar de forma simulada el workflow principal de desarrollo. Todavia no incluye agentes con LLMs reales, integraciones reales, observabilidad instrumentada ni logica de negocio.
 
 ## Stack local
 
@@ -52,6 +52,15 @@ packages/
     lummevia_core/
       workflow.py
       workflow_steps.py
+  runtime/
+    lummevia_runtime/
+      __init__.py
+      state.py
+      events.py
+      transitions.py
+      graph.py
+      exceptions.py
+      nodes/
 tests/
 ```
 
@@ -171,8 +180,7 @@ En esta etapa:
 - cada agente expone `name` y `role`
 - cada agente puede resolver configuracion de modelo via `model-router`
 - cada `run(...)` falla de forma explicita como placeholder
-- no existen workflows reales
-- no existe orquestacion con LangGraph
+- no ejecutan el workflow real por si mismos
 - no hay llamadas reales a modelos ni integraciones externas
 
 ## Workflow skeleton
@@ -182,10 +190,44 @@ El paso `founder_input` usa el rol contractual `FOUNDER` en `core` para represen
 
 En esta etapa:
 
-- no hay runtime de LangGraph
-- no se ejecutan agentes reales
-- no existe coordinacion automatizada entre pasos
-- el objetivo es solo representar el flujo como definicion serializable
+- el contrato del workflow sigue siendo serializable e independiente del runtime
+- `github_pr` sigue existiendo como paso contractual del flujo documentado
+- no se ejecutan agentes reales ni prompts
+- la coordinacion automatizada vive en el runtime LangGraph separado
+
+## Runtime LangGraph
+
+`packages/runtime/lummevia_runtime/` implementa el primer runtime ejecutable del sistema usando `LangGraph` como:
+
+- runtime
+- state machine
+- execution orchestrator
+
+No actua como:
+
+- memoria operacional
+- observabilidad
+- repositorio tecnico
+- capa de integracion externa
+
+El runtime actual:
+
+- crea `WorkflowRun` reales en memoria
+- mantiene `RuntimeState` serializable
+- genera `WorkflowRunEvent` reales
+- ejecuta pasos simulados para `FOUNDER -> PM -> PO -> DEV -> QA -> github_pr -> QC -> PO final`
+- representa explicitamente la publicacion simulada de `github_pr`
+- representa explicitamente el loop `DEV ↔ QA`
+- deja lista la arquitectura para checkpoints futuros
+
+Limitaciones actuales:
+
+- no hay llamadas reales a modelos
+- no hay integracion real con YouTrack
+- no hay integracion real con GitHub
+- no hay integracion real con Phoenix
+- no hay persistencia en Postgres
+- toda la ejecucion es simulada y en memoria
 
 ## Integrations
 
@@ -245,6 +287,8 @@ docker compose -f infra/compose/docker-compose.yml up --build
 - `GET /info`
 - `GET /model-router/roles`
 - `POST /model-router/resolve`
+- `POST /runtime/development/run`
+- `GET /runtime/development/run/{run_id}`
 - `GET /workflows/development`
 - `GET /workflows/development/steps`
 - `GET /workflows/development/steps/{step_name}`
@@ -256,7 +300,19 @@ No ejecutan prompts, no llaman providers reales y no disparan agentes.
 
 Los endpoints de `workflows` tambien son de diagnostico. Sirven para inspeccionar la definicion contractual del workflow de desarrollo expuesta desde `core`.
 
-No ejecutan un workflow real, no mantienen estado runtime, no usan LangGraph y no disparan agentes.
+No ejecutan un workflow real y no disparan agentes. La ejecucion simulada vive en los endpoints de `runtime`.
+
+Los endpoints de `runtime` ejecutan un workflow de desarrollo simulado con LangGraph y mantienen el estado resultante en memoria del proceso API.
+
+- `POST /runtime/development/run` crea y ejecuta un `WorkflowRun` real
+- `GET /runtime/development/run/{run_id}` recupera el estado final serializado desde el registry en memoria
+
+Estos endpoints:
+
+- no llaman LLMs reales
+- no conectan YouTrack, GitHub ni Phoenix
+- no persisten datos
+- si registran estado, artefactos y eventos del runtime simulado
 
 El endpoint `POST /workflow-runs/mock` tambien es solo de diagnostico. Devuelve un `WorkflowRun` serializado en memoria como respuesta de ejemplo.
 
