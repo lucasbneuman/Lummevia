@@ -100,7 +100,6 @@ Responsabilidad:
 
 Consume:
 - Implementation Package
-- PR
 - criterios de aceptación
 - escenarios de testing
 

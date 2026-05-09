@@ -38,9 +38,9 @@ branch
 ↓
 commits
 ↓
-PR
-↓
 QA validado
+↓
+PR
 ↓
 QC validado
 ↓
@@ -67,7 +67,7 @@ Los commits deben:
 
 ### Pull Requests
 
-Todo cambio validado debe materializarse en un PR.
+Todo cambio validado por QA debe materializarse en un PR.
 
 El PR debe poder relacionarse con:
 - task original

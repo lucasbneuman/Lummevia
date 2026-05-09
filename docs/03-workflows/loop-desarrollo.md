@@ -21,11 +21,11 @@ DEV
 ↓
 Implementation Package
 ↓
-PR
-↓
 QA
 ↓
 Validation Package
+↓
+PR
 ↓
 QC
 ↓
@@ -66,19 +66,24 @@ DEV implementa y produce:
 - branch
 - commits
 - `Implementation Package`
-- PR
 
 ### 4. DEV ↔ QA
 
-QA valida comportamiento, criterios de aceptación y edge cases sobre la implementación y el PR.
+QA valida comportamiento, criterios de aceptación y edge cases sobre la implementación.
 
 QA produce un `Validation Package`.
 
 Si encuentra errores, crea `BUG issues` y se reabre la iteración DEV ↔ QA hasta que la implementación quede validada.
 
-### 5. QA → QC
+### 5. QA PASS → GitHub PR
 
-Una vez validado el comportamiento, QC revisa el PR como validación técnica final.
+Una vez que QA valida la implementación, DEV materializa la evidencia técnica en GitHub mediante un PR.
+
+El nodo `github_pr` ocurre explícitamente después de `QA PASS`.
+
+### 6. GitHub PR → QC
+
+QC revisa el PR ya generado como validación técnica final.
 
 QC verifica:
 - arquitectura
@@ -88,7 +93,7 @@ QC verifica:
 
 QC produce `Quality Approval`.
 
-### 6. QC → PO final
+### 7. QC → PO final
 
 PO final consume:
 - PR
