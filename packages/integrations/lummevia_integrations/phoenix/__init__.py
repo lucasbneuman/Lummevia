@@ -3,6 +3,7 @@ from lummevia_integrations.phoenix.exceptions import (
     PhoenixIntegrationError,
     PhoenixIntegrationNotImplementedError,
 )
+from lummevia_integrations.phoenix.runtime import PhoenixRuntimeObserver
 from lummevia_integrations.phoenix.schemas import (
     PhoenixEvaluationPayload,
     PhoenixSpanPayload,
@@ -15,6 +16,7 @@ __all__ = [
     "PhoenixEvaluationPayload",
     "PhoenixIntegrationError",
     "PhoenixIntegrationNotImplementedError",
+    "PhoenixRuntimeObserver",
     "PhoenixSpanPayload",
     "PhoenixTracePayload",
     "PhoenixTraceRef",

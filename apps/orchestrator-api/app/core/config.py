@@ -89,6 +89,7 @@ class RedisSettings:
 
 @dataclass(frozen=True)
 class PhoenixSettings:
+    enabled: bool
     host: str
     port: int
     base_url: str
@@ -165,6 +166,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             port=_read_int(environment, "REDIS_PORT", 6379),
         ),
         phoenix=PhoenixSettings(
+            enabled=_read_bool(environment, "PHOENIX_ENABLED", True),
             host=phoenix_host,
             port=phoenix_port,
             base_url=_read_string(

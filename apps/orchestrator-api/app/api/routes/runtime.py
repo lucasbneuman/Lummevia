@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from app.core.config import settings
+from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
 from lummevia_runtime import (
     DevelopmentRuntime,
     PersistedRunNotFoundError,
@@ -12,7 +14,17 @@ from lummevia_runtime.persistence.repository import WorkflowRunRepository
 
 router = APIRouter(prefix="/runtime", tags=["runtime"])
 
-runtime_service = DevelopmentRuntime()
+runtime_service = DevelopmentRuntime(
+    observer=PhoenixRuntimeObserver(
+        PhoenixClient(
+            base_url=settings.phoenix.base_url,
+            enabled=settings.phoenix.enabled,
+            service_name=settings.app_name,
+            environment=settings.app_env,
+        ),
+        environment=settings.app_env,
+    )
+)
 runtime_repository: WorkflowRunRepository | None = None
 
 

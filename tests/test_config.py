@@ -14,6 +14,7 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.postgres.port == 5432
     assert settings.redis.host == "redis"
     assert settings.redis.port == 6379
+    assert settings.phoenix.enabled is True
     assert settings.phoenix.host == "phoenix"
     assert settings.phoenix.port == 6006
     assert settings.phoenix.base_url == "http://phoenix:6006"
@@ -41,6 +42,7 @@ def test_settings_load_safe_values_from_env() -> None:
             "POSTGRES_PASSWORD": "secret-password",
             "REDIS_HOST": "cache.internal",
             "REDIS_PORT": "6380",
+            "PHOENIX_ENABLED": "false",
             "PHOENIX_HOST": "phoenix.internal",
             "PHOENIX_PORT": "7007",
             "PHOENIX_BASE_URL": "http://phoenix.internal:7007",
@@ -64,6 +66,7 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.postgres.password == "secret-password"
     assert settings.redis.host == "cache.internal"
     assert settings.redis.port == 6380
+    assert settings.phoenix.enabled is False
     assert settings.phoenix.host == "phoenix.internal"
     assert settings.phoenix.port == 7007
     assert settings.phoenix.base_url == "http://phoenix.internal:7007"
@@ -108,6 +111,7 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "POSTGRES_PASSWORD=",
         "REDIS_HOST=",
         "REDIS_PORT=",
+        "PHOENIX_ENABLED=",
         "PHOENIX_HOST=",
         "PHOENIX_PORT=",
         "PHOENIX_BASE_URL=",

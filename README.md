@@ -2,14 +2,14 @@
 
 Bootstrap tecnico del runtime inicial del orquestador.
 
-En esta etapa el repositorio ya integra un primer runtime real basado en LangGraph para ejecutar de forma simulada el workflow principal de desarrollo. Todavia no incluye agentes con LLMs reales, integraciones reales, observabilidad instrumentada ni logica de negocio.
+En esta etapa el repositorio ya integra un primer runtime real basado en LangGraph para ejecutar de forma simulada el workflow principal de desarrollo. Todavia no incluye agentes con LLMs reales, prompts reales, providers IA reales ni logica de negocio. Si incluye una instrumentacion inicial real hacia Phoenix para observar `WorkflowRun`, steps, eventos runtime y el loop `DEV ↔ QA`.
 
 ## Stack local
 
 - `orchestrator-api`: API FastAPI minima con endpoints de salud y metadata.
 - `postgres`: base de datos del runtime para iteraciones futuras.
 - `redis`: cache y coordinacion liviana para el runtime futuro.
-- `phoenix`: servicio local de observabilidad para desarrollo, listo para futuras integraciones.
+- `phoenix`: servicio local de observabilidad para desarrollo, ya conectado al runtime simulado mediante OpenTelemetry.
 
 Phoenix tambiÃ©n puede correr como servicio externo desplegado en Coolify para uso compartido entre entornos, sin mover su instalaciÃ³n a una carpeta aparte de este repositorio.
 
@@ -227,13 +227,14 @@ Limitaciones actuales:
 - no hay llamadas reales a modelos
 - no hay integracion real con YouTrack
 - no hay integracion real con GitHub
-- no hay integracion real con Phoenix
+- no hay prompts reales instrumentados
+- no hay tokens ni costos reales instrumentados
 - no hay persistencia en Postgres
 - toda la ejecucion es simulada y en memoria
 
 ## Integrations
 
-`packages/integrations/lummevia_integrations/` contiene skeletons de integraciones externas para el runtime.
+`packages/integrations/lummevia_integrations/` contiene integraciones externas desacopladas del runtime.
 
 Las integraciones disponibles son:
 
@@ -241,17 +242,26 @@ Las integraciones disponibles son:
 - `github`
 - `phoenix`
 
-Cada skeleton hoy expone:
+Hoy expone:
 
 - schemas de contrato
 - excepciones propias
-- un cliente placeholder
+- un adaptador real minimo para Phoenix
+- clientes placeholder para YouTrack y GitHub
 
-El skeleton de `phoenix` define contratos para trazas, spans y evaluaciones, junto con un cliente placeholder para la futura capa de observabilidad.
+La integracion de `phoenix` define contratos para trazas, spans y evaluaciones, y agrega un adaptador real minimo basado en OpenTelemetry para exportar trazas del runtime simulado a `PHOENIX_BASE_URL`.
 
 En `PhoenixTracePayload`, el contrato minimo ya tipa `fallback_used`, `latency_ms`, `estimated_cost` y `error`, mientras `metadata` sigue abierta para contexto adicional.
 
-Todavia no hacen llamadas reales a YouTrack, GitHub o Phoenix, no usan credenciales reales, no implementan clientes HTTP externos y no agregan instrumentacion real ni SDKs externos.
+La instrumentacion actual de Phoenix:
+
+- crea una trace por `WorkflowRun`
+- crea spans por step del workflow
+- registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
+- agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
+- registra errores de runtime e instrumentacion sin romper el workflow
+
+Todavia no hace llamadas reales a YouTrack o GitHub, no envia prompts reales, no instrumenta tokens ni costos reales y no conecta providers LLM.
 
 ## Configuracion
 
@@ -268,7 +278,7 @@ Variables base:
 - `APP_ENV`, `APP_PORT`, `APP_NAME`, `APP_VERSION`
 - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `REDIS_HOST`, `REDIS_PORT`
-- `PHOENIX_HOST`, `PHOENIX_PORT`, `PHOENIX_BASE_URL`
+- `PHOENIX_ENABLED`, `PHOENIX_HOST`, `PHOENIX_PORT`, `PHOENIX_BASE_URL`
 
 ConvenciÃ³n recomendada para Phoenix:
 
@@ -276,6 +286,8 @@ ConvenciÃ³n recomendada para Phoenix:
 - Phoenix externo en Coolify: usar la URL publicada en `PHOENIX_BASE_URL`, por ejemplo `https://phoenix.example.com`
 
 `PHOENIX_BASE_URL` debe considerarse la referencia principal para la conexiÃ³n. `PHOENIX_HOST` y `PHOENIX_PORT` mantienen una configuraciÃ³n explÃ­cita y consistente para el caso local y para metadata operativa en despliegues externos.
+
+`PHOENIX_ENABLED=false` desactiva la exportacion de trazas hacia Phoenix sin alterar la ejecucion del workflow.
 
 Variables opcionales por ahora:
 
@@ -321,7 +333,8 @@ Los endpoints de `runtime` ejecutan un workflow de desarrollo simulado con LangG
 Estos endpoints:
 
 - no llaman LLMs reales
-- no conectan YouTrack, GitHub ni Phoenix
+- no conectan YouTrack ni GitHub reales
+- si conectan Phoenix para observabilidad del runtime cuando `PHOENIX_ENABLED=true`
 - no persisten datos
 - si registran estado, artefactos y eventos del runtime simulado
 

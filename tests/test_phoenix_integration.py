@@ -1,20 +1,43 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+
 import pytest
+from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from pydantic import ValidationError
 
 from lummevia_integrations.phoenix import (
     PhoenixClient,
     PhoenixEvaluationPayload,
-    PhoenixIntegrationNotImplementedError,
     PhoenixSpanPayload,
     PhoenixTracePayload,
     PhoenixTraceRef,
 )
 
 
+class RecordingSpanExporter(SpanExporter):
+    def __init__(self) -> None:
+        self.spans = []
+
+    def export(self, spans: Sequence[object]) -> SpanExportResult:
+        self.spans.extend(spans)
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self) -> None:
+        return None
+
+
 def test_phoenix_client_can_be_instantiated() -> None:
-    client = PhoenixClient()
+    client = PhoenixClient(enabled=False)
 
     assert isinstance(client, PhoenixClient)
+
+
+def test_phoenix_client_builds_otlp_endpoint_from_base_url() -> None:
+    client = PhoenixClient(base_url="http://phoenix.internal:7007/", enabled=False)
+
+    assert client.base_url == "http://phoenix.internal:7007"
+    assert client.endpoint == "http://phoenix.internal:7007/v1/traces"
 
 
 def test_phoenix_trace_ref_accepts_valid_payload() -> None:
@@ -145,57 +168,34 @@ def test_phoenix_trace_payload_rejects_negative_estimated_cost() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "call_name",
-    [
-        "create_trace",
-        "create_span",
-        "add_evaluation",
-        "get_trace",
-    ],
-)
-def test_phoenix_client_methods_raise_clear_placeholder_error(call_name: str) -> None:
-    client = PhoenixClient()
-    trace_payload = PhoenixTracePayload(
-        run_id="run-001",
-        workflow="loop-desarrollo",
-        project="lummevia-os",
-        environment="development",
-        issue_id="LUM-101",
-        agent_role="dev",
-        agent_name="builder-agent",
-        provider="openai",
-        model="gpt-4.1-mini",
-        fallback_used=False,
-        status="completed",
-        latency_ms=640,
-        estimated_cost=0.03,
-        metadata={},
-    )
-    span_payload = PhoenixSpanPayload(
-        trace_id="trace-001",
-        name="collect-context",
-        input="Read docs",
-        output="Docs collected",
-        metadata={"phase": "context"},
-    )
-    evaluation_payload = PhoenixEvaluationPayload(
-        trace_id="trace-001",
-        name="correctness",
-        score=1.0,
-        label="pass",
-        explanation="Placeholder payload is valid.",
+def test_phoenix_client_disabled_mode_yields_no_span() -> None:
+    client = PhoenixClient(enabled=False)
+
+    with client.start_as_current_span("disabled-span") as span:
+        assert span is None
+
+
+def test_phoenix_client_exports_spans_with_custom_exporter() -> None:
+    exporter = RecordingSpanExporter()
+    client = PhoenixClient(
+        base_url="http://phoenix:6006",
+        span_exporter=exporter,
     )
 
-    with pytest.raises(
-        PhoenixIntegrationNotImplementedError,
-        match="Phoenix integration is not implemented yet",
+    with client.start_as_current_span(
+        "workflow_run:development_loop",
+        attributes={
+            "run_id": "run-001",
+            "project": "lummevia-os",
+            "issue_id": "OS-100",
+        },
     ):
-        if call_name == "create_trace":
-            client.create_trace(trace_payload)
-        elif call_name == "create_span":
-            client.create_span(span_payload)
-        elif call_name == "add_evaluation":
-            client.add_evaluation(evaluation_payload)
-        else:
-            client.get_trace("trace-001")
+        pass
+
+    client.force_flush()
+
+    assert exporter.spans
+    exported = exporter.spans[0]
+    assert exported.attributes["run_id"] == "run-001"
+    assert exported.attributes["project"] == "lummevia-os"
+    assert exported.attributes["issue_id"] == "OS-100"
