@@ -51,6 +51,24 @@ def test_runtime_artifacts_reuse_core_contract_types() -> None:
     assert isinstance(state.artifacts.quality_approval, QualityApproval)
 
 
+def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-2A")
+
+    assert state.metadata["artifact_sources"] == {
+        "business_brief": "prompt_pipeline",
+        "execution_package": "prompt_pipeline",
+        "implementation_package": "prompt_pipeline",
+        "validation_package": "prompt_pipeline",
+        "quality_approval": "prompt_pipeline",
+    }
+    assert state.metadata["prompt_pipeline"]["pm_business_brief"]["target_artifact"] == (
+        "BusinessBrief"
+    )
+    assert state.metadata["prompt_pipeline"]["qa_validation"]["provider_adapter"] == "fake"
+
+
 def test_dev_qa_loop_occurs_exactly_once() -> None:
     runtime = DevelopmentRuntime()
 

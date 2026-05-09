@@ -134,12 +134,20 @@ class PromptPipeline:
 
     def _build_business_brief(self, context: PromptContext) -> BusinessBrief:
         artifact_names = sorted(context.available_artifacts.keys()) or ["founder_input"]
+        founder_input = context.available_artifacts.get("founder_input", {})
+        founder_summary = founder_input.get(
+            "summary",
+            f"Initial founder intent captured for issue {context.issue_id}.",
+        )
         return BusinessBrief(
             issue_id=context.issue_id,
             project=context.project,
-            objective=f"Clarify the business request for {context.issue_id}",
-            problem="Prompt execution still lacks a dedicated pipeline layer.",
-            expected_impact="Agents can render executable prompts with predictable outputs.",
+            objective=f"Clarify and advance the founder request for {context.issue_id}",
+            problem=founder_summary,
+            expected_impact=(
+                "Enable the runtime to delegate artifact generation through agents "
+                "and the prompt pipeline."
+            ),
             priority=Priority.HIGH,
             constraints=[
                 "Keep providers fake-only",
@@ -156,37 +164,39 @@ class PromptPipeline:
         )
 
     def _build_execution_package(self, context: PromptContext) -> ExecutionPackage:
+        business_brief = context.available_artifacts.get("business_brief", {})
         return ExecutionPackage(
             issue_id=context.issue_id,
             project=context.project,
             technical_story=(
-                "Create a prompt pipeline that composes context, template, role, "
-                "and target artifact before delegating execution to ModelExecutor."
+                "Connect the simulated runtime nodes to agents that delegate "
+                "artifact production through PromptPipeline and FakeModelProvider. "
+                f"Business objective: {business_brief.get('objective', 'not supplied')}."
             ),
             acceptance_criteria=[
-                "Registry resolves template by role and artifact",
-                "Context builder normalizes available artifacts",
+                "Runtime PM node delegates BusinessBrief generation to PMAgent",
+                "Runtime PO, DEV, QA, and QC nodes produce artifacts via PromptPipeline",
                 "Pipeline returns fake structured outputs validated by core schemas",
             ],
             edge_cases=[
                 "Missing template fails explicitly",
-                "Metadata survives model execution",
+                "QA outcome changes according to loop_count metadata",
             ],
             testing_scenarios=[
                 "PM produces BusinessBrief",
-                "PO produces ExecutionPackage",
+                "Runtime completes DEV-QA loop before PR creation",
             ],
             architecture_decisions=[
                 "Prompt templates live in packages/agents",
                 "Structured outputs stay fake until real providers are introduced",
             ],
             task_checklist=[
-                "Create prompt contracts",
-                "Register default templates",
-                "Add prompt pipeline tests",
+                "Delegate runtime artifact creation to agents",
+                "Preserve runtime persistence and Phoenix instrumentation",
+                "Keep github_pr as a separate simulated node",
             ],
             dev_prompts=[
-                "Implement a fake prompt execution pipeline.",
+                "Implement runtime to agent to pipeline delegation using fake providers only.",
                 "Validate outputs against shared artifact contracts.",
             ],
         )
@@ -194,21 +204,29 @@ class PromptPipeline:
     def _build_implementation_package(
         self, context: PromptContext
     ) -> ImplementationPackage:
+        loop_count = int(context.metadata.get("loop_count", 0))
+        is_rework = loop_count > 0
         return ImplementationPackage(
             issue_id=context.issue_id,
             project=context.project,
-            branch="fake/prompt-pipeline",
-            commits=["fake-commit-001"],
+            branch=f"runtime/{context.issue_id.lower()}",
+            commits=(
+                ["simulated-initial-commit", "simulated-rework-commit"]
+                if is_rework
+                else ["simulated-initial-commit"]
+            ),
             files_changed=[
-                "packages/agents/lummevia_agents/prompts/pipeline.py",
-                "packages/agents/lummevia_agents/prompts/registry.py",
+                "packages/runtime/lummevia_runtime/graph.py",
+                "packages/agents/lummevia_agents/base.py",
             ],
             tests_run=[
                 "pytest -q tests/test_prompt_pipeline.py",
+                "pytest -q tests/test_runtime_graph.py",
             ],
             summary=(
-                "Implemented the first prompt execution pipeline using fake outputs "
-                "and shared contracts."
+                "Applied implementation rework after QA feedback."
+                if is_rework
+                else "Created initial simulated implementation package through the prompt pipeline."
             ),
             risks=[
                 "Prompt wording is placeholder-only",
@@ -217,31 +235,55 @@ class PromptPipeline:
         )
 
     def _build_validation_package(self, context: PromptContext) -> ValidationPackage:
+        loop_count = int(context.metadata.get("loop_count", 0))
+        first_pass = loop_count == 0
+        status = ValidationStatus.FAILED if first_pass else ValidationStatus.PASSED
+        implementation_package = context.available_artifacts.get(
+            "implementation_package",
+            {},
+        )
+        scenarios_validated = [
+            "Prompt context rendering",
+            "Fake structured output validation",
+            f"Implementation branch {implementation_package.get('branch', 'unknown')}",
+        ]
+        if not first_pass:
+            scenarios_validated.append("DEV-QA rework loop resolution")
         return ValidationPackage(
             issue_id=context.issue_id,
             project=context.project,
-            status=ValidationStatus.PASSED,
-            bugs_found=[],
-            scenarios_validated=[
-                "Prompt context rendering",
-                "Fake structured output validation",
-            ],
-            feedback="Fake prompt pipeline behaves as expected for the covered roles.",
-            risks=[
-                "Real provider integration remains untested",
-            ],
+            status=status,
+            bugs_found=["BUG-DEV-QA-LOOP"] if first_pass else [],
+            scenarios_validated=scenarios_validated,
+            feedback=(
+                "QA found issues and requested a DEV rework iteration."
+                if first_pass
+                else "QA validated the implementation after the rework loop."
+            ),
+            risks=(
+                ["Implementation requires rework before QC"]
+                if first_pass
+                else ["Real provider integration remains untested"]
+            ),
         )
 
     def _build_quality_approval(self, context: PromptContext) -> QualityApproval:
+        pull_request = context.available_artifacts.get("pull_request", {})
+        pr_ok = pull_request.get("status") == "OPEN"
         return QualityApproval(
             issue_id=context.issue_id,
             project=context.project,
             status=ValidationStatus.PASSED,
             architecture_ok=True,
             standards_ok=True,
-            pr_ok=True,
+            pr_ok=pr_ok,
             observations=[
                 "Pipeline is isolated in packages/agents",
                 "Model selection remains delegated to model-router",
+                (
+                    f"QC reviewed simulated PR #{pull_request['pr_number']}."
+                    if pull_request.get("pr_number") is not None
+                    else "QC did not find a simulated PR."
+                ),
             ],
         )

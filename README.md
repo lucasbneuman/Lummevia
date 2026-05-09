@@ -182,6 +182,7 @@ En esta etapa:
 - cada agente expone `name` y `role`
 - cada agente puede resolver configuracion de modelo via `model-router`
 - cada agente puede ejecutar prompts contra una abstraccion de provider via `execute_model(...)`
+- cada agente de runtime puede producir su artefacto fake via `produce_artifact(...)` o `execute_prompt_pipeline(...)`
 - cada `run(...)` falla de forma explicita como placeholder
 - no ejecutan el workflow real por si mismos
 - no hay llamadas reales a modelos ni integraciones externas
@@ -214,6 +215,16 @@ PromptExecutionRequest
 -> PromptTemplate.render(...)
 -> ModelExecutor
 -> fake structured output validado con artifacts de core
+```
+
+La cadena conectada para el runtime ahora es:
+
+```text
+Runtime Node
+-> Agent
+-> PromptPipeline
+-> ModelExecutor
+-> FakeModelProvider
 ```
 
 En esta etapa:
@@ -295,6 +306,7 @@ El runtime actual:
 - mantiene `RuntimeState` serializable
 - genera `WorkflowRunEvent` reales
 - ejecuta pasos simulados para `FOUNDER -> PM -> PO -> DEV -> QA -> github_pr -> QC -> PO final`
+- delega la produccion fake de `BusinessBrief`, `ExecutionPackage`, `ImplementationPackage`, `ValidationPackage` y `QualityApproval` a agentes conectados al `PromptPipeline`
 - representa explicitamente la publicacion simulada de `github_pr`
 - representa explicitamente el loop `DEV ↔ QA`
 - deja lista la arquitectura para checkpoints futuros
@@ -302,6 +314,8 @@ El runtime actual:
 Limitaciones actuales:
 
 - no hay llamadas reales a modelos
+- se sigue usando `FakeModelProvider`
+- no hay providers reales conectados como OpenRouter o DeepSeek
 - no hay integracion real con YouTrack
 - no hay integracion real con GitHub
 - no hay prompts reales instrumentados
