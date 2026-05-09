@@ -181,9 +181,48 @@ En esta etapa:
 
 - cada agente expone `name` y `role`
 - cada agente puede resolver configuracion de modelo via `model-router`
+- cada agente puede ejecutar prompts contra una abstraccion de provider via `execute_model(...)`
 - cada `run(...)` falla de forma explicita como placeholder
 - no ejecutan el workflow real por si mismos
 - no hay llamadas reales a modelos ni integraciones externas
+
+### Model Execution Abstraction
+
+La primera capa de ejecucion de modelos vive en `packages/agents/lummevia_agents/execution.py`.
+
+Incluye:
+
+- `ModelExecutionRequest`
+- `ModelExecutionResult`
+- `ModelProvider`
+- `ModelExecutionError`
+- `ModelExecutor`
+- `FakeModelProvider`
+
+El flujo actual es:
+
+```text
+BaseAgent.execute_model(...)
+-> ModelExecutor
+-> model-router
+-> FakeModelProvider
+-> ModelExecutionResult
+```
+
+En esta etapa:
+
+- `ModelExecutor` resuelve `provider` y `model` via `model-router`
+- `FakeModelProvider` devuelve outputs deterministicos utiles para tests
+- `ModelExecutionResult.metadata` deja preparada metadata para Phoenix:
+  - `role`
+  - `project`
+  - `provider`
+  - `model`
+  - `latency_ms`
+  - `fallback_used`
+- no existen providers reales conectados
+- no hay llamadas HTTP reales
+- no hay prompts productivos reales
 
 ## Workflow skeleton
 

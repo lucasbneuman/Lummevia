@@ -1,5 +1,13 @@
 from lummevia_agents.base import BaseAgent
 from lummevia_agents.dev import DevAgent
+from lummevia_agents.execution import (
+    FakeModelProvider,
+    ModelExecutionError,
+    ModelExecutionRequest,
+    ModelExecutionResult,
+    ModelExecutor,
+    ModelProvider,
+)
 from lummevia_agents.exceptions import AgentError, AgentNotImplementedError
 from lummevia_agents.pm import PMAgent
 from lummevia_agents.po import POAgent
@@ -14,6 +22,12 @@ __all__ = [
     "AgentRunResult",
     "BaseAgent",
     "DevAgent",
+    "FakeModelProvider",
+    "ModelExecutionError",
+    "ModelExecutionRequest",
+    "ModelExecutionResult",
+    "ModelExecutor",
+    "ModelProvider",
     "PMAgent",
     "POAgent",
     "QAAgent",
