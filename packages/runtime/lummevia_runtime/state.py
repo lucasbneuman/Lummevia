@@ -16,6 +16,7 @@ from lummevia_core import (
     WorkflowRun,
 )
 from lummevia_core.validation import CoreArtifactModel
+from lummevia_kilo import KiloExecutionRecord
 
 
 class RuntimeArtifacts(CoreArtifactModel):
@@ -35,7 +36,7 @@ class RuntimeState(CoreArtifactModel):
     run: WorkflowRun
     current_role: AgentRole | None = None
     artifacts: RuntimeArtifacts = Field(default_factory=RuntimeArtifacts)
-    kilo_executions: list[dict[str, Any]] = Field(default_factory=list)
+    kilo_executions: list[KiloExecutionRecord] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     loop_count: int = 0
     max_loop_count: int = 1

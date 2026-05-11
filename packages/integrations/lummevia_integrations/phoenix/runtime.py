@@ -110,6 +110,10 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             attributes["execution_id"] = kilo_step["execution_id"]
             attributes["role"] = kilo_step["role"]
             attributes["task_id"] = kilo_step["task_id"]
+            attributes["kilo_status"] = kilo_step["kilo_status"]
+            attributes["retry_count"] = kilo_step["retry_count"]
+            attributes["attempts_count"] = kilo_step["attempts_count"]
+            attributes["final_status"] = kilo_step["final_status"]
         return attributes
 
     def _apply_state(

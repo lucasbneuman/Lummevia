@@ -8,6 +8,7 @@ from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
 from main import app
 from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
+from lummevia_kilo import KiloExecutionClient, KiloExecutionRequest, KiloRetryPolicy
 from lummevia_runtime import DevelopmentRuntime, RuntimeState
 from lummevia_runtime.observability import RuntimeObserver
 
@@ -43,6 +44,23 @@ class FailingObserver(RuntimeObserver):
         step_name: str | None = None,
     ) -> None:
         raise RuntimeError("phoenix runtime error reporting failed")
+
+
+class PhoenixRetryKiloClient(KiloExecutionClient):
+    def execute(self, request: KiloExecutionRequest):
+        metadata = {**request.metadata}
+        if metadata.get("step_name") == "dev_implementation":
+            metadata["fail_first_attempt"] = True
+            metadata["max_attempts"] = 2
+        max_attempts = int(metadata.get("max_attempts", request.retry_policy.max_attempts))
+        return super().execute(
+            request.model_copy(
+                update={
+                    "metadata": metadata,
+                    "retry_policy": KiloRetryPolicy(max_attempts=max_attempts),
+                }
+            )
+        )
 
 
 def test_runtime_completes_when_phoenix_is_disabled() -> None:
@@ -115,14 +133,45 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     qa_span = next(span for span in exporter.spans if span.name == "step:qa_validation")
 
     assert dev_span.attributes["kilo_mode"] == "CODE"
+    assert dev_span.attributes["kilo_status"] == "SUCCESS"
+    assert dev_span.attributes["retry_count"] == 0
+    assert dev_span.attributes["attempts_count"] == 1
+    assert dev_span.attributes["final_status"] == "SUCCESS"
     assert dev_span.attributes["role"] == "DEV"
     assert dev_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
     assert str(dev_span.attributes["execution_id"]).startswith("kilo-")
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
+    assert qa_span.attributes["kilo_status"] == "SUCCESS"
+    assert qa_span.attributes["retry_count"] == 0
+    assert qa_span.attributes["attempts_count"] == 1
+    assert qa_span.attributes["final_status"] == "SUCCESS"
     assert qa_span.attributes["role"] == "QA"
     assert qa_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
     assert str(qa_span.attributes["execution_id"]).startswith("kilo-")
+
+
+def test_phoenix_runtime_observer_exports_kilo_retry_metadata_on_steps() -> None:
+    exporter = RecordingSpanExporter()
+    observer = PhoenixRuntimeObserver(
+        PhoenixClient(span_exporter=exporter),
+        environment="test",
+    )
+    runtime = DevelopmentRuntime(
+        observer=observer,
+        kilo_client=PhoenixRetryKiloClient(),
+    )
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-206")
+
+    assert state.run.status.value == "COMPLETED"
+
+    dev_span = next(span for span in exporter.spans if span.name == "step:dev_implementation")
+
+    assert dev_span.attributes["kilo_status"] == "SUCCESS"
+    assert dev_span.attributes["retry_count"] == 1
+    assert dev_span.attributes["attempts_count"] == 2
+    assert dev_span.attributes["final_status"] == "SUCCESS"
 
 
 def test_runtime_route_returns_workflow_run_when_phoenix_fails(monkeypatch) -> None:

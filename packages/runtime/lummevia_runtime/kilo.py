@@ -5,6 +5,7 @@ from typing import Any
 from lummevia_core import AgentRole, TaskPackage
 from lummevia_kilo import (
     KiloExecutionClient,
+    KiloExecutionRecord,
     build_kilo_execution_request,
     build_planning_task_package,
     resolve_kilo_mode,
@@ -59,15 +60,20 @@ def execute_kilo_step(
         },
     )
     result = client.execute(request)
-    record = {
-        "execution_id": result.execution_id,
-        "role": role.value,
-        "mode": mode.value,
-        "task_id": task_package.task_id,
-        "status": result.status,
-    }
+    record = KiloExecutionRecord(
+        execution_id=result.execution_id,
+        role=role,
+        mode=mode,
+        task_id=task_package.task_id,
+        status=result.status,
+        final_status=result.final_status,
+        retry_count=result.retry_count,
+        attempts=result.attempts,
+        lifecycle=result.lifecycle,
+        error=result.error,
+    )
     state.kilo_executions.append(record)
-    state.metadata.setdefault("kilo_executions", []).append(record)
+    state.metadata.setdefault("kilo_executions", []).append(record.model_dump(mode="json"))
     state.metadata.setdefault("kilo_execution_results", {})[result.execution_id] = (
         result.model_dump(mode="json")
     )
@@ -76,6 +82,12 @@ def execute_kilo_step(
         "role": role.value,
         "kilo_mode": mode.value,
         "task_id": task_package.task_id,
-        "status": result.status,
+        "kilo_status": result.status.value,
+        "attempts_count": len(result.attempts),
+        "attempts": [attempt.model_dump(mode="json") for attempt in result.attempts],
+        "retry_count": result.retry_count,
+        "final_status": result.final_status.value,
+        "status": result.status.value,
+        "error": result.error,
     }
     return result.model_dump(mode="json")

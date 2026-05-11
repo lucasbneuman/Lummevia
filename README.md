@@ -252,6 +252,10 @@ Lummevia OS -> Kilo Execution Adapter -> Kilo CLI
 
 Incluye:
 
+- `KiloExecutionStatus`
+- `KiloRetryPolicy`
+- `KiloExecutionAttempt`
+- `KiloExecutionRecord`
 - `KiloExecutionRequest`
 - `KiloExecutionResult`
 - `KiloExecutionClient`
@@ -275,12 +279,15 @@ Mapeo inicial por rol:
 En esta etapa:
 
 - el client es deterministicamente fake
+- simula lifecycle sincrono `QUEUED -> RUNNING -> SUCCESS | FAILED | RETRYING | CANCELLED`
+- soporta retries fake via `max_attempts` y `fail_first_attempt` en metadata
 - no usa `subprocess`
 - no ejecuta terminal real
 - no muta filesystem
 - no toca git real
 - no abre PRs reales
 - no conecta providers reales ni Kilo CLI real
+- no hay workers async ni ejecucion externa
 
 La cadena conectada para el runtime ahora es:
 
@@ -380,7 +387,7 @@ El runtime actual:
 - hace explicita la descomposicion del PO antes de DEV
 - deja lista la arquitectura para checkpoints futuros
 
-En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados. El estado tambien registra `kilo_executions` con `execution_id`, `role`, `mode`, `task_id` y `status`.
+En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados. El estado tambien registra `kilo_executions` con `execution_id`, `role`, `mode`, `task_id`, `status`, `attempts`, `retry_count`, `final_status` y `error` cuando aplica.
 
 Limitaciones actuales:
 
@@ -421,7 +428,7 @@ La instrumentacion actual de Phoenix:
 - crea una trace por `WorkflowRun`
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
-- deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `role` y `task_id`
+- deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `role`, `task_id`, `kilo_status`, `retry_count`, `attempts_count` y `final_status`
 - agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
 - registra errores de runtime e instrumentacion sin romper el workflow
 

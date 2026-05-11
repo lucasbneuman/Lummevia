@@ -5,7 +5,7 @@ from typing import Any
 from lummevia_core import AgentRole, TaskPackage
 
 from lummevia_kilo.modes import KiloExecutionMode, resolve_kilo_mode
-from lummevia_kilo.schemas import KiloExecutionRequest
+from lummevia_kilo.schemas import KiloExecutionRequest, KiloRetryPolicy
 
 
 def build_kilo_execution_request(
@@ -17,7 +17,9 @@ def build_kilo_execution_request(
     task_package: TaskPackage,
     metadata: dict[str, Any] | None = None,
     mode: KiloExecutionMode | None = None,
+    retry_policy: KiloRetryPolicy | None = None,
 ) -> KiloExecutionRequest:
+    request_metadata = metadata or {}
     return KiloExecutionRequest(
         run_id=run_id,
         role=role,
@@ -25,7 +27,9 @@ def build_kilo_execution_request(
         project=project,
         repo_path=repo_path,
         task_package=task_package,
-        metadata=metadata or {},
+        metadata=request_metadata,
+        retry_policy=retry_policy
+        or KiloRetryPolicy(max_attempts=int(request_metadata.get("max_attempts", 1))),
     )
 
 
