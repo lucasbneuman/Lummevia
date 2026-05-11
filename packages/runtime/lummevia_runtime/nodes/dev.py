@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from lummevia_core import AgentRole
 from lummevia_agents import DevAgent
+from lummevia_kilo import KiloExecutionClient
 
 from lummevia_runtime.events import complete_step, start_step
+from lummevia_runtime.kilo import execute_kilo_step
 from lummevia_runtime.state import RuntimeState
 
 
@@ -11,6 +13,7 @@ def dev_implementation_node(
     state: RuntimeState,
     *,
     agent: DevAgent | None = None,
+    kilo_client: KiloExecutionClient | None = None,
 ) -> RuntimeState:
     step_name = "dev_implementation"
     task_package = state.artifacts.current_task_package
@@ -23,6 +26,14 @@ def dev_implementation_node(
     )
     if state.artifacts.task_packages:
         state.artifacts.task_packages[0] = state.artifacts.current_task_package
+    kilo_execution = execute_kilo_step(
+        state,
+        step_name=step_name,
+        role=AgentRole.DEV,
+        task_package=state.artifacts.current_task_package,
+        client=kilo_client or KiloExecutionClient(),
+        metadata={"target_artifact": "ImplementationPackage"},
+    )
     dev_agent = agent or DevAgent()
     pipeline_result = dev_agent.execute_prompt_pipeline(
         project=state.run.project,
@@ -46,6 +57,7 @@ def dev_implementation_node(
     state.metadata.setdefault("artifact_sources", {})["implementation_package"] = (
         "prompt_pipeline"
     )
+    state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
     state.metadata["implementation_revision"] = state.loop_count + 1
     return complete_step(

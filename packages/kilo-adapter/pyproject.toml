@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lummevia-kilo-adapter"
+version = "0.1.0"
+description = "Fake Kilo execution adapter contracts for Lummevia OS."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic==2.11.4",
+    "lummevia-core",
+]
+
+[tool.setuptools]
+packages = ["lummevia_kilo"]

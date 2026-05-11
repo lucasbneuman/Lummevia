@@ -4,11 +4,13 @@ import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from functools import partial
+from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
 from lummevia_core import WorkflowRun, WorkflowRunStatus
 from lummevia_agents import DevAgent, PMAgent, POAgent, QAAgent, QCAgent
+from lummevia_kilo import KiloExecutionClient
 
 from lummevia_runtime.exceptions import RuntimeNotFoundError
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
@@ -33,6 +35,7 @@ from lummevia_runtime.transitions import get_next_step_after_qa
 
 
 logger = logging.getLogger(__name__)
+DEFAULT_REPO_PATH = str(Path(__file__).resolve().parents[3])
 
 
 class RuntimeRegistry:
@@ -71,12 +74,15 @@ class DevelopmentRuntime:
         registry: RuntimeRegistry | None = None,
         repository: WorkflowRunRepository | None = None,
         observer: RuntimeObserver | None = None,
+        kilo_client: KiloExecutionClient | None = None,
     ) -> None:
         self.registry = registry or RuntimeRegistry()
         self.repository = repository
         self.observer = observer or NoopRuntimeObserver()
+        self.kilo_client = kilo_client or KiloExecutionClient()
         self.graph = build_development_graph(
             observer=self.observer,
+            kilo_client=self.kilo_client,
             pm_agent=PMAgent(),
             po_agent=POAgent(),
             dev_agent=DevAgent(),
@@ -95,7 +101,10 @@ class DevelopmentRuntime:
                 events=[],
                 metadata={},
             ),
-            metadata={"workflow": "development_loop"},
+            metadata={
+                "workflow": "development_loop",
+                "repo_path": DEFAULT_REPO_PATH,
+            },
         )
         self.registry.create(initial_state)
         with _observe_workflow_run(self.observer, initial_state):
@@ -122,6 +131,7 @@ def build_development_graph(
     dev_agent: DevAgent | None = None,
     qa_agent: QAAgent | None = None,
     qc_agent: QCAgent | None = None,
+    kilo_client: KiloExecutionClient | None = None,
 ):
     runtime_observer = observer or NoopRuntimeObserver()
     pm_agent = pm_agent or PMAgent()
@@ -129,6 +139,7 @@ def build_development_graph(
     dev_agent = dev_agent or DevAgent()
     qa_agent = qa_agent or QAAgent()
     qc_agent = qc_agent or QCAgent()
+    kilo_client = kilo_client or KiloExecutionClient()
     graph = StateGraph(RuntimeState)
     graph.add_node(
         "founder_input",
@@ -171,7 +182,7 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "po_task_plan",
-            partial(po_task_plan_node, agent=po_agent),
+            partial(po_task_plan_node, agent=po_agent, kilo_client=kilo_client),
         ),
     )
     graph.add_node(
@@ -179,7 +190,7 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "po_task_packages",
-            partial(po_task_packages_node, agent=po_agent),
+            partial(po_task_packages_node, agent=po_agent, kilo_client=kilo_client),
         ),
     )
     graph.add_node(
@@ -187,7 +198,7 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "dev_implementation",
-            partial(dev_implementation_node, agent=dev_agent),
+            partial(dev_implementation_node, agent=dev_agent, kilo_client=kilo_client),
         ),
     )
     graph.add_node(
@@ -195,7 +206,7 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "qa_validation",
-            partial(qa_validation_node, agent=qa_agent),
+            partial(qa_validation_node, agent=qa_agent, kilo_client=kilo_client),
         ),
     )
     graph.add_node(

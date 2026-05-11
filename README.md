@@ -54,6 +54,13 @@ packages/
     lummevia_core/
       workflow.py
       workflow_steps.py
+  kilo-adapter/
+    lummevia_kilo/
+      client.py
+      schemas.py
+      execution.py
+      exceptions.py
+      modes.py
   runtime/
     lummevia_runtime/
       __init__.py
@@ -235,6 +242,46 @@ Todavia es una simulacion:
 - no hay integracion real con Kilo CLI
 - no se crean tickets reales
 
+### Kilo Adapter Skeleton
+
+`packages/kilo-adapter/lummevia_kilo/` agrega el primer adapter contractual para preparar la futura cadena:
+
+```text
+Lummevia OS -> Kilo Execution Adapter -> Kilo CLI
+```
+
+Incluye:
+
+- `KiloExecutionRequest`
+- `KiloExecutionResult`
+- `KiloExecutionClient`
+- `KiloExecutionMode`
+- helpers para construir requests y envelopes de planning
+
+Modes implementados:
+
+- `ASK`
+- `PLAN`
+- `CODE`
+- `DEBUG`
+- `ORCHESTRATOR`
+
+Mapeo inicial por rol:
+
+- `PO -> PLAN`
+- `DEV -> CODE`
+- `QA -> DEBUG`
+
+En esta etapa:
+
+- el client es deterministicamente fake
+- no usa `subprocess`
+- no ejecuta terminal real
+- no muta filesystem
+- no toca git real
+- no abre PRs reales
+- no conecta providers reales ni Kilo CLI real
+
 La cadena conectada para el runtime ahora es:
 
 ```text
@@ -326,19 +373,21 @@ El runtime actual:
 - genera `WorkflowRunEvent` reales
 - ejecuta pasos simulados para `FOUNDER -> founder_pm_conversation -> PM brief -> founder_business_approval -> PO ExecutionPackage -> PO TaskPlan -> PO TaskPackages -> DEV -> QA -> github_pr -> QC -> PO final`
 - delega la produccion fake de `BusinessBrief`, `ExecutionPackage`, `TaskPlan`, `TaskPackage`, `ImplementationPackage`, `ValidationPackage` y `QualityApproval` a agentes conectados al `PromptPipeline`
+- envia `TaskPackage` o envelopes de planning a un `KiloExecutionClient` fake en `PO`, `DEV` y `QA`
 - representa explicitamente la publicacion simulada de `github_pr`
 - representa explicitamente el loop `DEV ↔ QA`
 - hace explicito el gate de aprobacion Founder antes del handoff tecnico al PO
 - hace explicita la descomposicion del PO antes de DEV
 - deja lista la arquitectura para checkpoints futuros
 
-En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados.
+En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados. El estado tambien registra `kilo_executions` con `execution_id`, `role`, `mode`, `task_id` y `status`.
 
 Limitaciones actuales:
 
 - no hay llamadas reales a modelos
 - se sigue usando `FakeModelProvider`
 - no hay providers reales conectados como OpenRouter o DeepSeek
+- no hay ejecucion real de Kilo CLI
 - no hay integracion real con YouTrack
 - no hay integracion real con GitHub
 - no hay prompts reales instrumentados
@@ -372,6 +421,7 @@ La instrumentacion actual de Phoenix:
 - crea una trace por `WorkflowRun`
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
+- deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `role` y `task_id`
 - agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
 - registra errores de runtime e instrumentacion sin romper el workflow
 

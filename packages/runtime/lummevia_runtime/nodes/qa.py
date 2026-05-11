@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from lummevia_core import AgentRole, ValidationStatus
 from lummevia_agents import QAAgent
+from lummevia_kilo import KiloExecutionClient
 
 from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
+from lummevia_runtime.kilo import execute_kilo_step
 from lummevia_runtime.state import RuntimeState
 
 
@@ -11,6 +13,7 @@ def qa_validation_node(
     state: RuntimeState,
     *,
     agent: QAAgent | None = None,
+    kilo_client: KiloExecutionClient | None = None,
 ) -> RuntimeState:
     step_name = "qa_validation"
     task_package = state.artifacts.current_task_package
@@ -18,6 +21,14 @@ def qa_validation_node(
         raise ValueError("TaskPackage must exist before QA validation.")
 
     state = start_step(state, step_name=step_name, role=AgentRole.QA)
+    kilo_execution = execute_kilo_step(
+        state,
+        step_name=step_name,
+        role=AgentRole.QA,
+        task_package=task_package,
+        client=kilo_client or KiloExecutionClient(),
+        metadata={"target_artifact": "ValidationPackage"},
+    )
 
     qa_agent = agent or QAAgent()
     pipeline_result = qa_agent.execute_prompt_pipeline(
@@ -50,6 +61,7 @@ def qa_validation_node(
     state.metadata.setdefault("artifact_sources", {})["validation_package"] = (
         "prompt_pipeline"
     )
+    state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
     return complete_step(
         state,

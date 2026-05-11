@@ -99,6 +99,32 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert "step:dev_qa_iteration" in step_names
 
 
+def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
+    exporter = RecordingSpanExporter()
+    observer = PhoenixRuntimeObserver(
+        PhoenixClient(span_exporter=exporter),
+        environment="test",
+    )
+    runtime = DevelopmentRuntime(observer=observer)
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-205")
+
+    assert state.run.status.value == "COMPLETED"
+
+    dev_span = next(span for span in exporter.spans if span.name == "step:dev_implementation")
+    qa_span = next(span for span in exporter.spans if span.name == "step:qa_validation")
+
+    assert dev_span.attributes["kilo_mode"] == "CODE"
+    assert dev_span.attributes["role"] == "DEV"
+    assert dev_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
+    assert str(dev_span.attributes["execution_id"]).startswith("kilo-")
+
+    assert qa_span.attributes["kilo_mode"] == "DEBUG"
+    assert qa_span.attributes["role"] == "QA"
+    assert qa_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
+    assert str(qa_span.attributes["execution_id"]).startswith("kilo-")
+
+
 def test_runtime_route_returns_workflow_run_when_phoenix_fails(monkeypatch) -> None:
     from app.api.routes import runtime as runtime_routes
 

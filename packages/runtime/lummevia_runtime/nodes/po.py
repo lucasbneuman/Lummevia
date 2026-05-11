@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from lummevia_core import AgentRole, WorkflowRunStatus
 from lummevia_agents import POAgent
+from lummevia_kilo import KiloExecutionClient
 
 from lummevia_runtime.events import complete_step, start_step
+from lummevia_runtime.kilo import build_runtime_planning_task_package, execute_kilo_step
 from lummevia_runtime.state import RuntimeState
 
 
@@ -57,6 +59,7 @@ def po_task_plan_node(
     state: RuntimeState,
     *,
     agent: POAgent | None = None,
+    kilo_client: KiloExecutionClient | None = None,
 ) -> RuntimeState:
     step_name = "po_task_plan"
     execution_package = state.artifacts.execution_package
@@ -79,7 +82,28 @@ def po_task_plan_node(
         },
     )
     state.artifacts.task_plan = pipeline_result.structured_output
+    planning_task_package = build_runtime_planning_task_package(
+        state=state,
+        task_id=f"{state.run.issue_id}-PLAN",
+        title="Plan execution sequencing",
+        objective="Translate the execution package into a sequenced TaskPlan.",
+        prompt="Produce a simulated TaskPlan boundary for the fake Kilo PLAN mode.",
+        expected_artifacts=["TaskPlan"],
+        context_refs=[
+            "docs/03-workflows/loop-desarrollo.md",
+            "docs/06-decisiones/0005-po-task-decomposition-flow.md",
+        ],
+    )
+    kilo_execution = execute_kilo_step(
+        state,
+        step_name=step_name,
+        role=AgentRole.PO,
+        task_package=planning_task_package,
+        client=kilo_client or KiloExecutionClient(),
+        metadata={"target_artifact": "TaskPlan"},
+    )
     state.metadata.setdefault("artifact_sources", {})["task_plan"] = "prompt_pipeline"
+    state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
     return complete_step(
         state,
@@ -96,6 +120,7 @@ def po_task_packages_node(
     state: RuntimeState,
     *,
     agent: POAgent | None = None,
+    kilo_client: KiloExecutionClient | None = None,
 ) -> RuntimeState:
     step_name = "po_task_packages"
     task_plan = state.artifacts.task_plan
@@ -125,6 +150,16 @@ def po_task_packages_node(
         task_packages.append(pipeline_result.structured_output)
     state.artifacts.task_packages = task_packages
     state.artifacts.current_task_package = task_packages[0] if task_packages else None
+    if state.artifacts.current_task_package is not None:
+        kilo_execution = execute_kilo_step(
+            state,
+            step_name=step_name,
+            role=AgentRole.PO,
+            task_package=state.artifacts.current_task_package,
+            client=kilo_client or KiloExecutionClient(),
+            metadata={"target_artifact": "TaskPackageCollection"},
+        )
+        state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("artifact_sources", {})["task_packages"] = "prompt_pipeline"
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = {
         "target_artifact": "TaskPackage",

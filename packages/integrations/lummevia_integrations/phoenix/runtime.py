@@ -90,7 +90,7 @@ class PhoenixRuntimeObserver(RuntimeObserver):
         *,
         current_step: str | None = None,
     ) -> dict[str, bool | int | str]:
-        return {
+        attributes: dict[str, bool | int | str] = {
             "run_id": state.run.run_id,
             "workflow": state.run.workflow_name,
             "project": state.run.project,
@@ -100,6 +100,17 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "status": state.run.status.value,
             "loop_count": state.loop_count,
         }
+        kilo_step = (
+            state.metadata.get("kilo_execution_by_step", {}).get(current_step)
+            if current_step is not None
+            else None
+        )
+        if kilo_step is not None:
+            attributes["kilo_mode"] = kilo_step["kilo_mode"]
+            attributes["execution_id"] = kilo_step["execution_id"]
+            attributes["role"] = kilo_step["role"]
+            attributes["task_id"] = kilo_step["task_id"]
+        return attributes
 
     def _apply_state(
         self,
