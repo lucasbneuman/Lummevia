@@ -36,7 +36,8 @@ def test_fake_model_provider_returns_deterministic_output() -> None:
     assert first.provider == "FAKE"
     assert first.model == "fake:pm"
     assert first.metadata["resolved_provider"] == "DEEPSEEK"
-    assert first.metadata["resolved_model"] == "deepseek-v4-strong-placeholder"
+    assert first.metadata["resolved_model"] == "deepseek-chat"
+    assert first.effective_model == "fake:pm"
 
 
 def test_model_executor_resolves_pm_model() -> None:
@@ -56,7 +57,9 @@ def test_model_executor_resolves_pm_model() -> None:
     assert result.provider == "FAKE"
     assert result.model == "fake:pm"
     assert result.metadata["role"] == "PM"
-    assert result.metadata["resolved_model"] == "deepseek-v4-strong-placeholder"
+    assert result.metadata["resolved_model"] == "deepseek-chat"
+    assert result.resolved_model == "deepseek-chat"
+    assert result.effective_model == "fake:pm"
 
 
 def test_model_executor_resolves_dev_model() -> None:
@@ -127,7 +130,7 @@ def test_deepseek_model_provider_parses_mock_response() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url == httpx.URL("https://api.deepseek.com/chat/completions")
         payload = request.read().decode("utf-8")
-        assert "deepseek-v4-strong-placeholder" in payload
+        assert "deepseek-chat" in payload
         assert "You are a PM" in payload
         assert "Summarize the brief" in payload
         return httpx.Response(
@@ -171,6 +174,8 @@ def test_deepseek_model_provider_parses_mock_response() -> None:
 
     assert result.provider == "DEEPSEEK"
     assert result.model == "deepseek-v4-pro"
+    assert result.resolved_model == "deepseek-chat"
+    assert result.effective_model == "deepseek-v4-pro"
     assert result.output == "Business summary from DeepSeek."
     assert result.raw_output["usage"]["total_tokens"] == 18
     assert result.metadata["provider_adapter"] == "deepseek"
@@ -209,7 +214,7 @@ def test_deepseek_model_provider_handles_http_errors_clearly() -> None:
         )
 
     assert exc_info.value.provider == "DEEPSEEK"
-    assert exc_info.value.model == "deepseek-v4-strong-placeholder"
+    assert exc_info.value.model == "deepseek-chat"
 
 
 def test_base_agent_execute_model_works() -> None:
@@ -226,7 +231,7 @@ def test_base_agent_execute_model_works() -> None:
     assert result.model == "fake:pm"
     assert result.metadata["run_id"] == "run-321"
     assert result.metadata["role"] == "PM"
-    assert result.metadata["resolved_model"] == "deepseek-v4-strong-placeholder"
+    assert result.metadata["resolved_model"] == "deepseek-chat"
 
 
 def test_run_still_raises_agent_not_implemented_error() -> None:

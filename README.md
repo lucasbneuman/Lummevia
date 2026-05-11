@@ -345,8 +345,10 @@ En esta etapa:
 - `ModelExecutionResult.metadata` deja preparada metadata para Phoenix:
   - `role`
   - `project`
-  - `provider`
-  - `model`
+  - `resolved_provider`
+  - `resolved_model`
+  - `effective_provider`
+  - `effective_model`
   - `latency_ms`
   - `fallback_used`
 - `DEEPSEEK_ENABLED=false` mantiene el fallback seguro a fake
@@ -498,7 +500,7 @@ Variables para DeepSeek:
 - `DEEPSEEK_ENABLED=false`
 - `DEEPSEEK_TIMEOUT_SECONDS=60`
 - `MODEL_PM_PROVIDER=DEEPSEEK`
-- `MODEL_PM_NAME=deepseek-v4-strong-placeholder`
+- `MODEL_PM_NAME=deepseek-chat`
 - `MODEL_PO_PROVIDER=DEEPSEEK`
 - `MODEL_PO_NAME=deepseek-v4-strong-placeholder`
 - `MODEL_DEV_PROVIDER=DEEPSEEK`
@@ -511,11 +513,14 @@ Variables para DeepSeek:
 Comportamiento actual de DeepSeek:
 
 - la API key va en `.env` como `DEEPSEEK_API_KEY`
+- `infra/compose/docker-compose.yml` ahora pasa `DEEPSEEK_*` y `MODEL_*` al contenedor `orchestrator-api` via interpolacion desde `.env`
 - `/info` no expone la API key
 - por defecto `DEEPSEEK_ENABLED=false`
 - solo `POST /model-execution/pm/dry-run` puede usar el provider real
 - si DeepSeek esta disabled, ese endpoint cae a `FakeModelProvider`
 - si DeepSeek esta enabled pero falta la API key, el dry-run falla de forma explicita
+- `deepseek-chat` es el modelo validado y recomendado hoy para el dry-run controlado de `PM`
+- `deepseek-v4-strong-placeholder`, `deepseek-v4-lite-placeholder` y `deepseek-v4-qc-placeholder` siguen siendo placeholders de naming hasta confirmacion oficial
 - `PO`, `DEV`, `QA`, `QC`, Kilo, GitHub y YouTrack siguen fuera de alcance real
 
 YouTrack y GitHub todavia no son obligatorios para levantar `orchestrator-api`. Sus tokens y URLs pueden quedar vacios mientras las integraciones sigan siendo skeletons contractuales.
@@ -547,6 +552,12 @@ Los endpoints de `model-router` son de diagnostico. Sirven para inspeccionar que
 No ejecutan prompts, no llaman providers reales y no disparan agentes.
 
 El endpoint `POST /model-execution/pm/dry-run` tambien es de diagnostico controlado. Ejecuta solo el `PM`, puede usar DeepSeek API directa si `DEEPSEEK_ENABLED=true` y, aun asi, mantiene el `BusinessBrief` estructurado como salida fake validada mientras expone el texto real y `raw_output` para observabilidad basica.
+
+Model reporting del dry-run:
+
+- `resolved_provider` y `resolved_model` describen lo que resolvio Lummevia OS via `model-router`
+- `effective_provider` y `effective_model` describen lo que realmente ejecuto o reporto el provider
+- `provider` y `model` se mantienen por compatibilidad y reflejan el valor efectivo
 
 Ese endpoint:
 
@@ -598,6 +609,6 @@ pytest
 Para correr los tests dentro de Docker:
 
 ```powershell
-docker compose -f infra/compose/docker-compose.yml build orchestrator-api
-docker compose -f infra/compose/docker-compose.yml run --rm orchestrator-api pytest /app/tests
+docker compose -f infra/compose/docker-compose.yml build orchestrator-api --no-cache
+docker compose -f infra/compose/docker-compose.yml run --rm orchestrator-api pytest -q /app/tests
 ```

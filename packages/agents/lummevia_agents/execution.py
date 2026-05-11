@@ -27,6 +27,10 @@ class ModelExecutionRequest(AgentBaseSchema):
 class ModelExecutionResult(AgentBaseSchema):
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
+    resolved_provider: str = Field(min_length=1)
+    resolved_model: str = Field(min_length=1)
+    effective_provider: str = Field(min_length=1)
+    effective_model: str = Field(min_length=1)
     output: str = Field(min_length=1)
     raw_output: Any = None
     latency_ms: int = Field(ge=0)
@@ -124,6 +128,7 @@ class FakeModelProvider:
                 "routing_source": resolution.source,
                 "effective_provider": "FAKE",
                 "effective_model": f"fake:{request.role.value.lower()}",
+                "provider_reported_model": f"fake:{request.role.value.lower()}",
                 "fallback_reason": self.fallback_reason,
             },
         )
@@ -202,6 +207,7 @@ class DeepSeekModelProvider:
             "routing_source": resolution.source,
             "effective_provider": provider_name,
             "effective_model": model_name,
+            "provider_reported_model": model_name,
         }
         if usage is not None:
             metadata["usage"] = usage
@@ -314,6 +320,8 @@ class ModelExecutor:
                 "model": effective_model,
                 "resolved_provider": resolution.provider.value,
                 "resolved_model": resolution.model,
+                "effective_provider": effective_provider,
+                "effective_model": effective_model,
                 "latency_ms": latency_ms,
                 "fallback_used": payload.fallback_used,
             }
@@ -322,6 +330,10 @@ class ModelExecutor:
         return ModelExecutionResult(
             provider=effective_provider,
             model=effective_model,
+            resolved_provider=resolution.provider.value,
+            resolved_model=resolution.model,
+            effective_provider=effective_provider,
+            effective_model=effective_model,
             output=payload.output,
             raw_output=payload.raw_output,
             latency_ms=latency_ms,

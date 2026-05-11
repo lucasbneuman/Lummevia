@@ -217,6 +217,8 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "MODEL_DEV_NAME=",
         "MODEL_QA_PROVIDER=",
         "MODEL_QA_NAME=",
+        "MODEL_QC_PROVIDER=",
+        "MODEL_QC_NAME=",
         "RUNTIME_PERSISTENCE_ENABLED=",
         "RUNTIME_DATABASE_URL=",
         "KILO_ENABLED=",
@@ -228,3 +230,32 @@ def test_env_example_contains_expected_configuration_variables() -> None:
 
     for variable in expected_variables:
         assert variable in env_example
+
+
+def test_compose_passes_deepseek_and_model_router_variables_without_hardcoded_secrets() -> None:
+    compose_file = (
+        Path(__file__).resolve().parents[1] / "infra" / "compose" / "docker-compose.yml"
+    ).read_text(encoding="utf-8")
+
+    expected_entries = [
+        "DEEPSEEK_ENABLED: ${DEEPSEEK_ENABLED:-false}",
+        "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}",
+        "DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}",
+        "DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS:-60}",
+        "MODEL_PM_PROVIDER: ${MODEL_PM_PROVIDER:-DEEPSEEK}",
+        "MODEL_PM_NAME: ${MODEL_PM_NAME:-deepseek-chat}",
+        "MODEL_PO_PROVIDER: ${MODEL_PO_PROVIDER:-DEEPSEEK}",
+        "MODEL_PO_NAME: ${MODEL_PO_NAME:-deepseek-v4-strong-placeholder}",
+        "MODEL_DEV_PROVIDER: ${MODEL_DEV_PROVIDER:-DEEPSEEK}",
+        "MODEL_DEV_NAME: ${MODEL_DEV_NAME:-deepseek-v4-lite-placeholder}",
+        "MODEL_QA_PROVIDER: ${MODEL_QA_PROVIDER:-DEEPSEEK}",
+        "MODEL_QA_NAME: ${MODEL_QA_NAME:-deepseek-v4-lite-placeholder}",
+        "MODEL_QC_PROVIDER: ${MODEL_QC_PROVIDER:-DEEPSEEK}",
+        "MODEL_QC_NAME: ${MODEL_QC_NAME:-deepseek-v4-qc-placeholder}",
+    ]
+
+    for entry in expected_entries:
+        assert entry in compose_file
+
+    assert "ds-secret" not in compose_file
+    assert "sk-" not in compose_file

@@ -52,7 +52,13 @@ def create_development_run(request: DevelopmentRunRequest) -> RuntimeState:
 @router.get("/development/runs", response_model=list[RuntimeState])
 def list_development_runs(limit: int = 50) -> list[RuntimeState]:
     if runtime_repository is not None:
-        return runtime_repository.list_runs(limit=limit)
+        try:
+            return runtime_repository.list_runs(limit=limit)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to list persisted runtime runs.",
+            ) from exc
 
     return runtime_service.list_runs()
 

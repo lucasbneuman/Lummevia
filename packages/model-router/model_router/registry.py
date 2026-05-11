@@ -5,7 +5,7 @@ from model_router.schemas import AgentRole, ModelConfig, Provider
 DEFAULT_ROLE_CONFIGS: dict[AgentRole, ModelConfig | None] = {
     AgentRole.PM: ModelConfig(
         provider=Provider.DEEPSEEK,
-        model="deepseek-v4-strong-placeholder",
+        model="deepseek-chat",
         temperature=0.1,
         max_tokens=4096,
     ),
@@ -61,7 +61,7 @@ PROJECT_ENVIRONMENT_ROLE_CONFIGS: dict[tuple[str, str], dict[AgentRole, ModelCon
     ("lummevia-os", "production"): {
         AgentRole.PM: ModelConfig(
             provider=Provider.DEEPSEEK,
-            model="deepseek-v4-strong-placeholder",
+            model="deepseek-chat",
             temperature=0.1,
             max_tokens=6144,
         )

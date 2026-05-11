@@ -58,7 +58,14 @@ def _apply_environment_overrides(role: AgentRole, config: ModelConfig) -> tuple[
         updates["provider"] = _parse_provider_override(role, provider_override)
 
     if model_name_override is not None:
-        updates["model"] = model_name_override
+        if (
+            legacy_model_override is not None
+            and model_name_override == config.model
+            and legacy_model_override != config.model
+        ):
+            updates["model"] = legacy_model_override
+        else:
+            updates["model"] = model_name_override
     elif legacy_model_override is not None:
         updates["model"] = legacy_model_override
 
@@ -71,7 +78,12 @@ def _apply_environment_overrides(role: AgentRole, config: ModelConfig) -> tuple[
     if not updates:
         return config, "registry"
 
-    return config.model_copy(update=updates), "env_override"
+    overridden_config = config.model_copy(update=updates)
+
+    if overridden_config == config:
+        return config, "registry"
+
+    return overridden_config, "env_override"
 
 
 def resolve_model(request: RoutingRequest) -> RoutingResolution:

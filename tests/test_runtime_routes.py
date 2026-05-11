@@ -222,3 +222,50 @@ def test_runtime_list_returns_persisted_runs_when_repository_is_active(monkeypat
 
     assert response.status_code == 200
     assert [run["run"]["issue_id"] for run in response.json()[:2]] == ["OS-106", "OS-105"]
+
+
+def test_runtime_list_skips_incompatible_persisted_runs(monkeypatch, caplog) -> None:
+    from app.api.routes import runtime as runtime_routes
+    from lummevia_runtime import DevelopmentRuntime
+    from lummevia_runtime.persistence import (
+        SqlAlchemyWorkflowRunRepository,
+        create_database_engine,
+        create_session_factory,
+        create_tables,
+    )
+    from lummevia_runtime.persistence.models import WorkflowRunRecord
+
+    runtime = DevelopmentRuntime()
+    valid_state = runtime.start_run(project="lummevia-os", issue_id="OS-107")
+    engine = create_database_engine("sqlite+pysqlite:///:memory:")
+    create_tables(engine)
+    session_factory = create_session_factory(engine)
+    repository = SqlAlchemyWorkflowRunRepository(session_factory)
+    repository.save_run(valid_state)
+
+    with session_factory() as session:
+        session.add(
+            WorkflowRunRecord(
+                run_id="run-corrupt",
+                workflow_name="development_loop",
+                project="lummevia-os",
+                issue_id="OS-legacy",
+                status="COMPLETED",
+                current_step="po_final_validation",
+                payload={
+                    "run": {
+                        "run_id": "run-corrupt",
+                        "workflow_name": "development_loop",
+                    }
+                },
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(runtime_routes, "runtime_repository", repository)
+
+    response = client.get("/runtime/development/runs")
+
+    assert response.status_code == 200
+    assert [run["run"]["run_id"] for run in response.json()] == [valid_state.run.run_id]
+    assert "run-corrupt" in caplog.text

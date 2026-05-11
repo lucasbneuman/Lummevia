@@ -15,6 +15,7 @@ COPY packages/runtime /app/packages/runtime
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY apps/orchestrator-api /app/apps/orchestrator-api
+COPY infra/compose /app/infra/compose
 COPY tests /app/tests
 COPY .env.example /app/.env.example
 

@@ -17,7 +17,7 @@ def test_resolve_pm_returns_default_config() -> None:
 
     assert resolution.role == AgentRole.PM
     assert resolution.provider == Provider.DEEPSEEK
-    assert resolution.model == "deepseek-v4-strong-placeholder"
+    assert resolution.model == "deepseek-chat"
     assert resolution.source == "default"
 
 
@@ -52,7 +52,7 @@ def test_resolve_respects_project_environment_precedence() -> None:
         )
     )
 
-    assert resolution.model == "deepseek-v4-strong-placeholder"
+    assert resolution.model == "deepseek-chat"
     assert resolution.source == "project_environment"
 
 

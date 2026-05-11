@@ -27,7 +27,7 @@ def test_model_router_resolve_returns_pm_configuration() -> None:
     assert response.json() == {
         "role": "PM",
         "provider": "DEEPSEEK",
-        "model": "deepseek-v4-strong-placeholder",
+        "model": "deepseek-chat",
         "temperature": 0.1,
         "max_tokens": 4096,
         "source": "default",

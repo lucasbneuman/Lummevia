@@ -19,6 +19,20 @@ services:
       PHOENIX_HOST: ${PHOENIX_HOST:-phoenix}
       PHOENIX_PORT: ${PHOENIX_PORT:-6006}
       PHOENIX_BASE_URL: ${PHOENIX_BASE_URL:-http://phoenix:6006}
+      DEEPSEEK_ENABLED: ${DEEPSEEK_ENABLED:-false}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS:-60}
+      MODEL_PM_PROVIDER: ${MODEL_PM_PROVIDER:-DEEPSEEK}
+      MODEL_PM_NAME: ${MODEL_PM_NAME:-deepseek-chat}
+      MODEL_PO_PROVIDER: ${MODEL_PO_PROVIDER:-DEEPSEEK}
+      MODEL_PO_NAME: ${MODEL_PO_NAME:-deepseek-v4-strong-placeholder}
+      MODEL_DEV_PROVIDER: ${MODEL_DEV_PROVIDER:-DEEPSEEK}
+      MODEL_DEV_NAME: ${MODEL_DEV_NAME:-deepseek-v4-lite-placeholder}
+      MODEL_QA_PROVIDER: ${MODEL_QA_PROVIDER:-DEEPSEEK}
+      MODEL_QA_NAME: ${MODEL_QA_NAME:-deepseek-v4-lite-placeholder}
+      MODEL_QC_PROVIDER: ${MODEL_QC_PROVIDER:-DEEPSEEK}
+      MODEL_QC_NAME: ${MODEL_QC_NAME:-deepseek-v4-qc-placeholder}
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
