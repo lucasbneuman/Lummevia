@@ -8,6 +8,7 @@ ENV PYTHONUNBUFFERED=1
 COPY requirements.txt /app/requirements.txt
 COPY packages/agents /app/packages/agents
 COPY packages/core /app/packages/core
+COPY packages/datasets /app/packages/datasets
 COPY packages/evaluations /app/packages/evaluations
 COPY packages/kilo-adapter /app/packages/kilo-adapter
 COPY packages/integrations /app/packages/integrations

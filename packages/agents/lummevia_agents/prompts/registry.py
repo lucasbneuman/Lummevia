@@ -27,3 +27,12 @@ class PromptRegistry:
                 f"'{role.value}' and target artifact '{target_artifact}'."
             )
         return template
+
+    def get_template_by_id(self, template_id: str) -> PromptTemplate:
+        for template in self._templates.values():
+            if template.template_id == template_id:
+                return template
+
+        raise PromptTemplateNotFoundError(
+            f"No prompt template registered with template_id '{template_id}'."
+        )

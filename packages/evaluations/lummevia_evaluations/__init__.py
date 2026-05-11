@@ -1,5 +1,11 @@
 from lummevia_evaluations.registry import PromptEvaluationRegistry
-from lummevia_evaluations.schemas import EvaluationStatus, PromptEvaluation
+from lummevia_evaluations.schemas import (
+    EvaluationStatus,
+    PromptEvaluation,
+    RegressionCaseResult,
+    RegressionRunResult,
+    RegressionRunSummary,
+)
 
 
 def evaluate_prompt_execution(
@@ -23,5 +29,8 @@ __all__ = [
     "EvaluationStatus",
     "PromptEvaluation",
     "PromptEvaluationRegistry",
+    "RegressionCaseResult",
+    "RegressionRunResult",
+    "RegressionRunSummary",
     "evaluate_prompt_execution",
 ]

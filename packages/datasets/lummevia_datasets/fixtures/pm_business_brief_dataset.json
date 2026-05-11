@@ -1,0 +1,63 @@
+{
+  "dataset_id": "pm_business_brief_dataset",
+  "template_id": "pm_business_brief",
+  "version": "v1",
+  "description": "Small manual regression dataset for PM business brief generation.",
+  "cases": [
+    {
+      "case_id": "pm-onboarding-001",
+      "template_id": "pm_business_brief",
+      "input_prompt": "Necesitamos mejorar el onboarding para que nuevos usuarios entiendan el valor del producto en menos de cinco minutos y reduzcan abandonos tempranos.",
+      "expected_keywords": ["onboarding", "usuarios", "producto"],
+      "expected_sections": ["objective", "problem", "expected_impact", "constraints", "kpis"],
+      "metadata": {
+        "issue_id": "PM-REG-ONBOARDING",
+        "theme": "onboarding"
+      }
+    },
+    {
+      "case_id": "pm-retention-001",
+      "template_id": "pm_business_brief",
+      "input_prompt": "Queremos atacar la retencion de clientes con alertas tempranas y acciones concretas para evitar churn en cuentas medianas.",
+      "expected_keywords": ["retencion", "clientes", "churn"],
+      "expected_sections": ["objective", "problem", "expected_impact", "constraints", "kpis"],
+      "metadata": {
+        "issue_id": "PM-REG-RETENTION",
+        "theme": "retention"
+      }
+    },
+    {
+      "case_id": "pm-analytics-001",
+      "template_id": "pm_business_brief",
+      "input_prompt": "Hace falta un dashboard de analytics para ver embudo, conversion, uso semanal y anomalias de negocio sin depender de reportes manuales.",
+      "expected_keywords": ["dashboard", "analytics", "reportes"],
+      "expected_sections": ["objective", "problem", "expected_impact", "constraints", "kpis"],
+      "metadata": {
+        "issue_id": "PM-REG-ANALYTICS",
+        "theme": "dashboard_analytics"
+      }
+    },
+    {
+      "case_id": "pm-automation-001",
+      "template_id": "pm_business_brief",
+      "input_prompt": "Buscamos automatizacion para tareas repetitivas de seguimiento comercial y aprobaciones internas que hoy consumen demasiadas horas operativas.",
+      "expected_keywords": ["automatizacion", "seguimiento", "operativas"],
+      "expected_sections": ["objective", "problem", "expected_impact", "constraints", "kpis"],
+      "metadata": {
+        "issue_id": "PM-REG-AUTOMATION",
+        "theme": "automation"
+      }
+    },
+    {
+      "case_id": "pm-collaboration-001",
+      "template_id": "pm_business_brief",
+      "input_prompt": "Necesitamos mejorar la colaboracion entre equipos con contexto compartido, handoffs claros y menos dependencia de mensajes dispersos.",
+      "expected_keywords": ["colaboracion", "equipos", "handoffs"],
+      "expected_sections": ["objective", "problem", "expected_impact", "constraints", "kpis"],
+      "metadata": {
+        "issue_id": "PM-REG-COLLAB",
+        "theme": "collaboration"
+      }
+    }
+  ]
+}

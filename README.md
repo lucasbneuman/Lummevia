@@ -57,9 +57,17 @@ packages/
   evaluations/
     lummevia_evaluations/
       __init__.py
+      regression.py
       schemas.py
       scoring.py
       registry.py
+  datasets/
+    lummevia_datasets/
+      __init__.py
+      schemas.py
+      registry.py
+      fixtures/
+        pm_business_brief_dataset.json
   kilo-adapter/
     lummevia_kilo/
       client.py
@@ -289,6 +297,66 @@ En esta etapa:
 - no hay UI de evaluacion humana
 - no hay persistencia durable de evaluaciones
 - no hay comparacion automatica multi-run todavia, pero ya quedan `evaluation_id`, `score`, `status` y metadata listos para evolucionar
+
+### Prompt Regression Datasets
+
+La primera capa de datasets de regression vive en `packages/datasets/lummevia_datasets/`.
+
+Incluye:
+
+- `PromptDatasetCase` con `case_id`, `template_id`, `input_prompt`, `expected_keywords`, `expected_sections` y `metadata`
+- `PromptDataset` con `dataset_id`, `template_id`, `version`, `description` y `cases`
+- `DatasetRegistry` para cargar fixtures JSON pequenos y manuales sin DB
+- un dataset inicial `pm_business_brief_dataset` con casos de onboarding, retencion, dashboard analytics, automatizacion y colaboracion
+
+Objetivo actual:
+
+- comparar versiones de prompts sobre datasets chicos y deterministas
+- detectar degradaciones simples antes de promover cambios
+- mantener fixtures fake o manuales faciles de auditar
+
+Fuera de alcance en esta etapa:
+
+- UI de datasets
+- pipelines async
+- persistencia de regression runs
+- evaluacion con LLM juez
+- benchmarking distribuido
+
+### Prompt Regression Runs
+
+La primera capa de regression runner vive en `packages/evaluations/lummevia_evaluations/regression.py`.
+
+Incluye:
+
+- `PromptRegressionRunner` para ejecutar dataset cases en serie
+- `RegressionCaseResult` y `RegressionRunResult` como contratos de salida
+- `RegressionRunSummary` con `total`, `passed`, `failed`, `avg_score` y `avg_latency_ms`
+- comparacion deterministica por `expected_keywords` y `expected_sections` usando el evaluator fake existente
+
+Flujo actual:
+
+```text
+PromptDataset
+-> PromptRegressionRunner
+-> PromptPipeline
+-> ModelExecutor
+-> FakeModelProvider o DeepSeek controlado para PM
+-> evaluator fake deterministico
+-> RegressionRunResult
+```
+
+El primer endpoint disponible es:
+
+- `POST /evaluations/pm/regression-run`
+
+Ese endpoint:
+
+- ejecuta el dataset `pm_business_brief_dataset`
+- usa DeepSeek solo si `DEEPSEEK_ENABLED=true`
+- cae a `FakeModelProvider` cuando DeepSeek esta deshabilitado
+- no persiste corridas
+- agrega metadata de regression en Phoenix (`regression_run_id`, `dataset_id`, `total_cases`, `passed_cases`, `failed_cases`, `avg_score`, `avg_latency_ms`)
 
 ### Kilo Adapter Skeleton
 
@@ -582,6 +650,7 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 
 - `GET /health`
 - `GET /info`
+- `POST /evaluations/pm/regression-run`
 - `POST /model-execution/pm/dry-run`
 - `GET /model-router/roles`
 - `POST /model-router/resolve`
@@ -620,6 +689,7 @@ Roadmap futuro de evaluacion:
 - almacenamiento durable de evaluaciones
 - datasets y suites de regression dedicadas
 - evaluacion humana y scoring mas sofisticado
+- comparacion de baselines entre versiones del mismo template
 
 Los endpoints de `workflows` tambien son de diagnostico. Sirven para inspeccionar la definicion contractual del workflow de desarrollo expuesta desde `core`.
 
