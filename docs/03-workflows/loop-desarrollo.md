@@ -21,6 +21,10 @@ PO
 ↓
 Execution Package
 ↓
+Task Plan
+↓
+Task Packages iterativos
+↓
 DEV
 ↓
 Implementation Package
@@ -62,18 +66,39 @@ El handoff al PO sólo puede ocurrir cuando el `Business Brief` está en estado 
 
 PO consume el `Business Brief` aprobado, el contexto operacional relevante y la documentación técnica del proyecto.
 
-PO produce un `Execution Package` con:
+PO no debe generar todo el trabajo en una sola respuesta monolítica.
+
+PO trabaja por fases:
+- primero produce un `Execution Package`
+- luego produce un `TaskPlan`
+- luego produce `TaskPackages` pequeños e iterables
+
+El `Execution Package` define el marco técnico general con:
 - alcance técnico
 - criterios de aceptación
 - edge cases
 - escenarios de testing
 - restricciones y decisiones técnicas locales
-- tasks concretas
-- prompts para DEV
+
+El `TaskPlan` organiza:
+- workstreams
+- secuencia de ejecución
+- ids de `TaskPackages`
+- riesgos de coordinación
+
+Cada `TaskPackage` define una unidad pequeña de ejecución para Kilo CLI con:
+- objetivo concreto
+- contexto puntual
+- criterios de aceptación
+- restricciones
+- prompt acotado para DEV
+- artefactos esperados
+
+Esta descomposición reduce tokens, evita prompts gigantes y mejora la trazabilidad entre brief, plan y ejecución.
 
 ### 4. PO → DEV
 
-DEV consume el `Execution Package`, la task asignada y el contexto técnico local del repositorio.
+DEV consume el `Execution Package` como contexto paraguas, pero ejecuta una iteración a la vez sobre un `TaskPackage`, no sobre un mega prompt monolítico.
 
 DEV implementa y produce:
 - cambios en código
@@ -83,7 +108,7 @@ DEV implementa y produce:
 
 ### 5. DEV ↔ QA
 
-QA valida comportamiento, criterios de aceptación y edge cases sobre la implementación.
+QA valida comportamiento, criterios de aceptación y edge cases sobre la implementación del `TaskPackage` actual.
 
 QA produce un `Validation Package`.
 
@@ -166,6 +191,8 @@ Se usa para:
 | Business Brief draft | PM |
 | Business Brief approved | Founder |
 | Execution Package | PO |
+| TaskPlan | PO |
+| TaskPackages | PO |
 | Implementation Package | DEV |
 | Validation Package | QA |
 | Quality Approval | QC |
@@ -174,6 +201,9 @@ Se usa para:
 
 - `AGENTS.md` es un router de contexto, no el documento maestro del sistema.
 - PM no puede enviar trabajo al PO sin aprobación explícita del Founder.
+- PO no debe producir todos los tasks, prompts y tickets en una sola generación monolítica.
+- Kilo CLI debe consumir `TaskPackages` pequeños y secuenciales.
+- QA valida por `TaskPackage`, no por un prompt gigante único.
 - YouTrack sigue siendo memoria operacional.
 - El repositorio sigue siendo verdad técnica.
 - Phoenix sigue siendo observabilidad.

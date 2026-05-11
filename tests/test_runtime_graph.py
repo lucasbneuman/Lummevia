@@ -4,6 +4,8 @@ from lummevia_core import (
     ExecutionPackage,
     ImplementationPackage,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
     ValidationStatus,
     WorkflowRunStatus,
@@ -33,6 +35,8 @@ def test_runtime_executes_complete_workflow() -> None:
     assert state.artifacts.business_brief.business_brief_status == "approved"
     assert state.artifacts.business_brief.founder_approved is True
     assert state.artifacts.execution_package is not None
+    assert state.artifacts.task_plan is not None
+    assert state.artifacts.task_packages
     assert state.artifacts.implementation_package is not None
     assert state.artifacts.validation_package is not None
     assert state.artifacts.pull_request is not None
@@ -47,6 +51,8 @@ def test_runtime_artifacts_reuse_core_contract_types() -> None:
 
     assert isinstance(state.artifacts.business_brief, BusinessBrief)
     assert isinstance(state.artifacts.execution_package, ExecutionPackage)
+    assert isinstance(state.artifacts.task_plan, TaskPlan)
+    assert all(isinstance(task_package, TaskPackage) for task_package in state.artifacts.task_packages)
     assert isinstance(state.artifacts.implementation_package, ImplementationPackage)
     assert isinstance(state.artifacts.validation_package, ValidationPackage)
     assert isinstance(state.artifacts.pull_request, dict)
@@ -61,6 +67,8 @@ def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
     assert state.metadata["artifact_sources"] == {
         "business_brief": "prompt_pipeline",
         "execution_package": "prompt_pipeline",
+        "task_plan": "prompt_pipeline",
+        "task_packages": "prompt_pipeline",
         "implementation_package": "prompt_pipeline",
         "validation_package": "prompt_pipeline",
         "quality_approval": "prompt_pipeline",
@@ -68,6 +76,8 @@ def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
     assert state.metadata["prompt_pipeline"]["pm_business_brief"]["target_artifact"] == (
         "BusinessBrief"
     )
+    assert state.metadata["prompt_pipeline"]["po_task_plan"]["target_artifact"] == "TaskPlan"
+    assert state.metadata["prompt_pipeline"]["po_task_packages"]["count"] >= 2
     assert state.metadata["prompt_pipeline"]["qa_validation"]["provider_adapter"] == "fake"
     assert state.metadata["business_brief_status"] == "approved"
     assert state.metadata["founder_approved"] is True
@@ -156,6 +166,33 @@ def test_founder_approval_occurs_before_po_execution_package() -> None:
     assert approval_completed_index < po_started_index
 
 
+def test_po_task_plan_and_task_packages_occur_before_dev_implementation() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4BA")
+    events = state.run.events
+    task_plan_completed_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.step_name == "po_task_plan"
+        and event.metadata["type"] == "STEP_COMPLETED"
+    )
+    task_packages_completed_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.step_name == "po_task_packages"
+        and event.metadata["type"] == "STEP_COMPLETED"
+    )
+    dev_started_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.step_name == "dev_implementation"
+        and event.metadata["type"] == "STEP_STARTED"
+    )
+
+    assert task_plan_completed_index < task_packages_completed_index < dev_started_index
+
+
 def test_runtime_registers_founder_conversation_and_approval_events() -> None:
     runtime = DevelopmentRuntime()
 
@@ -176,6 +213,21 @@ def test_runtime_registers_founder_conversation_and_approval_events() -> None:
         "STEP_COMPLETED",
     ]
     assert approval_events[-1].metadata["founder_approved"] is True
+
+
+def test_dev_consumes_first_task_package_and_qa_validates_task_package() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4D")
+
+    assert state.artifacts.current_task_package is not None
+    assert state.artifacts.implementation_package is not None
+    assert state.artifacts.validation_package is not None
+    assert state.artifacts.implementation_package.summary.lower().find("task package") != -1
+    assert any(
+        "task package" in scenario.lower()
+        for scenario in state.artifacts.validation_package.scenarios_validated
+    )
 
 
 def test_runtime_generates_unique_run_ids() -> None:

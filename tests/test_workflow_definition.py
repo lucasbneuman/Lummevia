@@ -12,6 +12,8 @@ def test_development_workflow_contains_expected_steps_in_order() -> None:
         "pm_business_brief",
         "founder_business_approval",
         "po_execution_package",
+        "po_task_plan",
+        "po_task_packages",
         "dev_implementation",
         "qa_validation",
         "dev_qa_iteration",
@@ -67,6 +69,9 @@ def test_founder_approval_step_happens_before_po_execution_package() -> None:
     assert step_names.index("founder_business_approval") < step_names.index(
         "po_execution_package"
     )
+    assert step_names.index("po_execution_package") < step_names.index("po_task_plan")
+    assert step_names.index("po_task_plan") < step_names.index("po_task_packages")
+    assert step_names.index("po_task_packages") < step_names.index("dev_implementation")
 
 
 def test_workflow_exports_to_dict_and_json() -> None:

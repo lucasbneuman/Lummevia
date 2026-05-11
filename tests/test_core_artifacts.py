@@ -11,6 +11,8 @@ from lummevia_core import (
     ImplementationPackage,
     Priority,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
     ValidationStatus,
     WorkflowRun,
@@ -71,6 +73,40 @@ def test_implementation_package_accepts_valid_payload() -> None:
 
     assert artifact.branch == "feature/core-artifacts"
     assert artifact.commits == ["abc1234"]
+
+
+def test_task_plan_accepts_valid_payload() -> None:
+    artifact = TaskPlan(
+        issue_id="LUM-103A",
+        project="lummevia-os",
+        workstreams=["runtime", "docs"],
+        task_packages=["TASK-1", "TASK-2"],
+        sequencing_notes=["Start with runtime scaffolding"],
+        risks=["Fake pipeline may drift from future real behavior"],
+    )
+
+    assert artifact.workstreams == ["runtime", "docs"]
+    assert artifact.task_packages == ["TASK-1", "TASK-2"]
+
+
+def test_task_package_accepts_valid_payload() -> None:
+    artifact = TaskPackage(
+        task_id="TASK-1",
+        issue_id="LUM-103B",
+        project="lummevia-os",
+        title="Add PO task decomposition state",
+        objective="Represent PO phases in runtime state",
+        target_repo="lummevia-os",
+        context_refs=["docs/03-workflows/loop-desarrollo.md"],
+        acceptance_criteria=["Runtime stores task packages"],
+        constraints=["Keep runtime sequential"],
+        prompt="Implement the first task package only.",
+        expected_artifacts=["TaskPlan", "TaskPackage"],
+        status="planned",
+    )
+
+    assert artifact.task_id == "TASK-1"
+    assert artifact.status == "planned"
 
 
 def test_validation_package_accepts_valid_payload() -> None:
@@ -181,6 +217,32 @@ def test_workflow_run_accepts_valid_payload() -> None:
                 "tests_run": [],
                 "summary": "Summary",
                 "risks": [],
+            },
+        ),
+        (
+            TaskPlan,
+            {
+                "project": "lummevia-os",
+                "workstreams": [],
+                "task_packages": [],
+                "sequencing_notes": [],
+                "risks": [],
+            },
+        ),
+        (
+            TaskPackage,
+            {
+                "task_id": "TASK-REQ",
+                "project": "lummevia-os",
+                "title": "Title",
+                "objective": "Objective",
+                "target_repo": "lummevia-os",
+                "context_refs": [],
+                "acceptance_criteria": [],
+                "constraints": [],
+                "prompt": "Prompt",
+                "expected_artifacts": [],
+                "status": "planned",
             },
         ),
         (

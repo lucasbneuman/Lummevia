@@ -53,6 +53,101 @@ def po_execution_package_node(
     )
 
 
+def po_task_plan_node(
+    state: RuntimeState,
+    *,
+    agent: POAgent | None = None,
+) -> RuntimeState:
+    step_name = "po_task_plan"
+    execution_package = state.artifacts.execution_package
+    if execution_package is None:
+        raise ValueError("ExecutionPackage must exist before PO task planning.")
+
+    state = start_step(state, step_name=step_name, role=AgentRole.PO)
+    po_agent = agent or POAgent()
+    pipeline_result = po_agent.execute_prompt_pipeline(
+        project=state.run.project,
+        issue_id=state.run.issue_id,
+        target_artifact="TaskPlan",
+        available_artifacts={
+            "execution_package": execution_package,
+        },
+        metadata={
+            "run_id": state.run.run_id,
+            "step_name": step_name,
+            "loop_count": state.loop_count,
+        },
+    )
+    state.artifacts.task_plan = pipeline_result.structured_output
+    state.metadata.setdefault("artifact_sources", {})["task_plan"] = "prompt_pipeline"
+    state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
+    return complete_step(
+        state,
+        step_name=step_name,
+        role=AgentRole.PO,
+        metadata={
+            "artifact": "TaskPlan",
+            "task_package_count": len(state.artifacts.task_plan.task_packages),
+        },
+    )
+
+
+def po_task_packages_node(
+    state: RuntimeState,
+    *,
+    agent: POAgent | None = None,
+) -> RuntimeState:
+    step_name = "po_task_packages"
+    task_plan = state.artifacts.task_plan
+    if task_plan is None:
+        raise ValueError("TaskPlan must exist before PO task packages.")
+
+    state = start_step(state, step_name=step_name, role=AgentRole.PO)
+    po_agent = agent or POAgent()
+    task_packages = []
+    for task_index, task_id in enumerate(task_plan.task_packages):
+        pipeline_result = po_agent.execute_prompt_pipeline(
+            project=state.run.project,
+            issue_id=state.run.issue_id,
+            target_artifact="TaskPackage",
+            available_artifacts={
+                "execution_package": state.artifacts.execution_package,
+                "task_plan": task_plan,
+            },
+            metadata={
+                "run_id": state.run.run_id,
+                "step_name": step_name,
+                "loop_count": state.loop_count,
+                "task_id": task_id,
+                "task_index": task_index,
+            },
+        )
+        task_packages.append(pipeline_result.structured_output)
+    state.artifacts.task_packages = task_packages
+    state.artifacts.current_task_package = task_packages[0] if task_packages else None
+    state.metadata.setdefault("artifact_sources", {})["task_packages"] = "prompt_pipeline"
+    state.metadata.setdefault("prompt_pipeline", {})[step_name] = {
+        "target_artifact": "TaskPackage",
+        "count": len(task_packages),
+        "task_ids": [task_package.task_id for task_package in task_packages],
+        "provider_adapter": "fake",
+    }
+    return complete_step(
+        state,
+        step_name=step_name,
+        role=AgentRole.PO,
+        metadata={
+            "artifact": "TaskPackageCollection",
+            "task_package_count": len(task_packages),
+            "current_task_package": (
+                state.artifacts.current_task_package.task_id
+                if state.artifacts.current_task_package is not None
+                else None
+            ),
+        },
+    )
+
+
 def po_final_validation_node(state: RuntimeState) -> RuntimeState:
     step_name = "po_final_validation"
     state = start_step(state, step_name=step_name, role=AgentRole.PO)
@@ -60,7 +155,10 @@ def po_final_validation_node(state: RuntimeState) -> RuntimeState:
         "issue_id": state.run.issue_id,
         "project": state.run.project,
         "approved": True,
-        "summary": "Functional validation completed on simulated runtime output.",
+        "summary": (
+            "Functional validation completed on the simulated runtime output for "
+            "the current TaskPackage."
+        ),
     }
     state.run.status = WorkflowRunStatus.COMPLETED
     return complete_step(

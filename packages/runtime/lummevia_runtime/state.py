@@ -10,6 +10,8 @@ from lummevia_core import (
     ExecutionPackage,
     ImplementationPackage,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
     WorkflowRun,
 )
@@ -19,6 +21,9 @@ from lummevia_core.validation import CoreArtifactModel
 class RuntimeArtifacts(CoreArtifactModel):
     business_brief: BusinessBrief | None = None
     execution_package: ExecutionPackage | None = None
+    task_plan: TaskPlan | None = None
+    task_packages: list[TaskPackage] = Field(default_factory=list)
+    current_task_package: TaskPackage | None = None
     implementation_package: ImplementationPackage | None = None
     validation_package: ValidationPackage | None = None
     pull_request: dict[str, Any] | None = None

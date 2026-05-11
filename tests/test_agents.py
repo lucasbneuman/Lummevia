@@ -7,6 +7,8 @@ from lummevia_core import (
     ExecutionPackage,
     ImplementationPackage,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
     ValidationStatus,
 )
@@ -115,6 +117,8 @@ def test_agents_run_raise_clear_placeholder_error(agent_cls: type[BaseAgent]) ->
     [
         (PMAgent, "BusinessBrief", BusinessBrief),
         (POAgent, "ExecutionPackage", ExecutionPackage),
+        (POAgent, "TaskPlan", TaskPlan),
+        (POAgent, "TaskPackage", TaskPackage),
         (DevAgent, "ImplementationPackage", ImplementationPackage),
         (QCAgent, "QualityApproval", QualityApproval),
     ],

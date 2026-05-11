@@ -162,6 +162,8 @@ $env:MODEL_DEV_MAX_TOKENS="4096"
 
 - `BusinessBrief`
 - `ExecutionPackage`
+- `TaskPlan`
+- `TaskPackage`
 - `ImplementationPackage`
 - `ValidationPackage`
 - `QualityApproval`
@@ -197,11 +199,14 @@ Incluye:
 - `PromptRegistry` para resolver templates por `role + target_artifact`
 - `ContextBuilder` para armar contexto minimo desde `project`, `issue_id`, `role`, `available_artifacts` y `metadata`
 - `PromptPipeline` para renderizar prompt final, ejecutar `ModelExecutor` y devolver un resultado estructurado
+- el flujo del `PO` ahora se decompone en `ExecutionPackage -> TaskPlan -> TaskPackage`
 
 Los templates iniciales cubren:
 
 - `PM -> BusinessBrief`
 - `PO -> ExecutionPackage`
+- `PO -> TaskPlan`
+- `PO -> TaskPackage`
 - `DEV -> ImplementationPackage`
 - `QA -> ValidationPackage`
 - `QC -> QualityApproval`
@@ -216,6 +221,19 @@ PromptExecutionRequest
 -> ModelExecutor
 -> fake structured output validado con artifacts de core
 ```
+
+Para el `PO`, el fake pipeline ahora puede producir:
+
+- un `TaskPlan` valido
+- multiples `TaskPackages` validos
+- prompts pequenos que Kilo CLI podra consumir por iteracion
+
+Todavia es una simulacion:
+
+- sigue usando `FakeModelProvider`
+- no hay parsing real de LLM
+- no hay integracion real con Kilo CLI
+- no se crean tickets reales
 
 La cadena conectada para el runtime ahora es:
 
@@ -277,6 +295,7 @@ En esta etapa:
 
 El workflow principal del sistema ya queda modelado como contrato de datos con pasos ordenados, `responsible_role`, `consumes`, `produces` y `description`.
 El paso `founder_input` usa el rol contractual `FOUNDER` en `core` para representar origen humano, sin introducir `FounderAgent` ni routing de modelo.
+El gate formal `Founder ↔ PM` antes del `PO` queda trazado como decisión arquitectónica en `docs/06-decisiones/0004-founder-pm-approval-gate.md`.
 
 En esta etapa:
 
@@ -305,11 +324,15 @@ El runtime actual:
 - crea `WorkflowRun` reales en memoria
 - mantiene `RuntimeState` serializable
 - genera `WorkflowRunEvent` reales
-- ejecuta pasos simulados para `FOUNDER -> PM -> PO -> DEV -> QA -> github_pr -> QC -> PO final`
-- delega la produccion fake de `BusinessBrief`, `ExecutionPackage`, `ImplementationPackage`, `ValidationPackage` y `QualityApproval` a agentes conectados al `PromptPipeline`
+- ejecuta pasos simulados para `FOUNDER -> founder_pm_conversation -> PM brief -> founder_business_approval -> PO ExecutionPackage -> PO TaskPlan -> PO TaskPackages -> DEV -> QA -> github_pr -> QC -> PO final`
+- delega la produccion fake de `BusinessBrief`, `ExecutionPackage`, `TaskPlan`, `TaskPackage`, `ImplementationPackage`, `ValidationPackage` y `QualityApproval` a agentes conectados al `PromptPipeline`
 - representa explicitamente la publicacion simulada de `github_pr`
 - representa explicitamente el loop `DEV ↔ QA`
+- hace explicito el gate de aprobacion Founder antes del handoff tecnico al PO
+- hace explicita la descomposicion del PO antes de DEV
 - deja lista la arquitectura para checkpoints futuros
+
+En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados.
 
 Limitaciones actuales:
 

@@ -23,6 +23,8 @@ from lummevia_runtime.nodes import (
     pm_business_brief_node,
     po_execution_package_node,
     po_final_validation_node,
+    po_task_packages_node,
+    po_task_plan_node,
     qa_validation_node,
     qc_quality_approval_node,
 )
@@ -165,6 +167,22 @@ def build_development_graph(
         ),
     )
     graph.add_node(
+        "po_task_plan",
+        _instrument_node(
+            runtime_observer,
+            "po_task_plan",
+            partial(po_task_plan_node, agent=po_agent),
+        ),
+    )
+    graph.add_node(
+        "po_task_packages",
+        _instrument_node(
+            runtime_observer,
+            "po_task_packages",
+            partial(po_task_packages_node, agent=po_agent),
+        ),
+    )
+    graph.add_node(
         "dev_implementation",
         _instrument_node(
             runtime_observer,
@@ -210,7 +228,9 @@ def build_development_graph(
     graph.add_edge("founder_pm_conversation", "pm_business_brief")
     graph.add_edge("pm_business_brief", "founder_business_approval")
     graph.add_edge("founder_business_approval", "po_execution_package")
-    graph.add_edge("po_execution_package", "dev_implementation")
+    graph.add_edge("po_execution_package", "po_task_plan")
+    graph.add_edge("po_task_plan", "po_task_packages")
+    graph.add_edge("po_task_packages", "dev_implementation")
     graph.add_edge("dev_implementation", "qa_validation")
     graph.add_conditional_edges(
         "qa_validation",

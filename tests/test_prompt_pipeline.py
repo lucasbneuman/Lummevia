@@ -4,6 +4,8 @@ from lummevia_core import (
     ExecutionPackage,
     ImplementationPackage,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
 )
 from lummevia_agents import FakeModelProvider, ModelExecutor
@@ -32,6 +34,15 @@ def test_prompt_registry_returns_po_template() -> None:
 
     assert template.role == AgentRole.PO
     assert template.target_artifact == "ExecutionPackage"
+
+
+def test_prompt_registry_returns_po_task_plan_template() -> None:
+    registry = PromptRegistry.default()
+
+    template = registry.get_template(AgentRole.PO, "TaskPlan")
+
+    assert template.role == AgentRole.PO
+    assert template.target_artifact == "TaskPlan"
 
 
 def test_prompt_registry_raises_clear_error_for_missing_template() -> None:
@@ -146,6 +157,73 @@ def test_prompt_pipeline_propagates_metadata() -> None:
     assert result.metadata["target_artifact"] == "ValidationPackage"
 
 
+def test_prompt_pipeline_executes_po_to_task_plan_fake() -> None:
+    pipeline = PromptPipeline(
+        model_executor=ModelExecutor(provider=FakeModelProvider()),
+    )
+
+    result = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PO,
+            project="lummevia-os",
+            issue_id="LUM-302A",
+            target_artifact="TaskPlan",
+            available_artifacts={
+                "execution_package": ExecutionPackage(
+                    issue_id="LUM-302A",
+                    project="lummevia-os",
+                    technical_story="Decompose PO output into smaller task packages",
+                    acceptance_criteria=["TaskPlan exists"],
+                    edge_cases=["No monolithic prompt"],
+                    testing_scenarios=["Pipeline builds TaskPlan"],
+                    architecture_decisions=["Keep contracts simple"],
+                    task_checklist=["Create contracts", "Update runtime"],
+                    dev_prompts=["Create TaskPlan prompt template"],
+                )
+            },
+            metadata={"trace_id": "trace-po-plan"},
+        )
+    )
+
+    assert result.target_artifact == "TaskPlan"
+    assert isinstance(result.structured_output, TaskPlan)
+    assert len(result.structured_output.task_packages) >= 2
+
+
+def test_prompt_pipeline_executes_po_to_task_package_fake() -> None:
+    pipeline = PromptPipeline(
+        model_executor=ModelExecutor(provider=FakeModelProvider()),
+    )
+
+    result = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PO,
+            project="lummevia-os",
+            issue_id="LUM-302B",
+            target_artifact="TaskPackage",
+            available_artifacts={
+                "task_plan": TaskPlan(
+                    issue_id="LUM-302B",
+                    project="lummevia-os",
+                    workstreams=["runtime"],
+                    task_packages=["LUM-302B-T1", "LUM-302B-T2"],
+                    sequencing_notes=["Process runtime first"],
+                    risks=["Plan can diverge from implementation"],
+                )
+            },
+            metadata={
+                "trace_id": "trace-po-task",
+                "task_id": "LUM-302B-T1",
+                "task_index": 0,
+            },
+        )
+    )
+
+    assert result.target_artifact == "TaskPackage"
+    assert isinstance(result.structured_output, TaskPackage)
+    assert result.structured_output.task_id == "LUM-302B-T1"
+
+
 def test_prompt_pipeline_uses_fake_model_provider() -> None:
     pipeline = PromptPipeline(
         model_executor=ModelExecutor(provider=FakeModelProvider()),
@@ -187,6 +265,26 @@ def test_prompt_pipeline_fake_outputs_validate_against_artifacts() -> None:
             metadata={},
         )
     ).structured_output
+    task_plan = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PO,
+            project="lummevia-os",
+            issue_id="LUM-402A",
+            target_artifact="TaskPlan",
+            available_artifacts={"execution_package": execution_package},
+            metadata={},
+        )
+    ).structured_output
+    task_package = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PO,
+            project="lummevia-os",
+            issue_id="LUM-402B",
+            target_artifact="TaskPackage",
+            available_artifacts={"task_plan": task_plan},
+            metadata={"task_id": "LUM-402B-T1", "task_index": 0},
+        )
+    ).structured_output
     implementation_package = pipeline.execute(
         PromptExecutionRequest(
             role=AgentRole.DEV,
@@ -217,6 +315,8 @@ def test_prompt_pipeline_fake_outputs_validate_against_artifacts() -> None:
 
     assert isinstance(business_brief, BusinessBrief)
     assert isinstance(execution_package, ExecutionPackage)
+    assert isinstance(task_plan, TaskPlan)
+    assert isinstance(task_package, TaskPackage)
     assert isinstance(implementation_package, ImplementationPackage)
     assert isinstance(validation_package, ValidationPackage)
     assert isinstance(quality_approval, QualityApproval)

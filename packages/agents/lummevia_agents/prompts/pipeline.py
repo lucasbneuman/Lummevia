@@ -11,6 +11,8 @@ from lummevia_core import (
     ImplementationPackage,
     Priority,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
     ValidationStatus,
 )
@@ -25,6 +27,8 @@ from lummevia_agents.schemas import AgentBaseSchema
 ArtifactResult = (
     BusinessBrief
     | ExecutionPackage
+    | TaskPlan
+    | TaskPackage
     | ImplementationPackage
     | ValidationPackage
     | QualityApproval
@@ -125,6 +129,8 @@ class PromptPipeline:
         builders: dict[type[CoreArtifactModel], Any] = {
             BusinessBrief: self._build_business_brief,
             ExecutionPackage: self._build_execution_package,
+            TaskPlan: self._build_task_plan,
+            TaskPackage: self._build_task_package,
             ImplementationPackage: self._build_implementation_package,
             ValidationPackage: self._build_validation_package,
             QualityApproval: self._build_quality_approval,
@@ -134,7 +140,9 @@ class PromptPipeline:
 
     def _build_business_brief(self, context: PromptContext) -> BusinessBrief:
         artifact_names = sorted(context.available_artifacts.keys()) or ["founder_input"]
-        founder_input = context.available_artifacts.get("founder_input", {})
+        founder_input = self._artifact_data(
+            context.available_artifacts.get("founder_input")
+        )
         founder_summary = founder_input.get(
             "summary",
             f"Initial founder intent captured for issue {context.issue_id}.",
@@ -166,7 +174,9 @@ class PromptPipeline:
         )
 
     def _build_execution_package(self, context: PromptContext) -> ExecutionPackage:
-        business_brief = context.available_artifacts.get("business_brief", {})
+        business_brief = self._artifact_data(
+            context.available_artifacts.get("business_brief")
+        )
         return ExecutionPackage(
             issue_id=context.issue_id,
             project=context.project,
@@ -179,6 +189,7 @@ class PromptPipeline:
             acceptance_criteria=[
                 "Runtime PM node delegates BusinessBrief generation to PMAgent",
                 "Founder approval happens before the PO execution package node",
+                "PO produces ExecutionPackage, TaskPlan, and TaskPackages in sequence",
                 "Runtime PO, DEV, QA, and QC nodes produce artifacts via PromptPipeline",
                 "Pipeline returns fake structured outputs validated by core schemas",
             ],
@@ -186,20 +197,22 @@ class PromptPipeline:
                 "Missing template fails explicitly",
                 "QA outcome changes according to loop_count metadata",
                 "PO must not execute from a draft business brief",
+                "DEV should consume a TaskPackage instead of a monolithic prompt",
             ],
             testing_scenarios=[
                 "Founder and PM iterate before drafting the BusinessBrief",
                 "Founder approves the BusinessBrief before PO execution",
-                "PM produces BusinessBrief",
+                "PO decomposes the approved brief into TaskPlan and TaskPackages",
                 "Runtime completes DEV-QA loop before PR creation",
             ],
             architecture_decisions=[
                 "Prompt templates live in packages/agents",
                 "Structured outputs stay fake until real providers are introduced",
+                "PO decomposition stays sequential until parallel execution is designed",
             ],
             task_checklist=[
                 "Simulate founder to PM conversation and founder approval gates",
-                "Delegate runtime artifact creation to agents",
+                "Delegate PO decomposition artifact creation to agents",
                 "Preserve runtime persistence and Phoenix instrumentation",
                 "Keep github_pr as a separate simulated node",
             ],
@@ -209,11 +222,106 @@ class PromptPipeline:
             ],
         )
 
+    def _build_task_plan(self, context: PromptContext) -> TaskPlan:
+        execution_package = self._artifact_data(
+            context.available_artifacts.get("execution_package")
+        )
+        issue_slug = context.issue_id.upper()
+        workstreams = [
+            "runtime_state_and_contracts",
+            "documentation_and_tests",
+        ]
+        return TaskPlan(
+            issue_id=context.issue_id,
+            project=context.project,
+            workstreams=workstreams,
+            task_packages=[
+                f"{issue_slug}-T1",
+                f"{issue_slug}-T2",
+            ],
+            sequencing_notes=[
+                "Create runtime and contract scaffolding first.",
+                "Update documentation and verification after the runtime shape is in place.",
+                (
+                    "Keep the runtime sequential and let DEV execute only the first "
+                    "TaskPackage in this MVP."
+                ),
+            ],
+            risks=[
+                "Simulated task packages can drift from future provider-backed prompts",
+                (
+                    "Task granularity must stay small enough for Kilo CLI without "
+                    "fragmenting traceability"
+                ),
+                (
+                    "Execution package summary remains the umbrella context: "
+                    f"{execution_package.get('technical_story', 'not supplied')}"
+                ),
+            ],
+        )
+
+    def _build_task_package(self, context: PromptContext) -> TaskPackage:
+        task_plan = self._artifact_data(context.available_artifacts.get("task_plan"))
+        task_id = str(context.metadata.get("task_id", f"{context.issue_id}-T1"))
+        task_index = int(context.metadata.get("task_index", 0))
+        task_titles = [
+            "Model PO decomposition artifacts and runtime state",
+            "Document the PO decomposition flow and expand regression tests",
+        ]
+        objectives = [
+            "Represent TaskPlan and TaskPackages in the simulated runtime.",
+            "Reflect the decomposition flow in docs, ADRs, and test coverage.",
+        ]
+        title = task_titles[min(task_index, len(task_titles) - 1)]
+        objective = objectives[min(task_index, len(objectives) - 1)]
+        return TaskPackage(
+            task_id=task_id,
+            issue_id=context.issue_id,
+            project=context.project,
+            title=title,
+            objective=objective,
+            target_repo=context.project,
+            context_refs=[
+                "docs/02-agentes/roles-y-limites.md",
+                "docs/03-workflows/loop-desarrollo.md",
+                "packages/runtime/lummevia_runtime",
+            ],
+            acceptance_criteria=[
+                "TaskPackage is small enough to execute in one focused DEV iteration",
+                "DEV consumes this TaskPackage instead of a mega prompt",
+                "QA validates acceptance criteria at the TaskPackage level",
+            ],
+            constraints=[
+                "Keep providers fake",
+                "Do not create real YouTrack tickets",
+                "Do not introduce parallel execution yet",
+                "Preserve Founder approval before PO execution",
+            ],
+            prompt=(
+                "Implement only this TaskPackage using the execution package as "
+                "umbrella context and keep changes traceable."
+            ),
+            expected_artifacts=[
+                "ImplementationPackage",
+                "ValidationPackage",
+            ],
+            status=(
+                "in_progress"
+                if task_index == 0
+                else "planned"
+            ),
+        )
+
     def _build_implementation_package(
         self, context: PromptContext
     ) -> ImplementationPackage:
         loop_count = int(context.metadata.get("loop_count", 0))
         is_rework = loop_count > 0
+        task_package = self._artifact_data(
+            context.available_artifacts.get("task_package")
+        )
+        task_id = task_package.get("task_id", "unknown-task")
+        task_title = task_package.get("title", "unknown task package")
         return ImplementationPackage(
             issue_id=context.issue_id,
             project=context.project,
@@ -232,9 +340,12 @@ class PromptPipeline:
                 "pytest -q tests/test_runtime_graph.py",
             ],
             summary=(
-                "Applied implementation rework after QA feedback."
+                f"Applied implementation rework for task package {task_id} after QA feedback."
                 if is_rework
-                else "Created initial simulated implementation package through the prompt pipeline."
+                else (
+                    "Created initial simulated implementation package through the "
+                    f"prompt pipeline for task package {task_id}: {task_title}."
+                )
             ),
             risks=[
                 "Prompt wording is placeholder-only",
@@ -246,14 +357,17 @@ class PromptPipeline:
         loop_count = int(context.metadata.get("loop_count", 0))
         first_pass = loop_count == 0
         status = ValidationStatus.FAILED if first_pass else ValidationStatus.PASSED
-        implementation_package = context.available_artifacts.get(
-            "implementation_package",
-            {},
+        implementation_package = self._artifact_data(
+            context.available_artifacts.get("implementation_package")
+        )
+        task_package = self._artifact_data(
+            context.available_artifacts.get("task_package")
         )
         scenarios_validated = [
             "Prompt context rendering",
             "Fake structured output validation",
             f"Implementation branch {implementation_package.get('branch', 'unknown')}",
+            f"Task package {task_package.get('task_id', 'unknown-task')}",
         ]
         if not first_pass:
             scenarios_validated.append("DEV-QA rework loop resolution")
@@ -276,7 +390,7 @@ class PromptPipeline:
         )
 
     def _build_quality_approval(self, context: PromptContext) -> QualityApproval:
-        pull_request = context.available_artifacts.get("pull_request", {})
+        pull_request = self._artifact_data(context.available_artifacts.get("pull_request"))
         pr_ok = pull_request.get("status") == "OPEN"
         return QualityApproval(
             issue_id=context.issue_id,
@@ -295,3 +409,12 @@ class PromptPipeline:
                 ),
             ],
         )
+
+    def _artifact_data(self, artifact: Any | None) -> dict[str, Any]:
+        if artifact is None:
+            return {}
+        if isinstance(artifact, CoreArtifactModel):
+            return artifact.model_dump(mode="json")
+        if isinstance(artifact, dict):
+            return artifact
+        return {}

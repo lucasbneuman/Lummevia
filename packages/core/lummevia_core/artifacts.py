@@ -43,6 +43,30 @@ class ImplementationPackage(CoreArtifactModel):
     risks: list[str]
 
 
+class TaskPlan(CoreArtifactModel):
+    issue_id: str
+    project: str
+    workstreams: list[str]
+    task_packages: list[str]
+    sequencing_notes: list[str]
+    risks: list[str]
+
+
+class TaskPackage(CoreArtifactModel):
+    task_id: str
+    issue_id: str
+    project: str
+    title: str
+    objective: str
+    target_repo: str
+    context_refs: list[str]
+    acceptance_criteria: list[str]
+    constraints: list[str]
+    prompt: str
+    expected_artifacts: list[str]
+    status: Literal["planned", "in_progress", "completed", "validated"]
+
+
 class ValidationPackage(CoreArtifactModel):
     issue_id: str
     project: str

@@ -145,10 +145,29 @@ El flujo principal del sistema es:
 
 ```text
 Founder → PM conversation loop → Business Brief draft → Founder approval →
-Business Brief approved → PO → DEV → QA → PR → QC → PO final
+Business Brief approved → PO ExecutionPackage → PO TaskPlan →
+PO TaskPackages iterativos → DEV → QA → PR → QC → PO final
 ```
 
 La definición detallada de handoffs, artefactos y validaciones vive en `docs/03-workflows/loop-desarrollo.md`.
+
+La decisión arquitectónica que formaliza el gate `Founder ↔ PM` antes del `PO` vive en `docs/06-decisiones/0004-founder-pm-approval-gate.md`.
+La decisión arquitectónica que formaliza la descomposición del `PO` por fases vive en `docs/06-decisiones/0005-po-task-decomposition-flow.md`.
+
+## Descomposición del PO
+
+El `PO` no genera todo el trabajo técnico en una sola expansión monolítica.
+
+La arquitectura separa tres artefactos secuenciales:
+- `ExecutionPackage` como marco técnico global
+- `TaskPlan` como plan de secuencia y workstreams
+- `TaskPackage` como unidad pequeña de ejecución para DEV y QA
+
+Consecuencias arquitectónicas:
+- reduce presión de tokens sobre Kilo CLI
+- mejora trazabilidad entre brief, plan, paquete y validación
+- evita mega prompts difíciles de auditar
+- mantiene YouTrack alineado con unidades pequeñas de trabajo
 
 ## Regla sobre AGENTS.md
 

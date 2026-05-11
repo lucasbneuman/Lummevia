@@ -10,6 +10,8 @@ from lummevia_core import (
     ExecutionPackage,
     ImplementationPackage,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
 )
 from lummevia_core.validation import CoreArtifactModel
@@ -67,7 +69,27 @@ def build_default_templates() -> list[PromptTemplate]:
             system_prompt="You are the PO role in Lummevia OS.",
             instructions=(
                 "Translate the brief into a technical execution package with "
-                "scope, tests, and development prompts."
+                "scope, tests, and decomposition guidance."
+            ),
+        ),
+        PromptTemplate(
+            role=AgentRole.PO,
+            target_artifact="TaskPlan",
+            artifact_model=TaskPlan,
+            system_prompt="You are the PO role in Lummevia OS.",
+            instructions=(
+                "Break the execution package into a small TaskPlan with "
+                "sequenced workstreams and task package identifiers."
+            ),
+        ),
+        PromptTemplate(
+            role=AgentRole.PO,
+            target_artifact="TaskPackage",
+            artifact_model=TaskPackage,
+            system_prompt="You are the PO role in Lummevia OS.",
+            instructions=(
+                "Produce one small TaskPackage for DEV and QA with clear "
+                "constraints, acceptance criteria, and expected artifacts."
             ),
         ),
         PromptTemplate(

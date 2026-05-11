@@ -45,6 +45,7 @@ No debe:
 
 Responsabilidad:
 - transformar Business Brief en Execution Package
+- descomponer el alcance en TaskPlan y TaskPackages iterativos
 - traducir necesidad de negocio a ejecución técnica
 - coordinar el alcance técnico a implementar
 
@@ -58,8 +59,9 @@ Consume:
 
 Produce:
 - Execution Package
-- tasks concretas
-- prompts para DEV
+- TaskPlan
+- TaskPackages pequeños e iterables
+- prompts acotados por TaskPackage para DEV
 - decisiones técnicas de alcance local
 
 No debe:
@@ -67,6 +69,7 @@ No debe:
 - redefinir prioridades de negocio
 - modificar código directamente
 - ignorar arquitectura existente
+- generar todos los tasks y prompts en una sola respuesta monolítica
 
 ## DEV
 
@@ -76,9 +79,10 @@ Responsabilidad:
 - dejar evidencia técnica trazable
 
 Consume:
-- task asignada
+- TaskPackage asignado
 - Execution Package
-- prompts del PO
+- TaskPlan cuando haga falta contexto de secuencia
+- prompts del PO acotados por TaskPackage
 - repositorio local
 - `AGENTS.md` local
 
@@ -93,6 +97,7 @@ No debe:
 - redefinir producto
 - redefinir arquitectura arbitrariamente
 - cambiar workflows globales
+- consumir un mega prompt monolítico cuando exista TaskPackage trazable
 
 ## QA
 
@@ -103,7 +108,8 @@ Responsabilidad:
 
 Consume:
 - Implementation Package
-- criterios de aceptación
+- TaskPackage actual
+- criterios de aceptación del TaskPackage
 - escenarios de testing
 
 Produce:
@@ -114,6 +120,7 @@ No debe:
 - redefinir requerimientos
 - modificar arquitectura
 - aprobar la calidad arquitectónica final del PR
+- validar un bloque monolítico ambiguo cuando el trabajo ya fue decompuesto por TaskPackage
 
 ## QC
 
@@ -171,6 +178,12 @@ Cada rol:
 - produce artefactos explícitos
 - respeta ownership
 - evita contaminación contextual
+
+Regla de descomposición del PO:
+- `ExecutionPackage` define marco técnico general
+- `TaskPlan` define secuencia y workstreams
+- `TaskPackage` define la unidad mínima que consume DEV y valida QA
+- esta separación reduce tokens y mejora trazabilidad para Kilo CLI y YouTrack
 
 Ningún rol debe:
 - asumir contexto no documentado

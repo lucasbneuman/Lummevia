@@ -3,6 +3,8 @@ from lummevia_core.artifacts import (
     ExecutionPackage,
     ImplementationPackage,
     QualityApproval,
+    TaskPackage,
+    TaskPlan,
     ValidationPackage,
 )
 from lummevia_core.enums import (
@@ -25,6 +27,8 @@ __all__ = [
     "ImplementationPackage",
     "Priority",
     "QualityApproval",
+    "TaskPackage",
+    "TaskPlan",
     "ValidationPackage",
     "ValidationStatus",
     "WorkflowDefinition",

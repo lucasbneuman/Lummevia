@@ -70,23 +70,41 @@ class DevelopmentWorkflowDefinition(WorkflowDefinition):
                 ),
             ),
             WorkflowStep(
+                name="po_task_plan",
+                responsible_role=AgentRole.PO,
+                consumes=["ExecutionPackage"],
+                produces=["TaskPlan"],
+                description=(
+                    "Decompose the execution package into a small, traceable TaskPlan."
+                ),
+            ),
+            WorkflowStep(
+                name="po_task_packages",
+                responsible_role=AgentRole.PO,
+                consumes=["TaskPlan"],
+                produces=["TaskPackageCollection"],
+                description=(
+                    "Produce small TaskPackages iteratively instead of one monolithic DEV prompt."
+                ),
+            ),
+            WorkflowStep(
                 name="dev_implementation",
                 responsible_role=AgentRole.DEV,
-                consumes=["ExecutionPackage"],
+                consumes=["ExecutionPackage", "TaskPackage"],
                 produces=["ImplementationPackage"],
                 description=(
-                    "Implement the assigned technical work and produce an "
+                    "Implement the current TaskPackage and produce an "
                     "ImplementationPackage."
                 ),
             ),
             WorkflowStep(
                 name="qa_validation",
                 responsible_role=AgentRole.QA,
-                consumes=["ImplementationPackage"],
+                consumes=["ImplementationPackage", "TaskPackage"],
                 produces=["ValidationPackage"],
                 description=(
                     "Validate behavior, acceptance criteria, and edge cases for "
-                    "the implementation."
+                    "the current TaskPackage implementation."
                 ),
             ),
             WorkflowStep(
