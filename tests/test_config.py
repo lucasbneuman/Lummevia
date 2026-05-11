@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app.core.config import load_settings
 
 
@@ -26,9 +28,16 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.runtime_persistence.database_url == (
         "postgresql+psycopg://lummevia:lummevia@postgres:5432/lummevia"
     )
+    assert settings.kilo.enabled is False
+    assert settings.kilo.cli_path is None
+    assert settings.kilo.workspace_root is None
+    assert settings.kilo.default_timeout_seconds == 300
+    assert settings.kilo.dry_run is True
 
 
 def test_settings_load_safe_values_from_env() -> None:
+    kilo_cli_path = Path(__file__).resolve()
+    kilo_workspace_root = Path(__file__).resolve().parents[1]
     settings = load_settings(
         {
             "APP_NAME": "lummevia-test-api",
@@ -52,6 +61,11 @@ def test_settings_load_safe_values_from_env() -> None:
             "GITHUB_ORG": "lummevia",
             "RUNTIME_PERSISTENCE_ENABLED": "true",
             "RUNTIME_DATABASE_URL": "postgresql+psycopg://tester:secret@db.internal:5544/lummevia_test",
+            "KILO_ENABLED": "true",
+            "KILO_CLI_PATH": str(kilo_cli_path),
+            "KILO_WORKSPACE_ROOT": str(kilo_workspace_root),
+            "KILO_DEFAULT_TIMEOUT_SECONDS": "120",
+            "KILO_DRY_RUN": "false",
         }
     )
 
@@ -78,6 +92,11 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.runtime_persistence.database_url == (
         "postgresql+psycopg://tester:secret@db.internal:5544/lummevia_test"
     )
+    assert settings.kilo.enabled is True
+    assert settings.kilo.cli_path == kilo_cli_path
+    assert settings.kilo.workspace_root == kilo_workspace_root
+    assert settings.kilo.default_timeout_seconds == 120
+    assert settings.kilo.dry_run is False
 
 
 def test_settings_build_phoenix_base_url_from_host_and_port_when_not_provided() -> None:
@@ -92,6 +111,61 @@ def test_settings_build_phoenix_base_url_from_host_and_port_when_not_provided() 
     assert settings.phoenix.host == "phoenix.coolify.internal"
     assert settings.phoenix.port == 7443
     assert settings.phoenix.base_url == "http://phoenix.coolify.internal:7443"
+
+
+def test_kilo_disabled_does_not_require_cli_path_or_workspace() -> None:
+    settings = load_settings(
+        {
+            "KILO_ENABLED": "false",
+            "KILO_CLI_PATH": "",
+            "KILO_WORKSPACE_ROOT": "",
+        }
+    )
+
+    assert settings.kilo.enabled is False
+    assert settings.kilo.cli_path is None
+    assert settings.kilo.workspace_root is None
+
+
+def test_kilo_enabled_requires_cli_path_and_workspace() -> None:
+    with pytest.raises(ValueError, match="KILO_CLI_PATH"):
+        load_settings(
+            {
+                "KILO_ENABLED": "true",
+                "KILO_WORKSPACE_ROOT": str(Path(__file__).resolve().parents[1]),
+            }
+        )
+
+    with pytest.raises(ValueError, match="KILO_WORKSPACE_ROOT"):
+        load_settings(
+            {
+                "KILO_ENABLED": "true",
+                "KILO_CLI_PATH": str(Path(__file__).resolve()),
+            }
+        )
+
+
+def test_kilo_enabled_validates_cli_path_and_workspace_exist() -> None:
+    missing_cli = Path(__file__).resolve().parent / "missing-kilo-cli"
+    missing_workspace = Path(__file__).resolve().parent / "missing-workspace"
+
+    with pytest.raises(ValueError, match="KILO_CLI_PATH"):
+        load_settings(
+            {
+                "KILO_ENABLED": "true",
+                "KILO_CLI_PATH": str(missing_cli),
+                "KILO_WORKSPACE_ROOT": str(Path(__file__).resolve().parents[1]),
+            }
+        )
+
+    with pytest.raises(ValueError, match="KILO_WORKSPACE_ROOT"):
+        load_settings(
+            {
+                "KILO_ENABLED": "true",
+                "KILO_CLI_PATH": str(Path(__file__).resolve()),
+                "KILO_WORKSPACE_ROOT": str(missing_workspace),
+            }
+        )
 
 
 def test_env_example_contains_expected_configuration_variables() -> None:
@@ -121,6 +195,11 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "GITHUB_ORG=",
         "RUNTIME_PERSISTENCE_ENABLED=",
         "RUNTIME_DATABASE_URL=",
+        "KILO_ENABLED=",
+        "KILO_CLI_PATH=",
+        "KILO_WORKSPACE_ROOT=",
+        "KILO_DEFAULT_TIMEOUT_SECONDS=",
+        "KILO_DRY_RUN=",
     ]
 
     for variable in expected_variables:

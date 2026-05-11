@@ -281,8 +281,11 @@ En esta etapa:
 - el client es deterministicamente fake
 - simula lifecycle sincrono `QUEUED -> RUNNING -> SUCCESS | FAILED | RETRYING | CANCELLED`
 - soporta retries fake via `max_attempts` y `fail_first_attempt` en metadata
+- expone configuracion futura para CLI real, pero `KILO_ENABLED=false` por defecto
+- puede validar `KILO_CLI_PATH` y `KILO_WORKSPACE_ROOT` solo a nivel de settings cuando se habilite
 - no usa `subprocess`
 - no ejecuta terminal real
+- no ejecuta Kilo CLI real todavia
 - no muta filesystem
 - no toca git real
 - no abre PRs reales
@@ -450,6 +453,23 @@ Variables base:
 - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `REDIS_HOST`, `REDIS_PORT`
 - `PHOENIX_ENABLED`, `PHOENIX_HOST`, `PHOENIX_PORT`, `PHOENIX_BASE_URL`
+
+Variables futuras para Kilo:
+
+- `KILO_ENABLED=false`
+- `KILO_CLI_PATH`
+- `KILO_WORKSPACE_ROOT`
+- `KILO_DEFAULT_TIMEOUT_SECONDS=300`
+- `KILO_DRY_RUN=true`
+
+Comportamiento actual de Kilo:
+
+- el adapter de `packages/kilo-adapter/` sigue siendo fake y deterministico
+- `KILO_ENABLED=false` por defecto
+- con `KILO_ENABLED=false` no se exige `KILO_CLI_PATH` ni `KILO_WORKSPACE_ROOT`
+- con `KILO_ENABLED=true` solo se valida que `KILO_CLI_PATH` y `KILO_WORKSPACE_ROOT` existan en el filesystem
+- aun con `KILO_ENABLED=true`, Lummevia OS no ejecuta Kilo CLI real todavia
+- `KILO_DRY_RUN=true` queda como default seguro para la futura transicion a ejecucion real
 
 ConvenciÃ³n recomendada para Phoenix:
 

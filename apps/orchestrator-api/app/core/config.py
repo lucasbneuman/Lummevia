@@ -37,6 +37,11 @@ def _read_optional_string(env: Mapping[str, str], key: str) -> str | None:
     return stripped or None
 
 
+def _read_optional_path(env: Mapping[str, str], key: str) -> Path | None:
+    value = _read_optional_string(env, key)
+    return Path(value).expanduser() if value is not None else None
+
+
 def _read_int(env: Mapping[str, str], key: str, default: int) -> int:
     value = env.get(key)
 
@@ -114,6 +119,15 @@ class RuntimePersistenceSettings:
 
 
 @dataclass(frozen=True)
+class KiloSettings:
+    enabled: bool
+    cli_path: Path | None
+    workspace_root: Path | None
+    default_timeout_seconds: int
+    dry_run: bool
+
+
+@dataclass(frozen=True)
 class Settings:
     app: AppSettings
     postgres: PostgresSettings
@@ -122,6 +136,7 @@ class Settings:
     youtrack: YouTrackSettings
     github: GitHubSettings
     runtime_persistence: RuntimePersistenceSettings
+    kilo: KiloSettings
 
     @property
     def app_name(self) -> str:
@@ -145,6 +160,29 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
 
     phoenix_host = _read_string(environment, "PHOENIX_HOST", "phoenix")
     phoenix_port = _read_int(environment, "PHOENIX_PORT", 6006)
+    kilo_enabled = _read_bool(environment, "KILO_ENABLED", False)
+    kilo_cli_path = _read_optional_path(environment, "KILO_CLI_PATH")
+    kilo_workspace_root = _read_optional_path(environment, "KILO_WORKSPACE_ROOT")
+    kilo_default_timeout_seconds = _read_int(
+        environment, "KILO_DEFAULT_TIMEOUT_SECONDS", 300
+    )
+
+    if kilo_enabled:
+        if kilo_cli_path is None:
+            raise ValueError("KILO_CLI_PATH is required when KILO_ENABLED=true.")
+        if kilo_workspace_root is None:
+            raise ValueError("KILO_WORKSPACE_ROOT is required when KILO_ENABLED=true.")
+        if not kilo_cli_path.exists():
+            raise ValueError(
+                "KILO_CLI_PATH must point to an existing filesystem path when "
+                "KILO_ENABLED=true."
+            )
+        if not kilo_workspace_root.exists():
+            raise ValueError(
+                "KILO_WORKSPACE_ROOT must point to an existing filesystem path when "
+                "KILO_ENABLED=true."
+            )
+
     postgres_settings = PostgresSettings(
         host=_read_string(environment, "POSTGRES_HOST", "postgres"),
         port=_read_int(environment, "POSTGRES_PORT", 5432),
@@ -187,6 +225,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             enabled=_read_bool(environment, "RUNTIME_PERSISTENCE_ENABLED", False),
             database_url=_read_optional_string(environment, "RUNTIME_DATABASE_URL")
             or postgres_settings.sqlalchemy_url,
+        ),
+        kilo=KiloSettings(
+            enabled=kilo_enabled,
+            cli_path=kilo_cli_path,
+            workspace_root=kilo_workspace_root,
+            default_timeout_seconds=kilo_default_timeout_seconds,
+            dry_run=_read_bool(environment, "KILO_DRY_RUN", True),
         ),
     )
 
