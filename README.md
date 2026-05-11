@@ -194,7 +194,10 @@ En esta etapa:
 - cada agente de runtime puede producir su artefacto fake via `produce_artifact(...)` o `execute_prompt_pipeline(...)`
 - cada `run(...)` falla de forma explicita como placeholder
 - no ejecutan el workflow real por si mismos
-- no hay llamadas reales a modelos ni integraciones externas
+- el runtime principal sigue usando `FakeModelProvider`
+- solo existe un dry-run controlado para `PM` que puede usar OpenRouter cuando se habilita
+- `PO`, `DEV`, `QA` y `QC` siguen en fake
+- no hay integraciones externas productivas
 
 ### Prompt Pipeline
 
@@ -337,6 +340,7 @@ En esta etapa:
 
 - `ModelExecutor` resuelve `provider` y `model` via `model-router`
 - `FakeModelProvider` devuelve outputs deterministicos utiles para tests
+- `OpenRouterModelProvider` implementa chat completions reales via OpenRouter para uso controlado
 - `ModelExecutionResult.metadata` deja preparada metadata para Phoenix:
   - `role`
   - `project`
@@ -344,9 +348,10 @@ En esta etapa:
   - `model`
   - `latency_ms`
   - `fallback_used`
-- no existen providers reales conectados
-- no hay llamadas HTTP reales
-- no hay prompts productivos reales
+- `OPENROUTER_ENABLED=false` mantiene el fallback seguro a fake
+- si `OPENROUTER_ENABLED=true` y falta `OPENROUTER_API_KEY`, el dry-run controlado falla de forma explicita
+- el runtime principal no usa OpenRouter todavia
+- no hay prompts productivos definitivos
 
 ## Workflow skeleton
 
@@ -485,6 +490,25 @@ Variables opcionales por ahora:
 - `YOUTRACK_BASE_URL`, `YOUTRACK_TOKEN`
 - `GITHUB_TOKEN`, `GITHUB_ORG`
 
+Variables para OpenRouter:
+
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
+- `OPENROUTER_ENABLED=false`
+- `OPENROUTER_TIMEOUT_SECONDS=60`
+- `MODEL_PM_PROVIDER=OPENROUTER`
+- `MODEL_PM_NAME=deepseek/deepseek-chat`
+
+Comportamiento actual de OpenRouter:
+
+- la API key va en `.env` como `OPENROUTER_API_KEY`
+- `/info` no expone la API key
+- por defecto `OPENROUTER_ENABLED=false`
+- solo `POST /model-execution/pm/dry-run` puede usar el provider real
+- si OpenRouter esta disabled, ese endpoint cae a `FakeModelProvider`
+- si OpenRouter esta enabled pero falta la API key, el dry-run falla de forma explicita
+- `PO`, `DEV`, `QA`, `QC`, Kilo, GitHub y YouTrack siguen fuera de alcance real
+
 YouTrack y GitHub todavia no son obligatorios para levantar `orchestrator-api`. Sus tokens y URLs pueden quedar vacios mientras las integraciones sigan siendo skeletons contractuales.
 
 3. Levantar el stack local de desarrollo:
@@ -499,6 +523,7 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 
 - `GET /health`
 - `GET /info`
+- `POST /model-execution/pm/dry-run`
 - `GET /model-router/roles`
 - `POST /model-router/resolve`
 - `POST /runtime/development/run`
@@ -511,6 +536,15 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 Los endpoints de `model-router` son de diagnostico. Sirven para inspeccionar que configuracion de modelo resolveria el runtime por rol, proyecto y entorno.
 
 No ejecutan prompts, no llaman providers reales y no disparan agentes.
+
+El endpoint `POST /model-execution/pm/dry-run` tambien es de diagnostico controlado. Ejecuta solo el `PM`, puede usar OpenRouter para `deepseek/deepseek-chat` si esta habilitado y, aun asi, mantiene el `BusinessBrief` estructurado como salida fake validada mientras expone el texto real y `raw_output` para observabilidad basica.
+
+Ese endpoint:
+
+- no modifica el runtime principal
+- no persiste workflows
+- no crea artefactos reales en YouTrack
+- no habilita OpenRouter para `PO`, `DEV`, `QA` ni `QC`
 
 Los endpoints de `workflows` tambien son de diagnostico. Sirven para inspeccionar la definicion contractual del workflow de desarrollo expuesta desde `core`.
 

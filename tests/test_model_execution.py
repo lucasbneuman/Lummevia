@@ -1,3 +1,4 @@
+import httpx
 import pytest
 
 from lummevia_core import AgentRole
@@ -10,6 +11,7 @@ from lummevia_agents import (
     ModelExecutionError,
     ModelExecutionRequest,
     ModelExecutor,
+    OpenRouterModelProvider,
     PMAgent,
 )
 
@@ -31,8 +33,10 @@ def test_fake_model_provider_returns_deterministic_output() -> None:
 
     assert first.output == second.output
     assert first.raw_output == second.raw_output
-    assert first.provider == "OPENROUTER"
-    assert first.model == "deepseek/deepseek-chat"
+    assert first.provider == "FAKE"
+    assert first.model == "fake:pm"
+    assert first.metadata["resolved_provider"] == "OPENROUTER"
+    assert first.metadata["resolved_model"] == "deepseek/deepseek-chat"
 
 
 def test_model_executor_resolves_pm_model() -> None:
@@ -49,9 +53,10 @@ def test_model_executor_resolves_pm_model() -> None:
         )
     )
 
-    assert result.provider == "OPENROUTER"
-    assert result.model == "deepseek/deepseek-chat-pro"
+    assert result.provider == "FAKE"
+    assert result.model == "fake:pm"
     assert result.metadata["role"] == "PM"
+    assert result.metadata["resolved_model"] == "deepseek/deepseek-chat-pro"
 
 
 def test_model_executor_resolves_dev_model() -> None:
@@ -68,9 +73,9 @@ def test_model_executor_resolves_dev_model() -> None:
         )
     )
 
-    assert result.provider == "OPENROUTER"
-    assert result.model == "deepseek/deepseek-chat-lite"
-    assert result.metadata["model"] == "deepseek/deepseek-chat-lite"
+    assert result.provider == "FAKE"
+    assert result.model == "fake:dev"
+    assert result.metadata["resolved_model"] == "deepseek/deepseek-chat-lite"
 
 
 def test_model_executor_propagates_metadata() -> None:
@@ -89,7 +94,7 @@ def test_model_executor_propagates_metadata() -> None:
 
     assert result.metadata["run_id"] == "run-123"
     assert result.metadata["issue_id"] == "LUM-42"
-    assert result.metadata["provider"] == "OPENROUTER"
+    assert result.metadata["provider"] == "FAKE"
     assert result.metadata["latency_ms"] >= 0
     assert result.metadata["fallback_used"] is False
 
@@ -118,6 +123,96 @@ def test_model_executor_handles_provider_error() -> None:
     assert exc_info.value.model == "deepseek/deepseek-chat-lite"
 
 
+def test_openrouter_model_provider_parses_mock_response() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url == httpx.URL("https://openrouter.ai/api/v1/chat/completions")
+        payload = request.read().decode("utf-8")
+        assert "deepseek/deepseek-chat" in payload
+        assert "You are a PM" in payload
+        assert "Summarize the brief" in payload
+        return httpx.Response(
+            status_code=200,
+            json={
+                "id": "gen-123",
+                "provider": "OpenRouter",
+                "model": "deepseek/deepseek-chat",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {
+                            "role": "assistant",
+                            "content": "Business summary from DeepSeek.",
+                        },
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 8,
+                    "total_tokens": 18,
+                },
+            },
+        )
+
+    provider = OpenRouterModelProvider(
+        api_key="test-key",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    executor = ModelExecutor(provider=provider)
+
+    result = executor.execute(
+        ModelExecutionRequest(
+            role=AgentRole.PM,
+            project="lummevia-os",
+            environment="development",
+            prompt="Summarize the brief",
+            system_prompt="You are a PM",
+        )
+    )
+
+    assert result.provider == "OpenRouter"
+    assert result.model == "deepseek/deepseek-chat"
+    assert result.output == "Business summary from DeepSeek."
+    assert result.raw_output["usage"]["total_tokens"] == 18
+    assert result.metadata["provider_adapter"] == "openrouter"
+
+
+def test_openrouter_model_provider_handles_http_errors_clearly() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status_code=429,
+            json={
+                "error": {
+                    "code": 429,
+                    "message": "Rate limit exceeded",
+                }
+            },
+        )
+
+    provider = OpenRouterModelProvider(
+        api_key="test-key",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    executor = ModelExecutor(provider=provider)
+
+    with pytest.raises(
+        ModelExecutionError,
+        match="Model provider execution failed for role 'PM'",
+    ) as exc_info:
+        executor.execute(
+            ModelExecutionRequest(
+                role=AgentRole.PM,
+                project="lummevia-os",
+                environment="development",
+                prompt="Summarize the brief",
+                system_prompt="You are a PM",
+            )
+        )
+
+    assert exc_info.value.provider == "OPENROUTER"
+    assert exc_info.value.model == "deepseek/deepseek-chat"
+
+
 def test_base_agent_execute_model_works() -> None:
     agent = PMAgent()
 
@@ -129,9 +224,10 @@ def test_base_agent_execute_model_works() -> None:
         metadata={"run_id": "run-321"},
     )
 
-    assert result.model == "deepseek/deepseek-chat-pro"
+    assert result.model == "fake:pm"
     assert result.metadata["run_id"] == "run-321"
     assert result.metadata["role"] == "PM"
+    assert result.metadata["resolved_model"] == "deepseek/deepseek-chat-pro"
 
 
 def test_run_still_raises_agent_not_implemented_error() -> None:

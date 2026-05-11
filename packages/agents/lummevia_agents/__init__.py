@@ -7,6 +7,7 @@ from lummevia_agents.execution import (
     ModelExecutionResult,
     ModelExecutor,
     ModelProvider,
+    OpenRouterModelProvider,
 )
 from lummevia_agents.exceptions import AgentError, AgentNotImplementedError
 from lummevia_agents.prompts import (
@@ -39,6 +40,7 @@ __all__ = [
     "ModelExecutionResult",
     "ModelExecutor",
     "ModelProvider",
+    "OpenRouterModelProvider",
     "ContextBuilder",
     "PMAgent",
     "POAgent",

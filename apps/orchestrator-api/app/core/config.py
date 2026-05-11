@@ -113,6 +113,14 @@ class GitHubSettings:
 
 
 @dataclass(frozen=True)
+class OpenRouterSettings:
+    enabled: bool
+    api_key: str | None
+    base_url: str
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class RuntimePersistenceSettings:
     enabled: bool
     database_url: str
@@ -135,6 +143,7 @@ class Settings:
     phoenix: PhoenixSettings
     youtrack: YouTrackSettings
     github: GitHubSettings
+    openrouter: OpenRouterSettings
     runtime_persistence: RuntimePersistenceSettings
     kilo: KiloSettings
 
@@ -220,6 +229,20 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         github=GitHubSettings(
             token=_read_optional_string(environment, "GITHUB_TOKEN"),
             org=_read_optional_string(environment, "GITHUB_ORG"),
+        ),
+        openrouter=OpenRouterSettings(
+            enabled=_read_bool(environment, "OPENROUTER_ENABLED", False),
+            api_key=_read_optional_string(environment, "OPENROUTER_API_KEY"),
+            base_url=_read_string(
+                environment,
+                "OPENROUTER_BASE_URL",
+                "https://openrouter.ai/api/v1",
+            ),
+            timeout_seconds=_read_int(
+                environment,
+                "OPENROUTER_TIMEOUT_SECONDS",
+                60,
+            ),
         ),
         runtime_persistence=RuntimePersistenceSettings(
             enabled=_read_bool(environment, "RUNTIME_PERSISTENCE_ENABLED", False),

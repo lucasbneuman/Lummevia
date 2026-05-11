@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Agent skeletons for Lummevia OS."
 requires-python = ">=3.12"
 dependencies = [
+    "httpx==0.28.1",
     "pydantic==2.11.4",
     "lummevia-core",
     "lummevia-model-router",

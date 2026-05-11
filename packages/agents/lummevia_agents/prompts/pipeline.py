@@ -92,6 +92,8 @@ class PromptPipeline:
                 "issue_id": request.issue_id,
             }
         )
+        if model_execution.raw_output is not None:
+            metadata["model_raw_output"] = model_execution.raw_output
         return PromptExecutionResult(
             role=request.role,
             target_artifact=request.target_artifact,
