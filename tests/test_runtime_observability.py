@@ -150,6 +150,14 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert qa_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
     assert str(qa_span.attributes["execution_id"]).startswith("kilo-")
 
+    founder_review_span = next(
+        span for span in exporter.spans if span.name == "step:founder_business_approval"
+    )
+    assert founder_review_span.attributes["review_type"] == "BUSINESS_BRIEF"
+    assert founder_review_span.attributes["review_status"] == "COMPLETED"
+    assert founder_review_span.attributes["review_decision"] == "APPROVED"
+    assert str(founder_review_span.attributes["review_id"]).startswith("review-")
+
 
 def test_phoenix_runtime_observer_exports_kilo_retry_metadata_on_steps() -> None:
     exporter = RecordingSpanExporter()

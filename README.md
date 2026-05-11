@@ -61,6 +61,11 @@ packages/
       schemas.py
       scoring.py
       registry.py
+  reviews/
+    lummevia_reviews/
+      __init__.py
+      schemas.py
+      registry.py
   datasets/
     lummevia_datasets/
       __init__.py
@@ -290,6 +295,7 @@ Incluye:
 - `PromptPromotionResult` y `PromotionStatus` para formalizar promociones
 - `PromptBaselineRegistry` en memoria para comparar candidato vs baseline y registrar la version activa
 - `score_prompt_execution(...)` como evaluator fake y deterministico
+- metadata contractual para `review_required` y `review_id` sobre promociones
 
 La evaluacion fake actual revisa:
 
@@ -308,6 +314,33 @@ En esta etapa:
 - no hay approval UI
 - no hay persistencia DB de baselines
 - no hay evaluadores IA avanzados
+
+### Human Review Layer
+
+La primera capa contractual de revision/aprobacion humana vive en `packages/reviews/lummevia_reviews/`.
+
+Incluye:
+
+- `HumanReview` como contrato minimo para revisiones humanas
+- `ReviewDecision` con `APPROVED`, `REJECTED` y `NEEDS_CHANGES`
+- `ReviewStatus` con `PENDING`, `IN_REVIEW` y `COMPLETED`
+- `ReviewType` con `PROMPT_PROMOTION`, `BUSINESS_BRIEF`, `TASK_PLAN`, `QA_VALIDATION` y `QC_APPROVAL`
+- `HumanReviewRegistry` en memoria con `create_review()`, `get_review()`, `list_reviews()` y `complete_review()`
+
+Objetivo actual:
+
+- dejar approval gates trazables sin UI ni auth real
+- registrar decisiones humanas futuras como contratos explicitos
+- permitir endpoints simples para inspeccion y cierre manual de reviews
+
+Fuera de alcance en esta etapa:
+
+- UI real
+- auth real
+- RBAC completo
+- approvals distribuidos
+- notificaciones reales
+- workflows async complejos
 
 ### Prompt Regression Datasets
 
@@ -377,14 +410,26 @@ El primer endpoint disponible es:
 - compara el resultado contra la baseline activa si existe
 - decide `PROMOTED`, `REJECTED` o `NEEDS_REVIEW`
 - registra la nueva baseline activa solo cuando promueve
+- crea un `HumanReview` automatico solo cuando la decision es `NEEDS_REVIEW`
+- expone `review_required` y `review_id` en el contrato de promotion
 - expone deltas de score, pass rate, latencia y `failed_cases`
-- agrega metadata de promotion en Phoenix (`promotion_status`, `baseline_version`, `candidate_version`, `regression_delta_score`, `regression_delta_latency`)
+- agrega metadata de promotion en Phoenix (`promotion_status`, `baseline_version`, `candidate_version`, `regression_delta_score`, `regression_delta_latency`, `review_id`, `review_type`, `review_status`, `review_decision`)
 
 Reglas minimas de gating:
 
 - no promueve si `failed_cases` empeora demasiado
 - no promueve si `avg_score` cae de forma significativa
 - puede devolver `NEEDS_REVIEW` para regresiones leves o dudas de latencia
+
+Flujo actual de review para promotions:
+
+```text
+RegressionRunResult
+-> compare against active baseline
+-> PROMOTED | REJECTED | NEEDS_REVIEW
+-> if NEEDS_REVIEW: create HumanReview(PROMPT_PROMOTION)
+-> expose review_id in API response and Phoenix metadata
+```
 
 ### Kilo Adapter Skeleton
 
@@ -535,6 +580,8 @@ El runtime actual:
 - representa explicitamente la publicacion simulada de `github_pr`
 - representa explicitamente el loop `DEV ↔ QA`
 - hace explicito el gate de aprobacion Founder antes del handoff tecnico al PO
+- formaliza ese gate con un `HumanReview` de tipo `BUSINESS_BRIEF`
+- autoaprueba ese review dentro del flow fake actual para no cambiar el runtime sincrono
 - hace explicita la descomposicion del PO antes de DEV
 - deja lista la arquitectura para checkpoints futuros
 
@@ -580,6 +627,7 @@ La instrumentacion actual de Phoenix:
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
 - en el dry-run de `PM` tambien registra `template_id`, `template_version`, `prompt_hash`, `evaluation_status` y `evaluation_score`
+- agrega metadata de review cuando existe: `review_id`, `review_type`, `review_status` y `review_decision`
 - deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `role`, `task_id`, `kilo_status`, `retry_count`, `attempts_count` y `final_status`
 - agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
 - registra errores de runtime e instrumentacion sin romper el workflow
@@ -683,6 +731,10 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `POST /model-execution/pm/dry-run`
 - `GET /model-router/roles`
 - `POST /model-router/resolve`
+- `GET /reviews`
+- `GET /reviews/{review_id}`
+- `POST /reviews/{review_id}/approve`
+- `POST /reviews/{review_id}/reject`
 - `POST /runtime/development/run`
 - `GET /runtime/development/run/{run_id}`
 - `GET /workflows/development`
@@ -714,7 +766,10 @@ Ese endpoint:
 Roadmap futuro de evaluacion:
 
 - approval UI
+- review inbox UI
+- founder approval UI
 - persistencia durable de baselines y promotions
+- persistencia durable de reviews
 - CI/CD y gating reales
 - rollout gradual y A/B testing
 - comparacion automatica mas rica entre versiones de prompt

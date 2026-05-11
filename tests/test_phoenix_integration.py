@@ -69,6 +69,10 @@ def test_phoenix_trace_payload_accepts_valid_payload() -> None:
             "prompt_hash": "a" * 64,
             "evaluation_status": "PASSED",
             "evaluation_score": 0.9,
+            "review_id": "review-001",
+            "review_type": "PROMPT_PROMOTION",
+            "review_status": "PENDING",
+            "review_decision": "NEEDS_CHANGES",
         },
     )
 
@@ -77,6 +81,7 @@ def test_phoenix_trace_payload_accepts_valid_payload() -> None:
     assert payload.latency_ms == 1280
     assert payload.estimated_cost == 0.12
     assert payload.metadata["template_id"] == "pm_business_brief"
+    assert payload.metadata["review_type"] == "PROMPT_PROMOTION"
 
 
 def test_phoenix_trace_payload_defaults_fallback_to_false() -> None:

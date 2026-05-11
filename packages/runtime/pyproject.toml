@@ -15,6 +15,7 @@ dependencies = [
     "psycopg[binary]",
     "lummevia-core",
     "lummevia-kilo-adapter",
+    "lummevia-reviews",
 ]
 
 [tool.setuptools]

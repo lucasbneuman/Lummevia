@@ -13,10 +13,12 @@ from lummevia_datasets import get_dataset
 from lummevia_evaluations import (
     PromptBaselineRegistry,
     PromptPromotionResult,
+    PromotionStatus,
     RegressionRunResult,
 )
 from lummevia_evaluations.regression import PromptRegressionRunner
 from lummevia_integrations import PhoenixClient
+from lummevia_reviews import HumanReviewRegistry, ReviewType
 
 
 router = APIRouter(prefix="/evaluations", tags=["evaluations"])
@@ -109,6 +111,11 @@ def _observe_promotion_run(
     avg_score: float,
     avg_latency_ms: float,
     failed_cases: int,
+    review_required: bool,
+    review_id: str | None = None,
+    review_type: str | None = None,
+    review_status: str | None = None,
+    review_decision: str | None = None,
     error: str | None = None,
 ) -> None:
     attributes: dict[str, bool | int | float | str] = {
@@ -122,6 +129,7 @@ def _observe_promotion_run(
         "avg_score": avg_score,
         "avg_latency_ms": avg_latency_ms,
         "failed_cases": failed_cases,
+        "review_required": review_required,
     }
     if baseline_version is not None:
         attributes["baseline_version"] = baseline_version
@@ -133,6 +141,14 @@ def _observe_promotion_run(
         attributes["regression_delta_pass_rate"] = regression_delta_pass_rate
     if failed_cases_delta is not None:
         attributes["failed_cases_delta"] = failed_cases_delta
+    if review_id is not None:
+        attributes["review_id"] = review_id
+    if review_type is not None:
+        attributes["review_type"] = review_type
+    if review_status is not None:
+        attributes["review_status"] = review_status
+    if review_decision is not None:
+        attributes["review_decision"] = review_decision
     if error is not None:
         attributes["error"] = error
 
@@ -143,6 +159,10 @@ def _observe_promotion_run(
 
 def _get_baseline_registry() -> PromptBaselineRegistry:
     return PromptBaselineRegistry.default()
+
+
+def _get_review_registry() -> HumanReviewRegistry:
+    return HumanReviewRegistry.default()
 
 
 def _resolve_pm_dataset_id(template_id: str) -> str:
@@ -248,6 +268,7 @@ def pm_promote_prompt(
             avg_score=0.0,
             avg_latency_ms=0.0,
             failed_cases=0,
+            review_required=False,
             error=str(exc),
         )
         raise HTTPException(
@@ -259,6 +280,7 @@ def pm_promote_prompt(
         pipeline=PromptPipeline(model_executor=model_executor),
     )
     baseline_registry = _get_baseline_registry()
+    review_registry = _get_review_registry()
 
     try:
         regression_run = runner.run_dataset(
@@ -271,6 +293,22 @@ def pm_promote_prompt(
             candidate_version=request.candidate_version,
             current_summary=regression_run.summary,
         )
+        review = None
+        if comparison.promotion_status is PromotionStatus.NEEDS_REVIEW:
+            review = review_registry.create_review(
+                review_type=ReviewType.PROMPT_PROMOTION,
+                target_id=f"{request.template_id}:{request.candidate_version}",
+                target_type="PromptTemplateVersion",
+                requested_by=request.promoted_by or AgentRole.PM.value,
+                notes=comparison.summary,
+                metadata={
+                    "template_id": request.template_id,
+                    "candidate_version": request.candidate_version,
+                    "baseline_version": comparison.baseline_version,
+                    "regression_run_id": regression_run.regression_run_id,
+                    "project": request.project,
+                },
+            )
         promotion = baseline_registry.promote(
             template_id=request.template_id,
             candidate_version=request.candidate_version,
@@ -287,9 +325,18 @@ def pm_promote_prompt(
                 "regression_delta_latency": comparison.delta_latency_ms,
                 "regression_delta_pass_rate": comparison.delta_pass_rate,
                 "failed_cases_delta": comparison.failed_cases_delta,
+                "review_required": comparison.promotion_status is PromotionStatus.NEEDS_REVIEW,
+                "review_id": review.review_id if review is not None else None,
             },
             comparison=comparison,
         )
+        if review is not None:
+            promotion = promotion.model_copy(
+                update={
+                    "review_required": True,
+                    "review_id": review.review_id,
+                }
+            )
     except Exception as exc:
         _observe_promotion_run(
             template_id=request.template_id,
@@ -306,6 +353,7 @@ def pm_promote_prompt(
             avg_score=0.0,
             avg_latency_ms=0.0,
             failed_cases=0,
+            review_required=False,
             error=str(exc),
         )
         raise
@@ -325,6 +373,11 @@ def pm_promote_prompt(
         avg_score=regression_run.summary.avg_score,
         avg_latency_ms=regression_run.summary.avg_latency_ms,
         failed_cases=regression_run.summary.failed,
+        review_required=promotion.review_required,
+        review_id=promotion.review_id,
+        review_type=ReviewType.PROMPT_PROMOTION.value if promotion.review_id is not None else None,
+        review_status="PENDING" if promotion.review_id is not None else None,
+        review_decision=None,
     )
     return PMPromptPromotionResponse(
         promotion=promotion,

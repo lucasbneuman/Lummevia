@@ -100,6 +100,8 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "status": state.run.status.value,
             "loop_count": state.loop_count,
         }
+        review_metadata = self._extract_review_metadata(state, current_step=current_step)
+        attributes.update(review_metadata)
         kilo_step = (
             state.metadata.get("kilo_execution_by_step", {}).get(current_step)
             if current_step is not None
@@ -115,6 +117,23 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             attributes["attempts_count"] = kilo_step["attempts_count"]
             attributes["final_status"] = kilo_step["final_status"]
         return attributes
+
+    def _extract_review_metadata(
+        self,
+        state: RuntimeState,
+        *,
+        current_step: str | None,
+    ) -> dict[str, str]:
+        if current_step is None:
+            return {}
+
+        step_metadata = state.run.metadata.get(current_step, {})
+        review_metadata = {}
+        for key in ("review_id", "review_type", "review_status", "review_decision"):
+            value = step_metadata.get(key)
+            if value is not None:
+                review_metadata[key] = value
+        return review_metadata
 
     def _apply_state(
         self,

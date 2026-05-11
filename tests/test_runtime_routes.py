@@ -38,6 +38,10 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["artifacts"]["quality_approval"]["pr_ok"] is True
     assert body["artifacts"]["final_validation"]["approved"] is True
     assert body["run"]["events"]
+    assert body["run"]["metadata"]["founder_business_approval"]["review_id"]
+    assert body["run"]["metadata"]["founder_business_approval"]["review_type"] == "BUSINESS_BRIEF"
+    assert body["run"]["metadata"]["founder_business_approval"]["review_status"] == "COMPLETED"
+    assert body["run"]["metadata"]["founder_business_approval"]["review_decision"] == "APPROVED"
 
     github_pr_started_index = next(
         index

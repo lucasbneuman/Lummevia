@@ -97,5 +97,7 @@ class PromptPromotionResult(EvaluationBaseSchema):
     promoted_version: str = Field(min_length=1)
     promotion_status: PromotionStatus
     regression_passed: bool
+    review_required: bool = False
+    review_id: str | None = None
     summary: str = Field(min_length=1)
     timestamp: datetime
