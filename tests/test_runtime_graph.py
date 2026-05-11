@@ -30,6 +30,8 @@ def test_runtime_executes_complete_workflow() -> None:
     assert state.run.current_step == "po_final_validation"
     assert state.current_role == AgentRole.PO
     assert state.artifacts.business_brief is not None
+    assert state.artifacts.business_brief.business_brief_status == "approved"
+    assert state.artifacts.business_brief.founder_approved is True
     assert state.artifacts.execution_package is not None
     assert state.artifacts.implementation_package is not None
     assert state.artifacts.validation_package is not None
@@ -67,6 +69,8 @@ def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
         "BusinessBrief"
     )
     assert state.metadata["prompt_pipeline"]["qa_validation"]["provider_adapter"] == "fake"
+    assert state.metadata["business_brief_status"] == "approved"
+    assert state.metadata["founder_approved"] is True
 
 
 def test_dev_qa_loop_occurs_exactly_once() -> None:
@@ -128,6 +132,50 @@ def test_github_pr_occurs_after_qa_pass_and_before_qc() -> None:
     assert state.artifacts.pull_request is not None
     assert state.artifacts.pull_request["status"] == "OPEN"
     assert state.artifacts.pull_request["branch"] == state.artifacts.implementation_package.branch
+
+
+def test_founder_approval_occurs_before_po_execution_package() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4B")
+    events = state.run.events
+    approval_completed_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.step_name == "founder_business_approval"
+        and event.metadata["type"] == "STEP_COMPLETED"
+        and event.metadata.get("founder_approved") is True
+    )
+    po_started_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.step_name == "po_execution_package"
+        and event.metadata["type"] == "STEP_STARTED"
+    )
+
+    assert approval_completed_index < po_started_index
+
+
+def test_runtime_registers_founder_conversation_and_approval_events() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4C")
+    conversation_events = [
+        event for event in state.run.events if event.step_name == "founder_pm_conversation"
+    ]
+    approval_events = [
+        event for event in state.run.events if event.step_name == "founder_business_approval"
+    ]
+
+    assert [event.metadata["type"] for event in conversation_events] == [
+        "STEP_STARTED",
+        "STEP_COMPLETED",
+    ]
+    assert [event.metadata["type"] for event in approval_events] == [
+        "STEP_STARTED",
+        "STEP_COMPLETED",
+    ]
+    assert approval_events[-1].metadata["founder_approved"] is True
 
 
 def test_runtime_generates_unique_run_ids() -> None:

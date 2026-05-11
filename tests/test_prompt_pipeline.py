@@ -87,6 +87,8 @@ def test_prompt_pipeline_executes_pm_to_business_brief_fake() -> None:
     assert result.model_execution.metadata["provider_adapter"] == "fake"
     assert isinstance(result.structured_output, BusinessBrief)
     assert result.structured_output.issue_id == "LUM-301"
+    assert result.structured_output.business_brief_status == "draft"
+    assert result.structured_output.founder_approved is False
 
 
 def test_prompt_pipeline_executes_po_to_execution_package_fake() -> None:
@@ -111,6 +113,8 @@ def test_prompt_pipeline_executes_po_to_execution_package_fake() -> None:
                     constraints=["No real providers"],
                     non_goals=["Connect OpenRouter"],
                     kpis=["Pipeline returns fake structured output"],
+                    business_brief_status="approved",
+                    founder_approved=True,
                 )
             },
             metadata={"trace_id": "trace-po"},

@@ -161,6 +161,8 @@ class PromptPipeline:
                 f"Pipeline renders prompt for {context.role.value}",
                 f"Context includes artifacts: {', '.join(artifact_names)}",
             ],
+            business_brief_status="draft",
+            founder_approved=False,
         )
 
     def _build_execution_package(self, context: PromptContext) -> ExecutionPackage:
@@ -171,18 +173,23 @@ class PromptPipeline:
             technical_story=(
                 "Connect the simulated runtime nodes to agents that delegate "
                 "artifact production through PromptPipeline and FakeModelProvider. "
-                f"Business objective: {business_brief.get('objective', 'not supplied')}."
+                f"Business objective: {business_brief.get('objective', 'not supplied')}. "
+                "Founder approval is required before this package is created."
             ),
             acceptance_criteria=[
                 "Runtime PM node delegates BusinessBrief generation to PMAgent",
+                "Founder approval happens before the PO execution package node",
                 "Runtime PO, DEV, QA, and QC nodes produce artifacts via PromptPipeline",
                 "Pipeline returns fake structured outputs validated by core schemas",
             ],
             edge_cases=[
                 "Missing template fails explicitly",
                 "QA outcome changes according to loop_count metadata",
+                "PO must not execute from a draft business brief",
             ],
             testing_scenarios=[
+                "Founder and PM iterate before drafting the BusinessBrief",
+                "Founder approves the BusinessBrief before PO execution",
                 "PM produces BusinessBrief",
                 "Runtime completes DEV-QA loop before PR creation",
             ],
@@ -191,6 +198,7 @@ class PromptPipeline:
                 "Structured outputs stay fake until real providers are introduced",
             ],
             task_checklist=[
+                "Simulate founder to PM conversation and founder approval gates",
                 "Delegate runtime artifact creation to agents",
                 "Preserve runtime persistence and Phoenix instrumentation",
                 "Keep github_pr as a separate simulated node",

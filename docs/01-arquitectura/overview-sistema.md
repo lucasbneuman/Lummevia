@@ -144,7 +144,8 @@ Ninguna capa debe absorber responsabilidades de otra.
 El flujo principal del sistema es:
 
 ```text
-Founder → PM → PO → DEV → QA → PR → QC → PO final
+Founder → PM conversation loop → Business Brief draft → Founder approval →
+Business Brief approved → PO → DEV → QA → PR → QC → PO final
 ```
 
 La definición detallada de handoffs, artefactos y validaciones vive en `docs/03-workflows/loop-desarrollo.md`.

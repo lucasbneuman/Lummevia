@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from .enums import Priority, ValidationStatus
 from .validation import CoreArtifactModel
 
@@ -14,6 +16,8 @@ class BusinessBrief(CoreArtifactModel):
     constraints: list[str]
     non_goals: list[str]
     kpis: list[str]
+    business_brief_status: Literal["draft", "approved"]
+    founder_approved: bool
 
 
 class ExecutionPackage(CoreArtifactModel):

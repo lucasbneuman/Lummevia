@@ -30,10 +30,14 @@ def test_business_brief_accepts_valid_payload() -> None:
         constraints=["No external integrations"],
         non_goals=["Implement runtime agents"],
         kpis=["Triage time under 10 minutes"],
+        business_brief_status="draft",
+        founder_approved=False,
     )
 
     assert artifact.issue_id == "LUM-101"
     assert artifact.priority == Priority.HIGH
+    assert artifact.business_brief_status == "draft"
+    assert artifact.founder_approved is False
 
 
 def test_execution_package_accepts_valid_payload() -> None:
@@ -150,6 +154,8 @@ def test_workflow_run_accepts_valid_payload() -> None:
                 "constraints": [],
                 "non_goals": [],
                 "kpis": [],
+                "business_brief_status": "draft",
+                "founder_approved": False,
             },
         ),
         (
@@ -218,6 +224,25 @@ def test_business_brief_rejects_invalid_priority() -> None:
             constraints=[],
             non_goals=[],
             kpis=[],
+            business_brief_status="draft",
+            founder_approved=False,
+        )
+
+
+def test_business_brief_rejects_invalid_approval_status() -> None:
+    with pytest.raises(ValidationError):
+        BusinessBrief(
+            issue_id="LUM-106A",
+            project="lummevia-os",
+            objective="Objective",
+            problem="Problem",
+            expected_impact="Impact",
+            priority=Priority.HIGH,
+            constraints=[],
+            non_goals=[],
+            kpis=[],
+            business_brief_status="submitted",
+            founder_approved=False,
         )
 
 

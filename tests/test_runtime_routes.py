@@ -27,6 +27,8 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["loop_count"] == 1
     assert body["max_loop_count"] == 1
     assert body["artifacts"]["business_brief"]["issue_id"] == "OS-100"
+    assert body["artifacts"]["business_brief"]["business_brief_status"] == "approved"
+    assert body["artifacts"]["business_brief"]["founder_approved"] is True
     assert body["artifacts"]["validation_package"]["status"] == "PASSED"
     assert body["artifacts"]["pull_request"]["status"] == "OPEN"
     assert body["artifacts"]["pull_request"]["url"].endswith("/pull/1002")
@@ -52,8 +54,22 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
         if event["step_name"] == "qc_quality_approval"
         and event["metadata"]["type"] == "STEP_STARTED"
     )
+    founder_approval_completed_index = next(
+        index
+        for index, event in enumerate(body["run"]["events"])
+        if event["step_name"] == "founder_business_approval"
+        and event["metadata"]["type"] == "STEP_COMPLETED"
+        and event["metadata"].get("founder_approved") is True
+    )
+    po_started_index = next(
+        index
+        for index, event in enumerate(body["run"]["events"])
+        if event["step_name"] == "po_execution_package"
+        and event["metadata"]["type"] == "STEP_STARTED"
+    )
 
     assert qa_pass_completed_index < github_pr_started_index < qc_started_index
+    assert founder_approval_completed_index < po_started_index
 
 
 def test_runtime_post_generates_unique_run_ids() -> None:

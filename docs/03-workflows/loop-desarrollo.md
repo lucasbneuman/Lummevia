@@ -9,9 +9,13 @@ Definir el flujo principal de contexto, artefactos, ejecución y validación den
 ```text
 Founder
 ↓
-PM
+PM conversation loop
 ↓
-Business Brief
+Business Brief draft
+↓
+Founder approval
+↓
+Business Brief approved
 ↓
 PO
 ↓
@@ -38,15 +42,25 @@ merge / cierre
 
 ## Secuencia operativa
 
-### 1. Founder → PM
+### 1. Founder → PM conversation loop
 
 Founder define intención, necesidad y prioridad humana.
 
-PM transforma esa intención en un `Business Brief`.
+Founder y PM pueden iterar en conversación para aclarar objetivo, alcance y prioridad antes de formalizar el brief.
 
-### 2. PM → PO
+El resultado de este loop es contexto alineado para producir un `Business Brief` en estado `draft`.
 
-PO consume el `Business Brief`, el contexto operacional relevante y la documentación técnica del proyecto.
+### 2. PM draft → Founder approval
+
+PM transforma esa intención alineada en un `Business Brief`.
+
+Ese brief queda en estado `draft` hasta que Founder apruebe explícitamente su contenido.
+
+El handoff al PO sólo puede ocurrir cuando el `Business Brief` está en estado `approved`.
+
+### 3. PM approved brief → PO
+
+PO consume el `Business Brief` aprobado, el contexto operacional relevante y la documentación técnica del proyecto.
 
 PO produce un `Execution Package` con:
 - alcance técnico
@@ -57,7 +71,7 @@ PO produce un `Execution Package` con:
 - tasks concretas
 - prompts para DEV
 
-### 3. PO → DEV
+### 4. PO → DEV
 
 DEV consume el `Execution Package`, la task asignada y el contexto técnico local del repositorio.
 
@@ -67,7 +81,7 @@ DEV implementa y produce:
 - commits
 - `Implementation Package`
 
-### 4. DEV ↔ QA
+### 5. DEV ↔ QA
 
 QA valida comportamiento, criterios de aceptación y edge cases sobre la implementación.
 
@@ -75,13 +89,13 @@ QA produce un `Validation Package`.
 
 Si encuentra errores, crea `BUG issues` y se reabre la iteración DEV ↔ QA hasta que la implementación quede validada.
 
-### 5. QA PASS → GitHub PR
+### 6. QA PASS → GitHub PR
 
 Una vez que QA valida la implementación, DEV materializa la evidencia técnica en GitHub mediante un PR.
 
 El nodo `github_pr` ocurre explícitamente después de `QA PASS`.
 
-### 6. GitHub PR → QC
+### 7. GitHub PR → QC
 
 QC revisa el PR ya generado como validación técnica final.
 
@@ -93,7 +107,7 @@ QC verifica:
 
 QC produce `Quality Approval`.
 
-### 7. QC → PO final
+### 8. QC → PO final
 
 PO final consume:
 - PR
@@ -149,7 +163,8 @@ Se usa para:
 
 | Artefacto | Responsable |
 |---|---|
-| Business Brief | PM |
+| Business Brief draft | PM |
+| Business Brief approved | Founder |
 | Execution Package | PO |
 | Implementation Package | DEV |
 | Validation Package | QA |
@@ -158,6 +173,7 @@ Se usa para:
 ## Reglas importantes
 
 - `AGENTS.md` es un router de contexto, no el documento maestro del sistema.
+- PM no puede enviar trabajo al PO sin aprobación explícita del Founder.
 - YouTrack sigue siendo memoria operacional.
 - El repositorio sigue siendo verdad técnica.
 - Phoenix sigue siendo observabilidad.

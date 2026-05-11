@@ -13,6 +13,7 @@ Responsabilidad:
 
 Produce:
 - intención inicial
+- aprobación explícita del Business Brief antes del handoff al PO
 
 No debe:
 - definir implementación técnica
@@ -22,6 +23,7 @@ No debe:
 ## PM
 
 Responsabilidad:
+- iterar con Founder hasta alinear objetivo, alcance y prioridad antes del handoff técnico
 - transformar intención humana en Business Brief
 - definir objetivo, impacto y prioridad
 - mantener dirección operacional
@@ -31,12 +33,13 @@ Consume:
 - YouTrack Issues relevantes
 
 Produce:
-- Business Brief
+- Business Brief en estado `draft`
 
 No debe:
 - escribir código
 - definir implementación técnica
 - definir arquitectura técnica detallada
+- enviar trabajo al PO sin aprobación explícita del Founder
 
 ## PO
 
@@ -46,7 +49,7 @@ Responsabilidad:
 - coordinar el alcance técnico a implementar
 
 Consume:
-- Business Brief
+- Business Brief aprobado explícitamente por Founder
 - YouTrack KB del proyecto
 - YouTrack Issues
 - repositorio
@@ -157,6 +160,11 @@ No debe:
 - aprobar features rotas
 
 ## Regla fundamental
+
+Regla de aprobación:
+- Founder y PM pueden iterar en conversación antes de cerrar el brief
+- PM produce un `Business Brief` en estado `draft`
+- PO no debe ejecutarse hasta que Founder apruebe explícitamente ese brief
 
 Cada rol:
 - consume contexto desde fuentes correctas

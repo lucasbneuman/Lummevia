@@ -31,18 +31,43 @@ class DevelopmentWorkflowDefinition(WorkflowDefinition):
                 ),
             ),
             WorkflowStep(
-                name="pm_business_brief",
+                name="founder_pm_conversation",
                 responsible_role=AgentRole.PM,
                 consumes=["founder_input"],
+                produces=["founder_pm_alignment"],
+                description=(
+                    "Simulate the Founder-PM conversation loop that refines scope "
+                    "before drafting the BusinessBrief."
+                ),
+            ),
+            WorkflowStep(
+                name="pm_business_brief",
+                responsible_role=AgentRole.PM,
+                consumes=["founder_input", "founder_pm_alignment"],
                 produces=["BusinessBrief"],
-                description="Transform founder input into a BusinessBrief.",
+                description=(
+                    "Transform founder intent and alignment notes into a draft "
+                    "BusinessBrief."
+                ),
+            ),
+            WorkflowStep(
+                name="founder_business_approval",
+                responsible_role=AgentRole.FOUNDER,
+                consumes=["BusinessBrief"],
+                produces=["BusinessBriefApproved"],
+                description=(
+                    "Require explicit founder approval before the BusinessBrief "
+                    "can move to the PO."
+                ),
             ),
             WorkflowStep(
                 name="po_execution_package",
                 responsible_role=AgentRole.PO,
-                consumes=["BusinessBrief"],
+                consumes=["BusinessBriefApproved"],
                 produces=["ExecutionPackage"],
-                description="Translate the BusinessBrief into an ExecutionPackage.",
+                description=(
+                    "Translate the approved BusinessBrief into an ExecutionPackage."
+                ),
             ),
             WorkflowStep(
                 name="dev_implementation",

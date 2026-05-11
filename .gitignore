@@ -38,7 +38,7 @@ ENV/
 logs/
 tmp/
 temp/
-runtime/
+/runtime/
 *.pid
 *.pid.lock
 

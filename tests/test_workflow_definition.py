@@ -8,7 +8,9 @@ def test_development_workflow_contains_expected_steps_in_order() -> None:
 
     assert [step.name for step in workflow.steps] == [
         "founder_input",
+        "founder_pm_conversation",
         "pm_business_brief",
+        "founder_business_approval",
         "po_execution_package",
         "dev_implementation",
         "qa_validation",
@@ -51,6 +53,20 @@ def test_dev_qa_iteration_step_exists_explicitly() -> None:
     assert iteration_step.responsible_role == AgentRole.QA
     assert "ImplementationPackage" in iteration_step.consumes
     assert "ValidationPackage" in iteration_step.produces
+
+
+def test_founder_approval_step_happens_before_po_execution_package() -> None:
+    workflow = DevelopmentWorkflowDefinition()
+
+    step_names = [step.name for step in workflow.steps]
+
+    assert step_names.index("founder_pm_conversation") < step_names.index("pm_business_brief")
+    assert step_names.index("pm_business_brief") < step_names.index(
+        "founder_business_approval"
+    )
+    assert step_names.index("founder_business_approval") < step_names.index(
+        "po_execution_package"
+    )
 
 
 def test_workflow_exports_to_dict_and_json() -> None:
