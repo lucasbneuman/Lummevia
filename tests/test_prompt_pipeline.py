@@ -14,9 +14,36 @@ from lummevia_agents.prompts import (
     PromptExecutionRequest,
     PromptPipeline,
     PromptRegistry,
+    PromptTemplate,
     PromptTemplateNotFoundError,
 )
+from lummevia_agents.prompts.templates import build_default_templates
+from lummevia_evaluations import PromptBaselineRegistry
 from lummevia_evaluations import EvaluationStatus
+
+
+def build_regression_run_for_test(*, template_version: str):
+    from datetime import UTC, datetime
+
+    from lummevia_evaluations import RegressionRunResult, RegressionRunSummary
+
+    now = datetime.now(UTC)
+    return RegressionRunResult(
+        regression_run_id=f"regr-{template_version}",
+        template_id="pm_business_brief",
+        template_version=template_version,
+        dataset_id="pm_business_brief_dataset",
+        summary=RegressionRunSummary(
+            total=5,
+            passed=5,
+            failed=0,
+            avg_score=0.9,
+            avg_latency_ms=110.0,
+        ),
+        cases=[],
+        started_at=now,
+        completed_at=now,
+    )
 
 
 def test_prompt_registry_returns_pm_template() -> None:
@@ -46,6 +73,38 @@ def test_prompt_registry_returns_po_task_plan_template() -> None:
 
     assert template.role == AgentRole.PO
     assert template.target_artifact == "TaskPlan"
+
+
+def test_prompt_registry_resolves_active_baseline_version_when_no_version_is_provided() -> None:
+    baseline_registry = PromptBaselineRegistry()
+    templates = build_default_templates()
+    templates.append(
+        PromptTemplate(
+            template_id="pm_business_brief",
+            version="v2",
+            role=AgentRole.PM,
+            target_artifact="BusinessBrief",
+            artifact_model=BusinessBrief,
+            system_prompt="You are the PM role in Lummevia OS.",
+            instructions="A promoted version for active resolution tests.",
+        )
+    )
+    registry = PromptRegistry(templates, baseline_registry=baseline_registry)
+    baseline_registry.promote(
+        template_id="pm_business_brief",
+        candidate_version="v1",
+        regression_run=build_regression_run_for_test(template_version="v1"),
+    )
+
+    active_template = registry.get_template(AgentRole.PM, "BusinessBrief")
+    explicit_template = registry.get_template(
+        AgentRole.PM,
+        "BusinessBrief",
+        version="v2",
+    )
+
+    assert active_template.version == "v1"
+    assert explicit_template.version == "v2"
 
 
 def test_prompt_registry_raises_clear_error_for_missing_template() -> None:
@@ -193,6 +252,39 @@ def test_prompt_pipeline_prompt_hash_is_deterministic() -> None:
 
     assert first.prompt == second.prompt
     assert first.prompt_hash == second.prompt_hash
+
+
+def test_prompt_pipeline_uses_explicit_template_version_when_requested() -> None:
+    baseline_registry = PromptBaselineRegistry()
+    templates = build_default_templates()
+    templates.append(
+        PromptTemplate(
+            template_id="pm_business_brief",
+            version="v2",
+            role=AgentRole.PM,
+            target_artifact="BusinessBrief",
+            artifact_model=BusinessBrief,
+            system_prompt="You are the PM role in Lummevia OS.",
+            instructions="Use the candidate v2 PM prompt.",
+        )
+    )
+    pipeline = PromptPipeline(
+        registry=PromptRegistry(templates, baseline_registry=baseline_registry),
+        model_executor=ModelExecutor(provider=FakeModelProvider()),
+    )
+
+    result = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PM,
+            project="lummevia-os",
+            issue_id="LUM-303B",
+            target_artifact="BusinessBrief",
+            template_version="v2",
+            metadata={"trace_id": "trace-explicit-version"},
+        )
+    )
+
+    assert result.template_version == "v2"
 
 
 def test_prompt_pipeline_executes_po_to_task_plan_fake() -> None:

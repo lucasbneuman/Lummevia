@@ -42,6 +42,7 @@ class PromptExecutionRequest(AgentBaseSchema):
     project: str = Field(min_length=1)
     issue_id: str = Field(min_length=1)
     target_artifact: str = Field(min_length=1)
+    template_version: str | None = Field(default=None, min_length=1)
     environment: str | None = None
     available_artifacts: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -76,7 +77,11 @@ class PromptPipeline:
         self.model_executor = model_executor or ModelExecutor()
 
     def execute(self, request: PromptExecutionRequest) -> PromptExecutionResult:
-        template = self.registry.get_template(request.role, request.target_artifact)
+        template = self.registry.get_template(
+            request.role,
+            request.target_artifact,
+            version=request.template_version,
+        )
         context = self.context_builder.build(
             project=request.project,
             issue_id=request.issue_id,

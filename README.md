@@ -221,7 +221,7 @@ La primera capa de pipeline de prompts vive en `packages/agents/lummevia_agents/
 Incluye:
 
 - `PromptTemplate` para declarar identidad estable del prompt con `template_id`, `version`, `created_at`, `tags`, rol, artefacto destino, system prompt e instrucciones base
-- `PromptRegistry` para resolver templates por `role + target_artifact`
+- `PromptRegistry` para resolver templates por `role + target_artifact`, version explicita o baseline activa
 - `ContextBuilder` para armar contexto minimo desde `project`, `issue_id`, `role`, `available_artifacts` y `metadata`
 - `PromptPipeline` para renderizar prompt final, calcular `prompt_hash` deterministico con `sha256`, ejecutar `ModelExecutor` y devolver un resultado estructurado con metadata versionada
 - el flujo del `PO` ahora se decompone en `ExecutionPackage -> TaskPlan -> TaskPackage`
@@ -258,6 +258,12 @@ PromptExecutionRequest
 -> fake structured output validado con artifacts de core
 ```
 
+Resolucion activa actual:
+
+- si el caller envia `template_version`, se usa esa version
+- si no se envia version y existe baseline promovida para `template_id`, se usa la version activa
+- si no existe baseline, se usa la ultima version registrada para ese template
+
 Para el `PO`, el fake pipeline ahora puede producir:
 
 - un `TaskPlan` valido
@@ -280,6 +286,9 @@ Incluye:
 - `PromptEvaluation` como contrato minimo de evaluacion
 - `EvaluationStatus` con `PENDING`, `PASSED`, `FAILED` y `NEEDS_REVIEW`
 - `PromptEvaluationRegistry` en memoria para registrar evaluaciones sin DB
+- `PromptBaseline` para guardar la baseline activa por `template_id`
+- `PromptPromotionResult` y `PromotionStatus` para formalizar promociones
+- `PromptBaselineRegistry` en memoria para comparar candidato vs baseline y registrar la version activa
 - `score_prompt_execution(...)` como evaluator fake y deterministico
 
 La evaluacion fake actual revisa:
@@ -296,7 +305,9 @@ En esta etapa:
 - no hay datasets masivos
 - no hay UI de evaluacion humana
 - no hay persistencia durable de evaluaciones
-- no hay comparacion automatica multi-run todavia, pero ya quedan `evaluation_id`, `score`, `status` y metadata listos para evolucionar
+- no hay approval UI
+- no hay persistencia DB de baselines
+- no hay evaluadores IA avanzados
 
 ### Prompt Regression Datasets
 
@@ -333,6 +344,7 @@ Incluye:
 - `RegressionCaseResult` y `RegressionRunResult` como contratos de salida
 - `RegressionRunSummary` con `total`, `passed`, `failed`, `avg_score` y `avg_latency_ms`
 - comparacion deterministica por `expected_keywords` y `expected_sections` usando el evaluator fake existente
+- comparacion simple contra baseline activa por `avg_score`, pass rate, `avg_latency_ms` y delta de `failed_cases`
 
 Flujo actual:
 
@@ -349,14 +361,30 @@ PromptDataset
 El primer endpoint disponible es:
 
 - `POST /evaluations/pm/regression-run`
+- `POST /evaluations/pm/promote`
 
-Ese endpoint:
+`POST /evaluations/pm/regression-run`:
 
 - ejecuta el dataset `pm_business_brief_dataset`
 - usa DeepSeek solo si `DEEPSEEK_ENABLED=true`
 - cae a `FakeModelProvider` cuando DeepSeek esta deshabilitado
 - no persiste corridas
 - agrega metadata de regression en Phoenix (`regression_run_id`, `dataset_id`, `total_cases`, `passed_cases`, `failed_cases`, `avg_score`, `avg_latency_ms`)
+
+`POST /evaluations/pm/promote`:
+
+- corre regression para una `candidate_version`
+- compara el resultado contra la baseline activa si existe
+- decide `PROMOTED`, `REJECTED` o `NEEDS_REVIEW`
+- registra la nueva baseline activa solo cuando promueve
+- expone deltas de score, pass rate, latencia y `failed_cases`
+- agrega metadata de promotion en Phoenix (`promotion_status`, `baseline_version`, `candidate_version`, `regression_delta_score`, `regression_delta_latency`)
+
+Reglas minimas de gating:
+
+- no promueve si `failed_cases` empeora demasiado
+- no promueve si `avg_score` cae de forma significativa
+- puede devolver `NEEDS_REVIEW` para regresiones leves o dudas de latencia
 
 ### Kilo Adapter Skeleton
 
@@ -651,6 +679,7 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /health`
 - `GET /info`
 - `POST /evaluations/pm/regression-run`
+- `POST /evaluations/pm/promote`
 - `POST /model-execution/pm/dry-run`
 - `GET /model-router/roles`
 - `POST /model-router/resolve`
@@ -684,12 +713,16 @@ Ese endpoint:
 
 Roadmap futuro de evaluacion:
 
-- comparacion automatica entre versiones de prompt
-- regression detection por template
+- approval UI
+- persistencia durable de baselines y promotions
+- CI/CD y gating reales
+- rollout gradual y A/B testing
+- comparacion automatica mas rica entre versiones de prompt
+- regression detection mas sofisticado por template
 - almacenamiento durable de evaluaciones
 - datasets y suites de regression dedicadas
 - evaluacion humana y scoring mas sofisticado
-- comparacion de baselines entre versiones del mismo template
+- multi-tenant prompt stores
 
 Los endpoints de `workflows` tambien son de diagnostico. Sirven para inspeccionar la definicion contractual del workflow de desarrollo expuesta desde `core`.
 

@@ -26,8 +26,12 @@ class PromptRegressionRunner:
         dataset: PromptDataset,
         *,
         project: str,
+        template_version: str | None = None,
     ) -> RegressionRunResult:
-        template = self.pipeline.registry.get_template_by_id(dataset.template_id)
+        template = self.pipeline.registry.get_template_by_id(
+            dataset.template_id,
+            version=template_version,
+        )
         regression_run_id = f"regr-{uuid4().hex[:12]}"
         started_at = datetime.now(UTC)
         cases = [
@@ -35,8 +39,7 @@ class PromptRegressionRunner:
                 dataset=dataset,
                 case=case,
                 project=project,
-                role=template.role,
-                target_artifact=template.target_artifact,
+                template=template,
             )
             for case in dataset.cases
         ]
@@ -60,14 +63,14 @@ class PromptRegressionRunner:
         dataset: PromptDataset,
         case: PromptDatasetCase,
         project: str,
-        role: AgentRole,
-        target_artifact: str,
+        template,
     ) -> RegressionCaseResult:
         request = PromptExecutionRequest(
-            role=role,
+            role=template.role,
             project=project,
             issue_id=str(case.metadata.get("issue_id", case.case_id)),
-            target_artifact=target_artifact,
+            target_artifact=template.target_artifact,
+            template_version=template.version,
             available_artifacts=self._build_available_artifacts(
                 template_id=dataset.template_id,
                 case=case,
@@ -86,9 +89,7 @@ class PromptRegressionRunner:
                 case_id=case.case_id,
                 dataset_id=dataset.dataset_id,
                 template_id=dataset.template_id,
-                template_version=self.pipeline.registry.get_template_by_id(
-                    dataset.template_id
-                ).version,
+                template_version=template.version,
                 input_prompt=case.input_prompt,
                 expected_keywords=list(case.expected_keywords),
                 expected_sections=list(case.expected_sections),

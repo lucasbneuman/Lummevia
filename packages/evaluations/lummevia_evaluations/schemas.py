@@ -73,3 +73,29 @@ class RegressionRunResult(EvaluationBaseSchema):
     cases: list[RegressionCaseResult] = Field(default_factory=list)
     started_at: datetime
     completed_at: datetime
+
+
+class PromotionStatus(StrEnum):
+    PROMOTED = "PROMOTED"
+    REJECTED = "REJECTED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class PromptBaseline(EvaluationBaseSchema):
+    template_id: str = Field(min_length=1)
+    active_version: str = Field(min_length=1)
+    promoted_at: datetime
+    promoted_by: str | None = None
+    regression_summary: RegressionRunSummary
+    notes: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PromptPromotionResult(EvaluationBaseSchema):
+    template_id: str = Field(min_length=1)
+    previous_version: str | None = None
+    promoted_version: str = Field(min_length=1)
+    promotion_status: PromotionStatus
+    regression_passed: bool
+    summary: str = Field(min_length=1)
+    timestamp: datetime
