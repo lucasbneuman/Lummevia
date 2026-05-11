@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from lummevia_core import AgentRole
 
-from app.core.config import OpenRouterSettings
-from lummevia_agents import FakeModelProvider, ModelExecutor, OpenRouterModelProvider
+from app.core.config import DeepSeekSettings
+from lummevia_agents import DeepSeekModelProvider, FakeModelProvider, ModelExecutor
 
 
 def build_dry_run_model_executor(
     role: AgentRole,
     *,
-    openrouter: OpenRouterSettings,
+    deepseek: DeepSeekSettings,
 ) -> ModelExecutor:
     if role is not AgentRole.PM:
         return ModelExecutor(
@@ -19,23 +19,23 @@ def build_dry_run_model_executor(
             )
         )
 
-    if not openrouter.enabled:
+    if not deepseek.enabled:
         return ModelExecutor(
             provider=FakeModelProvider(
                 fallback_used=True,
-                fallback_reason="openrouter_disabled",
+                fallback_reason="deepseek_disabled",
             )
         )
 
-    if openrouter.api_key is None:
+    if deepseek.api_key is None:
         raise ValueError(
-            "OPENROUTER_API_KEY is required when OPENROUTER_ENABLED=true."
+            "DEEPSEEK_API_KEY is required when DEEPSEEK_ENABLED=true."
         )
 
     return ModelExecutor(
-        provider=OpenRouterModelProvider(
-            api_key=openrouter.api_key,
-            base_url=openrouter.base_url,
-            timeout_seconds=openrouter.timeout_seconds,
+        provider=DeepSeekModelProvider(
+            api_key=deepseek.api_key,
+            base_url=deepseek.base_url,
+            timeout_seconds=deepseek.timeout_seconds,
         )
     )

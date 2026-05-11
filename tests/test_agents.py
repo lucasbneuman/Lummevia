@@ -48,8 +48,8 @@ def test_agent_run_result_accepts_valid_payload() -> None:
         role=AgentRole.PM,
         status="placeholder",
         output=None,
-        provider="OPENROUTER",
-        model="deepseek/deepseek-chat",
+        provider="DEEPSEEK",
+        model="deepseek-v4-strong-placeholder",
         metadata={"reason": "not implemented"},
     )
 

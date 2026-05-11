@@ -24,10 +24,10 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.youtrack.token is None
     assert settings.github.token is None
     assert settings.github.org is None
-    assert settings.openrouter.enabled is False
-    assert settings.openrouter.api_key is None
-    assert settings.openrouter.base_url == "https://openrouter.ai/api/v1"
-    assert settings.openrouter.timeout_seconds == 60
+    assert settings.deepseek.enabled is False
+    assert settings.deepseek.api_key is None
+    assert settings.deepseek.base_url == "https://api.deepseek.com"
+    assert settings.deepseek.timeout_seconds == 60
     assert settings.runtime_persistence.enabled is False
     assert settings.runtime_persistence.database_url == (
         "postgresql+psycopg://lummevia:lummevia@postgres:5432/lummevia"
@@ -63,10 +63,10 @@ def test_settings_load_safe_values_from_env() -> None:
             "YOUTRACK_TOKEN": "yt-token",
             "GITHUB_TOKEN": "gh-token",
             "GITHUB_ORG": "lummevia",
-            "OPENROUTER_ENABLED": "true",
-            "OPENROUTER_API_KEY": "or-key",
-            "OPENROUTER_BASE_URL": "https://openrouter.example.com/api/v1",
-            "OPENROUTER_TIMEOUT_SECONDS": "75",
+            "DEEPSEEK_ENABLED": "true",
+            "DEEPSEEK_API_KEY": "ds-key",
+            "DEEPSEEK_BASE_URL": "https://deepseek.example.com",
+            "DEEPSEEK_TIMEOUT_SECONDS": "75",
             "RUNTIME_PERSISTENCE_ENABLED": "true",
             "RUNTIME_DATABASE_URL": "postgresql+psycopg://tester:secret@db.internal:5544/lummevia_test",
             "KILO_ENABLED": "true",
@@ -96,10 +96,10 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.youtrack.token == "yt-token"
     assert settings.github.token == "gh-token"
     assert settings.github.org == "lummevia"
-    assert settings.openrouter.enabled is True
-    assert settings.openrouter.api_key == "or-key"
-    assert settings.openrouter.base_url == "https://openrouter.example.com/api/v1"
-    assert settings.openrouter.timeout_seconds == 75
+    assert settings.deepseek.enabled is True
+    assert settings.deepseek.api_key == "ds-key"
+    assert settings.deepseek.base_url == "https://deepseek.example.com"
+    assert settings.deepseek.timeout_seconds == 75
     assert settings.runtime_persistence.enabled is True
     assert settings.runtime_persistence.database_url == (
         "postgresql+psycopg://tester:secret@db.internal:5544/lummevia_test"
@@ -205,12 +205,18 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "YOUTRACK_TOKEN=",
         "GITHUB_TOKEN=",
         "GITHUB_ORG=",
-        "OPENROUTER_API_KEY=",
-        "OPENROUTER_BASE_URL=",
-        "OPENROUTER_ENABLED=",
-        "OPENROUTER_TIMEOUT_SECONDS=",
+        "DEEPSEEK_API_KEY=",
+        "DEEPSEEK_BASE_URL=",
+        "DEEPSEEK_ENABLED=",
+        "DEEPSEEK_TIMEOUT_SECONDS=",
         "MODEL_PM_PROVIDER=",
         "MODEL_PM_NAME=",
+        "MODEL_PO_PROVIDER=",
+        "MODEL_PO_NAME=",
+        "MODEL_DEV_PROVIDER=",
+        "MODEL_DEV_NAME=",
+        "MODEL_QA_PROVIDER=",
+        "MODEL_QA_NAME=",
         "RUNTIME_PERSISTENCE_ENABLED=",
         "RUNTIME_DATABASE_URL=",
         "KILO_ENABLED=",

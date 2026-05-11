@@ -113,7 +113,7 @@ class GitHubSettings:
 
 
 @dataclass(frozen=True)
-class OpenRouterSettings:
+class DeepSeekSettings:
     enabled: bool
     api_key: str | None
     base_url: str
@@ -143,7 +143,7 @@ class Settings:
     phoenix: PhoenixSettings
     youtrack: YouTrackSettings
     github: GitHubSettings
-    openrouter: OpenRouterSettings
+    deepseek: DeepSeekSettings
     runtime_persistence: RuntimePersistenceSettings
     kilo: KiloSettings
 
@@ -230,17 +230,17 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             token=_read_optional_string(environment, "GITHUB_TOKEN"),
             org=_read_optional_string(environment, "GITHUB_ORG"),
         ),
-        openrouter=OpenRouterSettings(
-            enabled=_read_bool(environment, "OPENROUTER_ENABLED", False),
-            api_key=_read_optional_string(environment, "OPENROUTER_API_KEY"),
+        deepseek=DeepSeekSettings(
+            enabled=_read_bool(environment, "DEEPSEEK_ENABLED", False),
+            api_key=_read_optional_string(environment, "DEEPSEEK_API_KEY"),
             base_url=_read_string(
                 environment,
-                "OPENROUTER_BASE_URL",
-                "https://openrouter.ai/api/v1",
+                "DEEPSEEK_BASE_URL",
+                "https://api.deepseek.com",
             ),
             timeout_seconds=_read_int(
                 environment,
-                "OPENROUTER_TIMEOUT_SECONDS",
+                "DEEPSEEK_TIMEOUT_SECONDS",
                 60,
             ),
         ),

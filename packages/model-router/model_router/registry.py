@@ -4,32 +4,32 @@ from model_router.schemas import AgentRole, ModelConfig, Provider
 
 DEFAULT_ROLE_CONFIGS: dict[AgentRole, ModelConfig | None] = {
     AgentRole.PM: ModelConfig(
-        provider=Provider.OPENROUTER,
-        model="deepseek/deepseek-chat",
+        provider=Provider.DEEPSEEK,
+        model="deepseek-v4-strong-placeholder",
         temperature=0.1,
         max_tokens=4096,
     ),
     AgentRole.PO: ModelConfig(
-        provider=Provider.OPENROUTER,
-        model="deepseek/deepseek-chat",
+        provider=Provider.DEEPSEEK,
+        model="deepseek-v4-strong-placeholder",
         temperature=0.15,
         max_tokens=4096,
     ),
     AgentRole.DEV: ModelConfig(
-        provider=Provider.OPENROUTER,
-        model="deepseek/deepseek-chat-lite",
+        provider=Provider.DEEPSEEK,
+        model="deepseek-v4-lite-placeholder",
         temperature=0.1,
         max_tokens=4096,
     ),
     AgentRole.QA: ModelConfig(
-        provider=Provider.OPENROUTER,
-        model="deepseek/deepseek-chat-lite",
+        provider=Provider.DEEPSEEK,
+        model="deepseek-v4-lite-placeholder",
         temperature=0.1,
         max_tokens=3072,
     ),
     AgentRole.QC: ModelConfig(
-        provider=Provider.OPENROUTER,
-        model="deepseek/deepseek-chat",
+        provider=Provider.DEEPSEEK,
+        model="deepseek-v4-qc-placeholder",
         temperature=0.05,
         max_tokens=4096,
     ),
@@ -38,8 +38,8 @@ DEFAULT_ROLE_CONFIGS: dict[AgentRole, ModelConfig | None] = {
 ENVIRONMENT_ROLE_CONFIGS: dict[str, dict[AgentRole, ModelConfig]] = {
     "production": {
         AgentRole.QA: ModelConfig(
-            provider=Provider.OPENROUTER,
-            model="deepseek/deepseek-chat",
+            provider=Provider.DEEPSEEK,
+            model="deepseek-v4-lite-placeholder",
             temperature=0.05,
             max_tokens=4096,
         )
@@ -49,8 +49,8 @@ ENVIRONMENT_ROLE_CONFIGS: dict[str, dict[AgentRole, ModelConfig]] = {
 PROJECT_ROLE_CONFIGS: dict[str, dict[AgentRole, ModelConfig]] = {
     "lummevia-os": {
         AgentRole.DEV: ModelConfig(
-            provider=Provider.OPENROUTER,
-            model="deepseek/deepseek-chat-lite",
+            provider=Provider.DEEPSEEK,
+            model="deepseek-v4-lite-placeholder",
             temperature=0.05,
             max_tokens=6144,
         )
@@ -60,12 +60,12 @@ PROJECT_ROLE_CONFIGS: dict[str, dict[AgentRole, ModelConfig]] = {
 PROJECT_ENVIRONMENT_ROLE_CONFIGS: dict[tuple[str, str], dict[AgentRole, ModelConfig]] = {
     ("lummevia-os", "production"): {
         AgentRole.PM: ModelConfig(
-            provider=Provider.OPENROUTER,
-            model="deepseek/deepseek-chat-pro",
+            provider=Provider.DEEPSEEK,
+            model="deepseek-v4-strong-placeholder",
             temperature=0.1,
             max_tokens=6144,
         )
-    }
+}
 }
 
 

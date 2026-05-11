@@ -26,8 +26,8 @@ def test_model_router_resolve_returns_pm_configuration() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "role": "PM",
-        "provider": "OPENROUTER",
-        "model": "deepseek/deepseek-chat",
+        "provider": "DEEPSEEK",
+        "model": "deepseek-v4-strong-placeholder",
         "temperature": 0.1,
         "max_tokens": 4096,
         "source": "default",
@@ -47,8 +47,8 @@ def test_model_router_resolve_returns_dev_project_configuration() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "role": "DEV",
-        "provider": "OPENROUTER",
-        "model": "deepseek/deepseek-chat-lite",
+        "provider": "DEEPSEEK",
+        "model": "deepseek-v4-lite-placeholder",
         "temperature": 0.05,
         "max_tokens": 6144,
         "source": "project",

@@ -35,5 +35,5 @@ def test_info_does_not_expose_secrets() -> None:
     assert "github_token" not in body
     assert "youtrack_token" not in body
     assert "postgres_password" not in body
-    assert "openrouter_api_key" not in body
+    assert "deepseek_api_key" not in body
     assert "api_key" not in body

@@ -6,12 +6,12 @@ from lummevia_core import AgentRole
 from lummevia_agents import (
     AgentNotImplementedError,
     AgentRunRequest,
+    DeepSeekModelProvider,
     DevAgent,
     FakeModelProvider,
     ModelExecutionError,
     ModelExecutionRequest,
     ModelExecutor,
-    OpenRouterModelProvider,
     PMAgent,
 )
 
@@ -35,8 +35,8 @@ def test_fake_model_provider_returns_deterministic_output() -> None:
     assert first.raw_output == second.raw_output
     assert first.provider == "FAKE"
     assert first.model == "fake:pm"
-    assert first.metadata["resolved_provider"] == "OPENROUTER"
-    assert first.metadata["resolved_model"] == "deepseek/deepseek-chat"
+    assert first.metadata["resolved_provider"] == "DEEPSEEK"
+    assert first.metadata["resolved_model"] == "deepseek-v4-strong-placeholder"
 
 
 def test_model_executor_resolves_pm_model() -> None:
@@ -56,7 +56,7 @@ def test_model_executor_resolves_pm_model() -> None:
     assert result.provider == "FAKE"
     assert result.model == "fake:pm"
     assert result.metadata["role"] == "PM"
-    assert result.metadata["resolved_model"] == "deepseek/deepseek-chat-pro"
+    assert result.metadata["resolved_model"] == "deepseek-v4-strong-placeholder"
 
 
 def test_model_executor_resolves_dev_model() -> None:
@@ -75,7 +75,7 @@ def test_model_executor_resolves_dev_model() -> None:
 
     assert result.provider == "FAKE"
     assert result.model == "fake:dev"
-    assert result.metadata["resolved_model"] == "deepseek/deepseek-chat-lite"
+    assert result.metadata["resolved_model"] == "deepseek-v4-lite-placeholder"
 
 
 def test_model_executor_propagates_metadata() -> None:
@@ -119,23 +119,22 @@ def test_model_executor_handles_provider_error() -> None:
             )
         )
 
-    assert exc_info.value.provider == "OPENROUTER"
-    assert exc_info.value.model == "deepseek/deepseek-chat-lite"
+    assert exc_info.value.provider == "DEEPSEEK"
+    assert exc_info.value.model == "deepseek-v4-lite-placeholder"
 
 
-def test_openrouter_model_provider_parses_mock_response() -> None:
+def test_deepseek_model_provider_parses_mock_response() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url == httpx.URL("https://openrouter.ai/api/v1/chat/completions")
+        assert request.url == httpx.URL("https://api.deepseek.com/chat/completions")
         payload = request.read().decode("utf-8")
-        assert "deepseek/deepseek-chat" in payload
+        assert "deepseek-v4-strong-placeholder" in payload
         assert "You are a PM" in payload
         assert "Summarize the brief" in payload
         return httpx.Response(
             status_code=200,
             json={
                 "id": "gen-123",
-                "provider": "OpenRouter",
-                "model": "deepseek/deepseek-chat",
+                "model": "deepseek-v4-pro",
                 "choices": [
                     {
                         "index": 0,
@@ -154,7 +153,7 @@ def test_openrouter_model_provider_parses_mock_response() -> None:
             },
         )
 
-    provider = OpenRouterModelProvider(
+    provider = DeepSeekModelProvider(
         api_key="test-key",
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
@@ -170,14 +169,14 @@ def test_openrouter_model_provider_parses_mock_response() -> None:
         )
     )
 
-    assert result.provider == "OpenRouter"
-    assert result.model == "deepseek/deepseek-chat"
+    assert result.provider == "DEEPSEEK"
+    assert result.model == "deepseek-v4-pro"
     assert result.output == "Business summary from DeepSeek."
     assert result.raw_output["usage"]["total_tokens"] == 18
-    assert result.metadata["provider_adapter"] == "openrouter"
+    assert result.metadata["provider_adapter"] == "deepseek"
 
 
-def test_openrouter_model_provider_handles_http_errors_clearly() -> None:
+def test_deepseek_model_provider_handles_http_errors_clearly() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
             status_code=429,
@@ -189,7 +188,7 @@ def test_openrouter_model_provider_handles_http_errors_clearly() -> None:
             },
         )
 
-    provider = OpenRouterModelProvider(
+    provider = DeepSeekModelProvider(
         api_key="test-key",
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
@@ -209,8 +208,8 @@ def test_openrouter_model_provider_handles_http_errors_clearly() -> None:
             )
         )
 
-    assert exc_info.value.provider == "OPENROUTER"
-    assert exc_info.value.model == "deepseek/deepseek-chat"
+    assert exc_info.value.provider == "DEEPSEEK"
+    assert exc_info.value.model == "deepseek-v4-strong-placeholder"
 
 
 def test_base_agent_execute_model_works() -> None:
@@ -227,7 +226,7 @@ def test_base_agent_execute_model_works() -> None:
     assert result.model == "fake:pm"
     assert result.metadata["run_id"] == "run-321"
     assert result.metadata["role"] == "PM"
-    assert result.metadata["resolved_model"] == "deepseek/deepseek-chat-pro"
+    assert result.metadata["resolved_model"] == "deepseek-v4-strong-placeholder"
 
 
 def test_run_still_raises_agent_not_implemented_error() -> None:

@@ -36,7 +36,7 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
     try:
         model_executor = build_dry_run_model_executor(
             AgentRole.PM,
-            openrouter=settings.openrouter,
+            deepseek=settings.deepseek,
         )
     except ValueError as exc:
         raise HTTPException(

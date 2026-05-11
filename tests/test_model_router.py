@@ -16,8 +16,8 @@ def test_resolve_pm_returns_default_config() -> None:
     resolution = resolve_model(RoutingRequest(role=AgentRole.PM))
 
     assert resolution.role == AgentRole.PM
-    assert resolution.provider == Provider.OPENROUTER
-    assert resolution.model == "deepseek/deepseek-chat"
+    assert resolution.provider == Provider.DEEPSEEK
+    assert resolution.model == "deepseek-v4-strong-placeholder"
     assert resolution.source == "default"
 
 
@@ -25,8 +25,8 @@ def test_resolve_dev_returns_default_config() -> None:
     resolution = resolve_model(RoutingRequest(role=AgentRole.DEV))
 
     assert resolution.role == AgentRole.DEV
-    assert resolution.provider == Provider.OPENROUTER
-    assert resolution.model == "deepseek/deepseek-chat-lite"
+    assert resolution.provider == Provider.DEEPSEEK
+    assert resolution.model == "deepseek-v4-lite-placeholder"
     assert resolution.source == "default"
 
 
@@ -52,7 +52,7 @@ def test_resolve_respects_project_environment_precedence() -> None:
         )
     )
 
-    assert resolution.model == "deepseek/deepseek-chat-pro"
+    assert resolution.model == "deepseek-v4-strong-placeholder"
     assert resolution.source == "project_environment"
 
 
@@ -62,7 +62,7 @@ def test_resolve_model_applies_environment_override(monkeypatch: pytest.MonkeyPa
     resolution = resolve_model(RoutingRequest(role=AgentRole.PM))
 
     assert resolution.model == "custom/pm-model"
-    assert resolution.provider == Provider.OPENROUTER
+    assert resolution.provider == Provider.DEEPSEEK
     assert resolution.source == "env_override"
 
 
@@ -86,7 +86,7 @@ def test_resolve_model_applies_partial_pm_name_override(monkeypatch: pytest.Monk
 
     resolution = resolve_model(RoutingRequest(role=AgentRole.PM))
 
-    assert resolution.provider == Provider.OPENROUTER
+    assert resolution.provider == Provider.DEEPSEEK
     assert resolution.model == "custom/pm-name"
     assert resolution.temperature == 0.1
     assert resolution.max_tokens == 4096
@@ -133,7 +133,7 @@ def test_resolve_model_preserves_legacy_model_dev_override(
 
     resolution = resolve_model(RoutingRequest(role=AgentRole.DEV))
 
-    assert resolution.provider == Provider.OPENROUTER
+    assert resolution.provider == Provider.DEEPSEEK
     assert resolution.model == "legacy/dev-model"
     assert resolution.temperature == 0.1
     assert resolution.max_tokens == 4096

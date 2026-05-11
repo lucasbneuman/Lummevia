@@ -1,13 +1,13 @@
 from lummevia_agents.base import BaseAgent
 from lummevia_agents.dev import DevAgent
 from lummevia_agents.execution import (
+    DeepSeekModelProvider,
     FakeModelProvider,
     ModelExecutionError,
     ModelExecutionRequest,
     ModelExecutionResult,
     ModelExecutor,
     ModelProvider,
-    OpenRouterModelProvider,
 )
 from lummevia_agents.exceptions import AgentError, AgentNotImplementedError
 from lummevia_agents.prompts import (
@@ -34,13 +34,13 @@ __all__ = [
     "AgentRunResult",
     "BaseAgent",
     "DevAgent",
+    "DeepSeekModelProvider",
     "FakeModelProvider",
     "ModelExecutionError",
     "ModelExecutionRequest",
     "ModelExecutionResult",
     "ModelExecutor",
     "ModelProvider",
-    "OpenRouterModelProvider",
     "ContextBuilder",
     "PMAgent",
     "POAgent",

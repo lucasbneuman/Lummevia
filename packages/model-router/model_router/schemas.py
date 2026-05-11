@@ -13,6 +13,7 @@ class AgentRole(str, Enum):
 
 
 class Provider(str, Enum):
+    DEEPSEEK = "DEEPSEEK"
     OPENAI = "OPENAI"
     OPENROUTER = "OPENROUTER"
     ANTHROPIC = "ANTHROPIC"

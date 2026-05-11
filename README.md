@@ -138,7 +138,7 @@ Variables soportadas por rol:
 Comportamiento:
 
 - si se setea solo `MODEL_<ROL>_NAME`, cambia solo el nombre del modelo
-- `MODEL_<ROL>_PROVIDER` debe coincidir con `OPENAI`, `OPENROUTER`, `ANTHROPIC` o `LOCAL`
+- `MODEL_<ROL>_PROVIDER` debe coincidir con `DEEPSEEK`, `OPENAI`, `OPENROUTER`, `ANTHROPIC` o `LOCAL`
 - `MODEL_<ROL>_TEMPERATURE` se parsea como `float`
 - `MODEL_<ROL>_MAX_TOKENS` se parsea como `int`
 - los errores de parseo fallan de forma explicita
@@ -153,12 +153,13 @@ Estas variables legacy siguen funcionando, pero solo sobrescriben `model` y debe
 ### Ejemplo por rol
 
 ```powershell
-$env:MODEL_PM_PROVIDER="OPENAI"
-$env:MODEL_PM_NAME="gpt-4.1-mini"
+$env:MODEL_PM_PROVIDER="DEEPSEEK"
+$env:MODEL_PM_NAME="deepseek-v4-strong-placeholder"
 $env:MODEL_PM_TEMPERATURE="0.2"
 $env:MODEL_PM_MAX_TOKENS="8192"
 
-$env:MODEL_DEV_NAME="deepseek/deepseek-coder"
+$env:MODEL_DEV_PROVIDER="DEEPSEEK"
+$env:MODEL_DEV_NAME="deepseek-v4-lite-placeholder"
 $env:MODEL_DEV_TEMPERATURE="0.1"
 $env:MODEL_DEV_MAX_TOKENS="4096"
 ```
@@ -195,7 +196,7 @@ En esta etapa:
 - cada `run(...)` falla de forma explicita como placeholder
 - no ejecutan el workflow real por si mismos
 - el runtime principal sigue usando `FakeModelProvider`
-- solo existe un dry-run controlado para `PM` que puede usar OpenRouter cuando se habilita
+- solo existe un dry-run controlado para `PM` que puede usar DeepSeek API directa cuando se habilita
 - `PO`, `DEV`, `QA` y `QC` siguen en fake
 - no hay integraciones externas productivas
 
@@ -311,7 +312,7 @@ En esta etapa:
 - los outputs estructurados son mocks validos contra Pydantic
 - no existe parsing real de respuesta LLM
 - no hay prompts productivos definitivos
-- no hay integracion real con OpenRouter, DeepSeek, YouTrack, GitHub o Phoenix desde esta capa
+- no hay integracion real con DeepSeek fuera del dry-run controlado del `PM`, YouTrack, GitHub o Phoenix desde esta capa
 
 ### Model Execution Abstraction
 
@@ -340,7 +341,7 @@ En esta etapa:
 
 - `ModelExecutor` resuelve `provider` y `model` via `model-router`
 - `FakeModelProvider` devuelve outputs deterministicos utiles para tests
-- `OpenRouterModelProvider` implementa chat completions reales via OpenRouter para uso controlado
+- `DeepSeekModelProvider` implementa chat completions reales via DeepSeek API directa para uso controlado
 - `ModelExecutionResult.metadata` deja preparada metadata para Phoenix:
   - `role`
   - `project`
@@ -348,9 +349,9 @@ En esta etapa:
   - `model`
   - `latency_ms`
   - `fallback_used`
-- `OPENROUTER_ENABLED=false` mantiene el fallback seguro a fake
-- si `OPENROUTER_ENABLED=true` y falta `OPENROUTER_API_KEY`, el dry-run controlado falla de forma explicita
-- el runtime principal no usa OpenRouter todavia
+- `DEEPSEEK_ENABLED=false` mantiene el fallback seguro a fake
+- si `DEEPSEEK_ENABLED=true` y falta `DEEPSEEK_API_KEY`, el dry-run controlado falla de forma explicita
+- el runtime principal no usa DeepSeek de forma productiva todavia
 - no hay prompts productivos definitivos
 
 ## Workflow skeleton
@@ -401,7 +402,7 @@ Limitaciones actuales:
 
 - no hay llamadas reales a modelos
 - se sigue usando `FakeModelProvider`
-- no hay providers reales conectados como OpenRouter o DeepSeek
+- no hay providers reales conectados fuera del dry-run controlado de DeepSeek para `PM`
 - no hay ejecucion real de Kilo CLI
 - no hay integracion real con YouTrack
 - no hay integracion real con GitHub
@@ -490,23 +491,31 @@ Variables opcionales por ahora:
 - `YOUTRACK_BASE_URL`, `YOUTRACK_TOKEN`
 - `GITHUB_TOKEN`, `GITHUB_ORG`
 
-Variables para OpenRouter:
+Variables para DeepSeek:
 
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
-- `OPENROUTER_ENABLED=false`
-- `OPENROUTER_TIMEOUT_SECONDS=60`
-- `MODEL_PM_PROVIDER=OPENROUTER`
-- `MODEL_PM_NAME=deepseek/deepseek-chat`
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL=https://api.deepseek.com`
+- `DEEPSEEK_ENABLED=false`
+- `DEEPSEEK_TIMEOUT_SECONDS=60`
+- `MODEL_PM_PROVIDER=DEEPSEEK`
+- `MODEL_PM_NAME=deepseek-v4-strong-placeholder`
+- `MODEL_PO_PROVIDER=DEEPSEEK`
+- `MODEL_PO_NAME=deepseek-v4-strong-placeholder`
+- `MODEL_DEV_PROVIDER=DEEPSEEK`
+- `MODEL_DEV_NAME=deepseek-v4-lite-placeholder`
+- `MODEL_QA_PROVIDER=DEEPSEEK`
+- `MODEL_QA_NAME=deepseek-v4-lite-placeholder`
+- `MODEL_QC_PROVIDER=DEEPSEEK`
+- `MODEL_QC_NAME=deepseek-v4-qc-placeholder`
 
-Comportamiento actual de OpenRouter:
+Comportamiento actual de DeepSeek:
 
-- la API key va en `.env` como `OPENROUTER_API_KEY`
+- la API key va en `.env` como `DEEPSEEK_API_KEY`
 - `/info` no expone la API key
-- por defecto `OPENROUTER_ENABLED=false`
+- por defecto `DEEPSEEK_ENABLED=false`
 - solo `POST /model-execution/pm/dry-run` puede usar el provider real
-- si OpenRouter esta disabled, ese endpoint cae a `FakeModelProvider`
-- si OpenRouter esta enabled pero falta la API key, el dry-run falla de forma explicita
+- si DeepSeek esta disabled, ese endpoint cae a `FakeModelProvider`
+- si DeepSeek esta enabled pero falta la API key, el dry-run falla de forma explicita
 - `PO`, `DEV`, `QA`, `QC`, Kilo, GitHub y YouTrack siguen fuera de alcance real
 
 YouTrack y GitHub todavia no son obligatorios para levantar `orchestrator-api`. Sus tokens y URLs pueden quedar vacios mientras las integraciones sigan siendo skeletons contractuales.
@@ -537,14 +546,14 @@ Los endpoints de `model-router` son de diagnostico. Sirven para inspeccionar que
 
 No ejecutan prompts, no llaman providers reales y no disparan agentes.
 
-El endpoint `POST /model-execution/pm/dry-run` tambien es de diagnostico controlado. Ejecuta solo el `PM`, puede usar OpenRouter para `deepseek/deepseek-chat` si esta habilitado y, aun asi, mantiene el `BusinessBrief` estructurado como salida fake validada mientras expone el texto real y `raw_output` para observabilidad basica.
+El endpoint `POST /model-execution/pm/dry-run` tambien es de diagnostico controlado. Ejecuta solo el `PM`, puede usar DeepSeek API directa si `DEEPSEEK_ENABLED=true` y, aun asi, mantiene el `BusinessBrief` estructurado como salida fake validada mientras expone el texto real y `raw_output` para observabilidad basica.
 
 Ese endpoint:
 
 - no modifica el runtime principal
 - no persiste workflows
 - no crea artefactos reales en YouTrack
-- no habilita OpenRouter para `PO`, `DEV`, `QA` ni `QC`
+- no habilita DeepSeek real para `PO`, `DEV`, `QA` ni `QC`
 
 Los endpoints de `workflows` tambien son de diagnostico. Sirven para inspeccionar la definicion contractual del workflow de desarrollo expuesta desde `core`.
 

@@ -122,7 +122,7 @@ def test_prompt_pipeline_executes_po_to_execution_package_fake() -> None:
                     expected_impact="More consistent agent handoffs",
                     priority="HIGH",
                     constraints=["No real providers"],
-                    non_goals=["Connect OpenRouter"],
+                    non_goals=["Connect DeepSeek runtime beyond PM dry-run"],
                     kpis=["Pipeline returns fake structured output"],
                     business_brief_status="approved",
                     founder_approved=True,

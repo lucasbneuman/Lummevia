@@ -11,13 +11,13 @@ from main import app
 client = TestClient(app)
 
 
-def test_pm_dry_run_endpoint_uses_fake_provider_when_openrouter_is_disabled(
+def test_pm_dry_run_endpoint_uses_fake_provider_when_deepseek_is_disabled(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
         model_execution_routes,
         "settings",
-        load_settings({"OPENROUTER_ENABLED": "false"}),
+        load_settings({"DEEPSEEK_ENABLED": "false"}),
     )
 
     response = client.post(
@@ -47,7 +47,7 @@ def test_pm_dry_run_endpoint_fails_clearly_without_api_key_when_enabled(
     monkeypatch.setattr(
         model_execution_routes,
         "settings",
-        load_settings({"OPENROUTER_ENABLED": "true"}),
+        load_settings({"DEEPSEEK_ENABLED": "true"}),
     )
 
     response = client.post(
@@ -55,26 +55,26 @@ def test_pm_dry_run_endpoint_fails_clearly_without_api_key_when_enabled(
         json={
             "project": "lummevia-os",
             "issue_id": "OS-2",
-            "prompt": "Founder wants OpenRouter enabled.",
+            "prompt": "Founder wants DeepSeek enabled.",
         },
     )
 
     assert response.status_code == 503
     assert response.json() == {
-        "detail": "OPENROUTER_API_KEY is required when OPENROUTER_ENABLED=true."
+        "detail": "DEEPSEEK_API_KEY is required when DEEPSEEK_ENABLED=true."
     }
 
 
 def test_non_pm_roles_stay_on_fake_provider_for_controlled_execution() -> None:
     settings = load_settings(
         {
-            "OPENROUTER_ENABLED": "true",
-            "OPENROUTER_API_KEY": "or-key",
+            "DEEPSEEK_ENABLED": "true",
+            "DEEPSEEK_API_KEY": "ds-key",
         }
     )
 
     for role in (AgentRole.PO, AgentRole.DEV, AgentRole.QA, AgentRole.QC):
-        executor = build_dry_run_model_executor(role, openrouter=settings.openrouter)
+        executor = build_dry_run_model_executor(role, deepseek=settings.deepseek)
         result = executor.execute(
             ModelExecutionRequest(
                 role=role,

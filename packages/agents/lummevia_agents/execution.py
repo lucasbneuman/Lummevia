@@ -129,14 +129,14 @@ class FakeModelProvider:
         )
 
 
-class OpenRouterModelProvider:
-    """Real provider for OpenRouter chat completions."""
+class DeepSeekModelProvider:
+    """Real provider for direct DeepSeek chat completions."""
 
     def __init__(
         self,
         *,
         api_key: str,
-        base_url: str = "https://openrouter.ai/api/v1",
+        base_url: str = "https://api.deepseek.com",
         timeout_seconds: int = 60,
         http_client: httpx.Client | None = None,
     ) -> None:
@@ -179,36 +179,32 @@ class OpenRouterModelProvider:
                     )
         except httpx.TimeoutException as exc:
             raise RuntimeError(
-                "OpenRouter request timed out after "
+                "DeepSeek request timed out after "
                 f"{self.timeout_seconds} seconds."
             ) from exc
         except httpx.HTTPError as exc:
-            raise RuntimeError(f"OpenRouter request failed: {exc}.") from exc
+            raise RuntimeError(f"DeepSeek request failed: {exc}.") from exc
 
         if response.status_code >= 400:
             raise RuntimeError(
-                "OpenRouter request failed with status "
+                "DeepSeek request failed with status "
                 f"{response.status_code}: {self._extract_error_message(response)}"
             )
 
         response_payload = response.json()
         output = self._extract_output_text(response_payload)
-        provider_name = str(
-            response_payload.get("provider") or resolution.provider.value
-        )
+        provider_name = resolution.provider.value
         model_name = str(response_payload.get("model") or resolution.model)
         usage = response_payload.get("usage")
 
         metadata: dict[str, Any] = {
-            "provider_adapter": "openrouter",
+            "provider_adapter": "deepseek",
             "routing_source": resolution.source,
             "effective_provider": provider_name,
             "effective_model": model_name,
         }
         if usage is not None:
             metadata["usage"] = usage
-        if "openrouter_metadata" in response_payload:
-            metadata["openrouter_metadata"] = response_payload["openrouter_metadata"]
 
         return ProviderExecutionPayload(
             output=output,
@@ -229,7 +225,7 @@ class OpenRouterModelProvider:
         try:
             payload = response.json()
         except ValueError:
-            return response.text or "Unknown OpenRouter error."
+            return response.text or "Unknown DeepSeek error."
 
         error = payload.get("error")
         if isinstance(error, Mapping):
@@ -241,20 +237,20 @@ class OpenRouterModelProvider:
         if detail:
             return str(detail)
 
-        return response.text or "Unknown OpenRouter error."
+        return response.text or "Unknown DeepSeek error."
 
     def _extract_output_text(self, payload: Mapping[str, Any]) -> str:
         choices = payload.get("choices")
         if not isinstance(choices, Sequence) or not choices:
-            raise RuntimeError("OpenRouter response did not include any choices.")
+            raise RuntimeError("DeepSeek response did not include any choices.")
 
         first_choice = choices[0]
         if not isinstance(first_choice, Mapping):
-            raise RuntimeError("OpenRouter response choice had an invalid shape.")
+            raise RuntimeError("DeepSeek response choice had an invalid shape.")
 
         message = first_choice.get("message")
         if not isinstance(message, Mapping):
-            raise RuntimeError("OpenRouter response did not include a message payload.")
+            raise RuntimeError("DeepSeek response did not include a message payload.")
 
         content = message.get("content")
         if isinstance(content, str):
@@ -272,7 +268,7 @@ class OpenRouterModelProvider:
             if joined:
                 return joined
 
-        raise RuntimeError("OpenRouter response did not include textual content.")
+        raise RuntimeError("DeepSeek response did not include textual content.")
 
 
 class ModelExecutor:
