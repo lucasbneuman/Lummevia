@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from pydantic import Field
 
@@ -21,11 +22,15 @@ from lummevia_agents.schemas import AgentBaseSchema
 
 
 class PromptTemplate(AgentBaseSchema):
+    template_id: str = Field(min_length=1)
+    version: str = Field(min_length=1)
     role: AgentRole
     target_artifact: str = Field(min_length=1)
     artifact_model: type[CoreArtifactModel]
     system_prompt: str = Field(min_length=1)
     instructions: str = Field(min_length=1)
+    created_at: datetime | None = None
+    tags: list[str] = Field(default_factory=list)
 
     def render(self, context: PromptContext) -> str:
         artifacts_json = json.dumps(
@@ -53,6 +58,8 @@ class PromptTemplate(AgentBaseSchema):
 def build_default_templates() -> list[PromptTemplate]:
     return [
         PromptTemplate(
+            template_id="pm_business_brief",
+            version="v1",
             role=AgentRole.PM,
             target_artifact="BusinessBrief",
             artifact_model=BusinessBrief,
@@ -63,6 +70,8 @@ def build_default_templates() -> list[PromptTemplate]:
             ),
         ),
         PromptTemplate(
+            template_id="po_execution_package",
+            version="v1",
             role=AgentRole.PO,
             target_artifact="ExecutionPackage",
             artifact_model=ExecutionPackage,
@@ -73,6 +82,8 @@ def build_default_templates() -> list[PromptTemplate]:
             ),
         ),
         PromptTemplate(
+            template_id="po_task_plan",
+            version="v1",
             role=AgentRole.PO,
             target_artifact="TaskPlan",
             artifact_model=TaskPlan,
@@ -83,6 +94,8 @@ def build_default_templates() -> list[PromptTemplate]:
             ),
         ),
         PromptTemplate(
+            template_id="po_task_package",
+            version="v1",
             role=AgentRole.PO,
             target_artifact="TaskPackage",
             artifact_model=TaskPackage,
@@ -93,6 +106,8 @@ def build_default_templates() -> list[PromptTemplate]:
             ),
         ),
         PromptTemplate(
+            template_id="dev_implementation_package",
+            version="v1",
             role=AgentRole.DEV,
             target_artifact="ImplementationPackage",
             artifact_model=ImplementationPackage,
@@ -103,6 +118,8 @@ def build_default_templates() -> list[PromptTemplate]:
             ),
         ),
         PromptTemplate(
+            template_id="qa_validation_package",
+            version="v1",
             role=AgentRole.QA,
             target_artifact="ValidationPackage",
             artifact_model=ValidationPackage,
@@ -113,6 +130,8 @@ def build_default_templates() -> list[PromptTemplate]:
             ),
         ),
         PromptTemplate(
+            template_id="qc_quality_approval",
+            version="v1",
             role=AgentRole.QC,
             target_artifact="QualityApproval",
             artifact_model=QualityApproval,

@@ -16,6 +16,7 @@ from lummevia_agents.prompts import (
     PromptRegistry,
     PromptTemplateNotFoundError,
 )
+from lummevia_evaluations import EvaluationStatus
 
 
 def test_prompt_registry_returns_pm_template() -> None:
@@ -25,6 +26,8 @@ def test_prompt_registry_returns_pm_template() -> None:
 
     assert template.role == AgentRole.PM
     assert template.target_artifact == "BusinessBrief"
+    assert template.template_id == "pm_business_brief"
+    assert template.version == "v1"
 
 
 def test_prompt_registry_returns_po_template() -> None:
@@ -95,11 +98,15 @@ def test_prompt_pipeline_executes_pm_to_business_brief_fake() -> None:
     )
 
     assert result.target_artifact == "BusinessBrief"
+    assert result.template_id == "pm_business_brief"
+    assert result.template_version == "v1"
+    assert len(result.prompt_hash) == 64
     assert result.model_execution.metadata["provider_adapter"] == "fake"
     assert isinstance(result.structured_output, BusinessBrief)
     assert result.structured_output.issue_id == "LUM-301"
     assert result.structured_output.business_brief_status == "draft"
     assert result.structured_output.founder_approved is False
+    assert result.evaluation_status == EvaluationStatus.PENDING
 
 
 def test_prompt_pipeline_executes_po_to_execution_package_fake() -> None:
@@ -155,6 +162,37 @@ def test_prompt_pipeline_propagates_metadata() -> None:
     assert result.metadata["run_id"] == "run-303"
     assert result.metadata["trace_id"] == "trace-qa"
     assert result.metadata["target_artifact"] == "ValidationPackage"
+    assert result.metadata["template_id"] == "qa_validation_package"
+    assert result.metadata["template_version"] == "v1"
+    assert result.metadata["prompt_hash"] == result.prompt_hash
+
+
+def test_prompt_pipeline_prompt_hash_is_deterministic() -> None:
+    pipeline = PromptPipeline(
+        model_executor=ModelExecutor(provider=FakeModelProvider()),
+    )
+
+    first = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PM,
+            project="lummevia-os",
+            issue_id="LUM-303A",
+            target_artifact="BusinessBrief",
+            metadata={"trace_id": "trace-hash"},
+        )
+    )
+    second = pipeline.execute(
+        PromptExecutionRequest(
+            role=AgentRole.PM,
+            project="lummevia-os",
+            issue_id="LUM-303A",
+            target_artifact="BusinessBrief",
+            metadata={"trace_id": "trace-hash"},
+        )
+    )
+
+    assert first.prompt == second.prompt
+    assert first.prompt_hash == second.prompt_hash
 
 
 def test_prompt_pipeline_executes_po_to_task_plan_fake() -> None:

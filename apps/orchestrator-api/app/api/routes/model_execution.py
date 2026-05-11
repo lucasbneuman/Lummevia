@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.model_execution import build_dry_run_model_executor
 from lummevia_agents import ModelExecutionError, PromptExecutionRequest, PromptPipeline
 from lummevia_core import AgentRole, BusinessBrief
+from lummevia_evaluations import EvaluationStatus, PromptEvaluation, evaluate_prompt_execution
 from lummevia_integrations import PhoenixClient
 from model_router import RoutingRequest, resolve_model
 
@@ -30,11 +31,17 @@ class PMDryRunResponse(BaseModel):
     resolved_model: str = Field(min_length=1)
     effective_provider: str = Field(min_length=1)
     effective_model: str = Field(min_length=1)
+    template_id: str = Field(min_length=1)
+    template_version: str = Field(min_length=1)
+    prompt_hash: str = Field(min_length=64, max_length=64)
     output: str = Field(min_length=1)
     raw_output: Any = None
     latency_ms: int = Field(ge=0)
     fallback_used: bool = False
     structured_output: BusinessBrief
+    evaluation_id: str | None = None
+    evaluation_status: EvaluationStatus = EvaluationStatus.PENDING
+    evaluation: PromptEvaluation | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -55,6 +62,11 @@ def _observe_pm_dry_run(
     resolved_model: str,
     effective_provider: str,
     effective_model: str,
+    template_id: str | None,
+    template_version: str | None,
+    prompt_hash: str | None,
+    evaluation_status: str | None,
+    evaluation_score: float | None,
     latency_ms: int,
     fallback_used: bool,
     status_value: str,
@@ -72,6 +84,16 @@ def _observe_pm_dry_run(
         "fallback_used": fallback_used,
         "status": status_value,
     }
+    if template_id is not None:
+        attributes["template_id"] = template_id
+    if template_version is not None:
+        attributes["template_version"] = template_version
+    if prompt_hash is not None:
+        attributes["prompt_hash"] = prompt_hash
+    if evaluation_status is not None:
+        attributes["evaluation_status"] = evaluation_status
+    if evaluation_score is not None:
+        attributes["evaluation_score"] = evaluation_score
     if error is not None:
         attributes["error"] = error
 
@@ -102,6 +124,11 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
             resolved_model=resolution.model,
             effective_provider="UNAVAILABLE",
             effective_model="UNAVAILABLE",
+            template_id=None,
+            template_version=None,
+            prompt_hash=None,
+            evaluation_status=None,
+            evaluation_score=None,
             latency_ms=0,
             fallback_used=False,
             status_value="configuration_error",
@@ -142,6 +169,11 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
             resolved_model=resolution.model,
             effective_provider="UNAVAILABLE",
             effective_model="UNAVAILABLE",
+            template_id=None,
+            template_version=None,
+            prompt_hash=None,
+            evaluation_status=None,
+            evaluation_score=None,
             latency_ms=latency_ms,
             fallback_used=False,
             status_value="failed",
@@ -152,6 +184,17 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
             detail=str(exc),
         ) from exc
 
+    evaluation = evaluate_prompt_execution(result)
+    result_metadata = dict(result.metadata)
+    result_metadata.update(
+        {
+            "evaluation_id": evaluation.evaluation_id,
+            "evaluation_status": evaluation.status,
+            "evaluation_score": evaluation.score,
+            "evaluation": evaluation.model_dump(mode="json"),
+        }
+    )
+
     _observe_pm_dry_run(
         project=request.project,
         issue_id=request.issue_id,
@@ -159,6 +202,11 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
         resolved_model=result.model_execution.resolved_model,
         effective_provider=result.model_execution.effective_provider,
         effective_model=result.model_execution.effective_model,
+        template_id=result.template_id,
+        template_version=result.template_version,
+        prompt_hash=result.prompt_hash,
+        evaluation_status=evaluation.status,
+        evaluation_score=evaluation.score,
         latency_ms=result.model_execution.latency_ms,
         fallback_used=result.model_execution.fallback_used,
         status_value="completed",
@@ -171,10 +219,16 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
         resolved_model=result.model_execution.resolved_model,
         effective_provider=result.model_execution.effective_provider,
         effective_model=result.model_execution.effective_model,
+        template_id=result.template_id,
+        template_version=result.template_version,
+        prompt_hash=result.prompt_hash,
         output=result.model_execution.output,
         raw_output=result.model_execution.raw_output,
         latency_ms=result.model_execution.latency_ms,
         fallback_used=result.model_execution.fallback_used,
         structured_output=result.structured_output,
-        metadata=result.metadata,
+        evaluation_id=evaluation.evaluation_id,
+        evaluation_status=evaluation.status,
+        evaluation=evaluation,
+        metadata=result_metadata,
     )

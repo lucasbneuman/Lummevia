@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from typing import Any
 
 from pydantic import Field
@@ -22,6 +23,7 @@ from lummevia_agents.execution import ModelExecutionResult, ModelExecutor
 from lummevia_agents.prompts.context import ContextBuilder, PromptContext
 from lummevia_agents.prompts.registry import PromptRegistry
 from lummevia_agents.schemas import AgentBaseSchema
+from lummevia_evaluations import EvaluationStatus
 
 
 ArtifactResult = (
@@ -48,11 +50,16 @@ class PromptExecutionRequest(AgentBaseSchema):
 class PromptExecutionResult(AgentBaseSchema):
     role: AgentRole
     target_artifact: str = Field(min_length=1)
+    template_id: str = Field(min_length=1)
+    template_version: str = Field(min_length=1)
     prompt: str = Field(min_length=1)
+    prompt_hash: str = Field(min_length=64, max_length=64)
     system_prompt: str = Field(min_length=1)
     context: PromptContext
     model_execution: ModelExecutionResult
     structured_output: ArtifactResult
+    evaluation_id: str | None = None
+    evaluation_status: EvaluationStatus = EvaluationStatus.PENDING
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -78,6 +85,7 @@ class PromptPipeline:
             metadata=request.metadata,
         )
         prompt = template.render(context)
+        prompt_hash = self._compute_prompt_hash(prompt)
         model_execution = self.model_executor.execute(
             request=self._build_model_request(request, prompt, template.system_prompt)
         )
@@ -90,6 +98,11 @@ class PromptPipeline:
             {
                 "target_artifact": request.target_artifact,
                 "issue_id": request.issue_id,
+                "template_id": template.template_id,
+                "template_version": template.version,
+                "prompt_hash": prompt_hash,
+                "evaluation_id": None,
+                "evaluation_status": EvaluationStatus.PENDING,
             }
         )
         if model_execution.raw_output is not None:
@@ -97,13 +110,19 @@ class PromptPipeline:
         return PromptExecutionResult(
             role=request.role,
             target_artifact=request.target_artifact,
+            template_id=template.template_id,
+            template_version=template.version,
             prompt=prompt,
+            prompt_hash=prompt_hash,
             system_prompt=template.system_prompt,
             context=context,
             model_execution=model_execution,
             structured_output=structured_output,
             metadata=metadata,
         )
+
+    def _compute_prompt_hash(self, prompt: str) -> str:
+        return sha256(prompt.encode("utf-8")).hexdigest()
 
     def _build_model_request(
         self,

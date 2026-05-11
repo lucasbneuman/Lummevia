@@ -54,6 +54,12 @@ packages/
     lummevia_core/
       workflow.py
       workflow_steps.py
+  evaluations/
+    lummevia_evaluations/
+      __init__.py
+      schemas.py
+      scoring.py
+      registry.py
   kilo-adapter/
     lummevia_kilo/
       client.py
@@ -206,10 +212,10 @@ La primera capa de pipeline de prompts vive en `packages/agents/lummevia_agents/
 
 Incluye:
 
-- `PromptTemplate` para declarar rol, artefacto destino, system prompt e instrucciones base
+- `PromptTemplate` para declarar identidad estable del prompt con `template_id`, `version`, `created_at`, `tags`, rol, artefacto destino, system prompt e instrucciones base
 - `PromptRegistry` para resolver templates por `role + target_artifact`
 - `ContextBuilder` para armar contexto minimo desde `project`, `issue_id`, `role`, `available_artifacts` y `metadata`
-- `PromptPipeline` para renderizar prompt final, ejecutar `ModelExecutor` y devolver un resultado estructurado
+- `PromptPipeline` para renderizar prompt final, calcular `prompt_hash` deterministico con `sha256`, ejecutar `ModelExecutor` y devolver un resultado estructurado con metadata versionada
 - el flujo del `PO` ahora se decompone en `ExecutionPackage -> TaskPlan -> TaskPackage`
 
 Los templates iniciales cubren:
@@ -222,6 +228,16 @@ Los templates iniciales cubren:
 - `QA -> ValidationPackage`
 - `QC -> QualityApproval`
 
+Convencion inicial de versionado:
+
+- `pm_business_brief:v1`
+- `po_execution_package:v1`
+- `po_task_plan:v1`
+- `po_task_package:v1`
+- `dev_implementation_package:v1`
+- `qa_validation_package:v1`
+- `qc_quality_approval:v1`
+
 Flujo actual:
 
 ```text
@@ -229,6 +245,7 @@ PromptExecutionRequest
 -> PromptRegistry
 -> ContextBuilder
 -> PromptTemplate.render(...)
+-> sha256(prompt renderizado)
 -> ModelExecutor
 -> fake structured output validado con artifacts de core
 ```
@@ -245,6 +262,33 @@ Todavia es una simulacion:
 - no hay parsing real de LLM
 - no hay integracion real con Kilo CLI
 - no se crean tickets reales
+
+### Prompt Evaluation Framework
+
+La primera capa de evaluacion de prompts vive en `packages/evaluations/lummevia_evaluations/`.
+
+Incluye:
+
+- `PromptEvaluation` como contrato minimo de evaluacion
+- `EvaluationStatus` con `PENDING`, `PASSED`, `FAILED` y `NEEDS_REVIEW`
+- `PromptEvaluationRegistry` en memoria para registrar evaluaciones sin DB
+- `score_prompt_execution(...)` como evaluator fake y deterministico
+
+La evaluacion fake actual revisa:
+
+- longitud minima del prompt renderizado
+- presencia de secciones esperadas por template
+- validez del `structured_output`
+- penalizacion suave cuando `fallback_used=true`
+
+En esta etapa:
+
+- no hay benchmarking complejo
+- no hay scoring automatico con otro LLM
+- no hay datasets masivos
+- no hay UI de evaluacion humana
+- no hay persistencia durable de evaluaciones
+- no hay comparacion automatica multi-run todavia, pero ya quedan `evaluation_id`, `score`, `status` y metadata listos para evolucionar
 
 ### Kilo Adapter Skeleton
 
@@ -439,6 +483,7 @@ La instrumentacion actual de Phoenix:
 - crea una trace por `WorkflowRun`
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
+- en el dry-run de `PM` tambien registra `template_id`, `template_version`, `prompt_hash`, `evaluation_status` y `evaluation_score`
 - deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `role`, `task_id`, `kilo_status`, `retry_count`, `attempts_count` y `final_status`
 - agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
 - registra errores de runtime e instrumentacion sin romper el workflow
@@ -558,6 +603,8 @@ Model reporting del dry-run:
 - `resolved_provider` y `resolved_model` describen lo que resolvio Lummevia OS via `model-router`
 - `effective_provider` y `effective_model` describen lo que realmente ejecuto o reporto el provider
 - `provider` y `model` se mantienen por compatibilidad y reflejan el valor efectivo
+- `template_id`, `template_version` y `prompt_hash` identifican exactamente el prompt ejecutado
+- `evaluation_id`, `evaluation_status` y `evaluation` exponen la salida del evaluator fake actual
 
 Ese endpoint:
 
@@ -565,6 +612,14 @@ Ese endpoint:
 - no persiste workflows
 - no crea artefactos reales en YouTrack
 - no habilita DeepSeek real para `PO`, `DEV`, `QA` ni `QC`
+
+Roadmap futuro de evaluacion:
+
+- comparacion automatica entre versiones de prompt
+- regression detection por template
+- almacenamiento durable de evaluaciones
+- datasets y suites de regression dedicadas
+- evaluacion humana y scoring mas sofisticado
 
 Los endpoints de `workflows` tambien son de diagnostico. Sirven para inspeccionar la definicion contractual del workflow de desarrollo expuesta desde `core`.
 

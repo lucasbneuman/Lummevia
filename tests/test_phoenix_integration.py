@@ -62,13 +62,21 @@ def test_phoenix_trace_payload_accepts_valid_payload() -> None:
         latency_ms=1280,
         estimated_cost=0.12,
         error=None,
-        metadata={"commit_sha": "abc123def456"},
+        metadata={
+            "commit_sha": "abc123def456",
+            "template_id": "pm_business_brief",
+            "template_version": "v1",
+            "prompt_hash": "a" * 64,
+            "evaluation_status": "PASSED",
+            "evaluation_score": 0.9,
+        },
     )
 
     assert payload.run_id == "run-001"
     assert payload.fallback_used is True
     assert payload.latency_ms == 1280
     assert payload.estimated_cost == 0.12
+    assert payload.metadata["template_id"] == "pm_business_brief"
 
 
 def test_phoenix_trace_payload_defaults_fallback_to_false() -> None:

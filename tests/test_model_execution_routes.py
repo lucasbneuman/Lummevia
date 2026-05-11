@@ -7,6 +7,7 @@ from app.core.model_execution import build_dry_run_model_executor
 from lummevia_integrations import PhoenixClient
 from lummevia_agents import ModelExecutionRequest
 from lummevia_core import AgentRole
+from lummevia_evaluations import EvaluationStatus
 from main import app
 
 
@@ -53,9 +54,17 @@ def test_pm_dry_run_endpoint_uses_fake_provider_when_deepseek_is_disabled(
     assert body["effective_provider"] == "FAKE"
     assert body["effective_model"] == "fake:pm"
     assert body["fallback_used"] is True
+    assert body["template_id"] == "pm_business_brief"
+    assert body["template_version"] == "v1"
+    assert len(body["prompt_hash"]) == 64
+    assert body["evaluation"]["status"] == EvaluationStatus.PASSED
+    assert body["evaluation_status"] == EvaluationStatus.PASSED
+    assert body["evaluation_id"]
     assert body["structured_output"]["issue_id"] == "OS-1"
     assert body["structured_output"]["business_brief_status"] == "draft"
     assert body["metadata"]["provider_adapter"] == "fake"
+    assert body["metadata"]["template_id"] == "pm_business_brief"
+    assert body["metadata"]["evaluation_status"] == EvaluationStatus.PASSED
     assert body["metadata"]["model_raw_output"]["provider_adapter"] == "fake"
 
 
@@ -152,5 +161,10 @@ def test_pm_dry_run_emits_phoenix_metadata_without_sensitive_prompt_or_keys(
     assert span.attributes["effective_model"] == "fake:pm"
     assert span.attributes["status"] == "completed"
     assert span.attributes["fallback_used"] is True
+    assert span.attributes["template_id"] == "pm_business_brief"
+    assert span.attributes["template_version"] == "v1"
+    assert len(span.attributes["prompt_hash"]) == 64
+    assert span.attributes["evaluation_status"] == EvaluationStatus.PASSED
+    assert span.attributes["evaluation_score"] > 0
     assert "prompt" not in span.attributes
     assert "ds-secret-key" not in caplog.text

@@ -8,6 +8,7 @@ ENV PYTHONUNBUFFERED=1
 COPY requirements.txt /app/requirements.txt
 COPY packages/agents /app/packages/agents
 COPY packages/core /app/packages/core
+COPY packages/evaluations /app/packages/evaluations
 COPY packages/kilo-adapter /app/packages/kilo-adapter
 COPY packages/integrations /app/packages/integrations
 COPY packages/model-router /app/packages/model-router
