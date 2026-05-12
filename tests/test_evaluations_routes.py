@@ -11,6 +11,7 @@ from lummevia_evaluations import PromptBaselineRegistry, PromotionStatus
 from lummevia_evaluations.baselines import BaselineComparison
 from lummevia_evaluations.regression import PromptRegressionRunner
 from lummevia_integrations import PhoenixClient
+from lummevia_memory import MemoryCategory, ProjectMemoryRegistry
 from lummevia_reviews import HumanReviewRegistry, ReviewType
 from main import app
 
@@ -205,6 +206,8 @@ def test_pm_promote_endpoint_emits_phoenix_metadata(monkeypatch) -> None:
     assert span.attributes["promotion_status"] == PromotionStatus.PROMOTED.value
     assert span.attributes["regression_delta_score"] == 0.0
     assert "regression_delta_latency" in span.attributes
+    assert span.attributes["memory_records_created"] >= 1
+    assert span.attributes["project_memory_count"] >= 1
 
 
 def test_pm_promote_needs_review_creates_human_review(monkeypatch) -> None:
@@ -292,3 +295,40 @@ def test_pm_promote_needs_review_creates_human_review(monkeypatch) -> None:
     assert span.attributes["review_type"] == "PROMPT_PROMOTION"
     assert span.attributes["review_status"] == "PENDING"
     assert span.attributes["review_id"] == body["promotion"]["review_id"]
+
+
+def test_pm_promote_creates_prompt_learning_memory(monkeypatch) -> None:
+    baseline_registry = PromptBaselineRegistry()
+    memory_registry = ProjectMemoryRegistry()
+    monkeypatch.setattr(
+        evaluations_routes,
+        "_get_baseline_registry",
+        lambda: baseline_registry,
+    )
+    monkeypatch.setattr(
+        evaluations_routes,
+        "_get_memory_registry",
+        lambda: memory_registry,
+    )
+    monkeypatch.setattr(
+        evaluations_routes,
+        "settings",
+        load_settings({"DEEPSEEK_ENABLED": "false"}),
+    )
+
+    response = client.post(
+        "/evaluations/pm/promote",
+        json={
+            "template_id": "pm_business_brief",
+            "candidate_version": "v1",
+            "project": "lummevia-os",
+        },
+    )
+
+    assert response.status_code == 200
+    records = memory_registry.search_by_category(
+        "lummevia-os",
+        MemoryCategory.PROMPT_LEARNING,
+    )
+    assert len(records) == 1
+    assert records[0].source_type.value == "WORKFLOW"

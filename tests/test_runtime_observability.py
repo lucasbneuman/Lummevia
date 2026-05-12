@@ -120,6 +120,9 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["session_attempts"] >= 1
     assert workflow_span.attributes["output_count"] >= 1
     assert workflow_span.attributes["event_count"] >= 1
+    assert workflow_span.attributes["memory_records_created"] >= 1
+    assert workflow_span.attributes["project_memory_count"] >= 1
+    assert "BUSINESS_DECISION" in workflow_span.attributes["memory_categories"]
 
     step_names = {span.name for span in exporter.spans}
     assert "step:dev_implementation" in step_names

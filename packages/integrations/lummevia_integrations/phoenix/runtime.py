@@ -119,6 +119,15 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = str(value)
+        memory_records_created = state.metadata.get("memory_records_created")
+        if memory_records_created is not None:
+            attributes["memory_records_created"] = int(memory_records_created)
+        project_memory_count = state.metadata.get("project_memory_count")
+        if project_memory_count is not None:
+            attributes["project_memory_count"] = int(project_memory_count)
+        memory_categories = state.metadata.get("memory_categories")
+        if memory_categories:
+            attributes["memory_categories"] = ",".join(str(category) for category in memory_categories)
         review_metadata = self._extract_review_metadata(state, current_step=current_step)
         attributes.update(review_metadata)
         kilo_step = (

@@ -59,6 +59,11 @@ packages/
       __init__.py
       schemas.py
       registry.py
+  memory/
+    lummevia_memory/
+      __init__.py
+      schemas.py
+      registry.py
   evaluations/
     lummevia_evaluations/
       __init__.py
@@ -256,9 +261,49 @@ Roadmap deliberadamente fuera de alcance en esta etapa:
 - auth real
 - vector DB o embeddings
 - memoria semantica avanzada
+- RAG real
 - agentes conversacionales autonomos
 - colaboracion multi-user
 - integraciones Slack o Discord
+
+## Project Memory
+
+`packages/memory/lummevia_memory/` agrega la primera capa de project memory compartida entre workflows, conversaciones, reviews y task sessions sin introducir todavia embeddings ni almacenamiento vectorial.
+
+Incluye:
+
+- `ProjectMemoryRecord` como contrato minimo para memoria organizacional del proyecto
+- `MemoryCategory` con `BUSINESS_DECISION`, `TASK_LEARNING`, `QA_ISSUE`, `IMPLEMENTATION_NOTE`, `PROMPT_LEARNING` y `REVIEW_DECISION`
+- `MemorySourceType` con `CONVERSATION`, `SESSION`, `REVIEW`, `WORKFLOW` y `SYSTEM`
+- `ProjectMemoryRegistry` en memoria con `add_memory()`, `get_memory()`, `list_project_memories()`, `search_by_tag()` y `search_by_category()`
+- `get_project_context(project)` para devolver decisiones recientes, issues de QA, prompt learnings y reviews recientes ordenados por fecha
+
+Integracion actual:
+
+- founder conversation crea `BUSINESS_DECISION`
+- QA fail crea `QA_ISSUE`
+- prompt promotion crea `PROMPT_LEARNING`
+- reviews completadas crean `REVIEW_DECISION`
+- task session completion crea `TASK_LEARNING`
+- el `PM` consume `project_context` resumido dentro del prompt pipeline
+- Phoenix recibe metadata de `memory_records_created`, `memory_categories` y `project_memory_count`
+
+Alcance deliberado en esta etapa:
+
+- no embeddings
+- no vector DB
+- no semantic search
+- no RAG real
+- no memory agents autonomos
+- no summarization IA automatica
+- no persistencia durable de memory
+
+Roadmap futuro:
+
+- persistencia durable de `ProjectMemoryRecord`
+- retrieval hibrido con filtros y recencia
+- embeddings y semantic search cuando la capa contractual este estable
+- RAG real sobre memoria organizacional y tecnica cuando exista storage durable
 
 ### Prompt Pipeline
 
@@ -420,6 +465,7 @@ Relacion con runtime:
 - la session vive en memoria como estado runtime, no como memoria durable de negocio
 - persistence DB todavia no existe para sessions; solo se serializa el snapshot dentro del payload del runtime cuando la persistence del workflow esta habilitada
 - Phoenix recibe metadata de `session_id`, `session_status`, `session_role`, `session_attempts`, `output_count` y `event_count`
+- al cerrar la session, el runtime tambien registra `TASK_LEARNING` dentro de project memory
 
 Fuera de alcance deliberado por ahora:
 
@@ -715,6 +761,7 @@ La instrumentacion actual de Phoenix:
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
 - agrega metadata de session: `session_id`, `session_status`, `session_role`, `session_attempts`, `output_count` y `event_count`
+- agrega metadata de project memory: `memory_records_created`, `memory_categories` y `project_memory_count`
 - en el dry-run de `PM` tambien registra `template_id`, `template_version`, `prompt_hash`, `evaluation_status` y `evaluation_score`
 - agrega metadata de review cuando existe: `review_id`, `review_type`, `review_status` y `review_decision`
 - deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `session_id`, `role`, `task_id`, `kilo_status`, `retry_count`, `attempts_count` y `final_status`
@@ -824,6 +871,9 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /reviews/{review_id}`
 - `POST /reviews/{review_id}/approve`
 - `POST /reviews/{review_id}/reject`
+- `GET /memory/projects/{project}`
+- `GET /memory/projects/{project}/category/{category}`
+- `GET /memory/projects/{project}/tags/{tag}`
 - `GET /sessions`
 - `GET /sessions/{session_id}`
 - `POST /runtime/development/run`

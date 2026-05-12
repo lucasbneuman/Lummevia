@@ -3,6 +3,12 @@ from __future__ import annotations
 from lummevia_core import AgentRole, ValidationStatus
 from lummevia_agents import QAAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
+from lummevia_memory import (
+    MemoryCategory,
+    MemorySourceType,
+    ProjectMemoryRegistry,
+    build_project_memory_metadata,
+)
 from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 from lummevia_sessions import SessionStatus
 
@@ -91,15 +97,43 @@ def qa_validation_node(
                 "session_id": state.metadata.get("current_session_id"),
             },
         )
+        memory_record = ProjectMemoryRegistry.default().add_memory(
+            project=state.run.project,
+            category=MemoryCategory.QA_ISSUE,
+            title=f"QA issue for {task_package.task_id}",
+            content=(
+                f"QA failed for task {task_package.task_id}. "
+                f"Feedback: {state.artifacts.validation_package.feedback}. "
+                f"Bugs found: {', '.join(state.artifacts.validation_package.bugs_found) or 'none'}."
+            ),
+            source_type=MemorySourceType.REVIEW,
+            source_id=review.review_id,
+            tags=["qa", "issue", task_package.task_id, state.run.issue_id],
+            metadata={
+                "run_id": state.run.run_id,
+                "issue_id": state.run.issue_id,
+                "task_id": task_package.task_id,
+                "session_id": state.metadata.get("current_session_id"),
+            },
+        )
+        memory_metadata = build_project_memory_metadata(
+            state.run.project,
+            created_records=[memory_record],
+        )
         qa_review_metadata = {
             "review_id": review.review_id,
             "review_type": review.review_type.value,
             "review_status": review.status.value,
             "review_decision": review.decision.value if review.decision is not None else None,
             "session_id": state.metadata.get("current_session_id"),
+            "memory_id": memory_record.memory_id,
+            **memory_metadata,
         }
         state.run.metadata[step_name] = qa_review_metadata
         state.metadata.setdefault("review_by_step", {})[step_name] = qa_review_metadata
+        state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
+        state.metadata.update(memory_metadata)
+        state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
         update_task_execution_session(
             state,
             status=SessionStatus.WAITING_REVIEW,
@@ -119,15 +153,42 @@ def qa_validation_node(
                 notes="Auto-closed after simulated QA pass.",
                 assigned_to=AgentRole.FOUNDER.value,
             )
+            memory_record = ProjectMemoryRegistry.default().add_memory(
+                project=state.run.project,
+                category=MemoryCategory.REVIEW_DECISION,
+                title=f"QA review decision for {task_package.task_id}",
+                content=(
+                    "QA validation review was completed after the rework loop. "
+                    f"Decision: {review.decision.value if review.decision is not None else 'UNKNOWN'}."
+                ),
+                source_type=MemorySourceType.REVIEW,
+                source_id=review.review_id,
+                tags=["qa", "review", task_package.task_id, state.run.issue_id],
+                metadata={
+                    "run_id": state.run.run_id,
+                    "issue_id": state.run.issue_id,
+                    "task_id": task_package.task_id,
+                    "session_id": state.metadata.get("current_session_id"),
+                },
+            )
+            memory_metadata = build_project_memory_metadata(
+                state.run.project,
+                created_records=[memory_record],
+            )
             qa_review_metadata = {
                 "review_id": review.review_id,
                 "review_type": review.review_type.value,
                 "review_status": review.status.value,
                 "review_decision": review.decision.value if review.decision is not None else None,
                 "session_id": state.metadata.get("current_session_id"),
+                "memory_id": memory_record.memory_id,
+                **memory_metadata,
             }
             state.run.metadata[step_name] = qa_review_metadata
             state.metadata.setdefault("review_by_step", {})[step_name] = qa_review_metadata
+            state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
+            state.metadata.update(memory_metadata)
+            state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
         update_task_execution_session(
             state,
             status=SessionStatus.COMPLETED,

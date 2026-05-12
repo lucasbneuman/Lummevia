@@ -4,6 +4,12 @@ from typing import Any
 
 from lummevia_core import AgentRole, TaskPackage
 from lummevia_kilo import KiloExecutionMode, KiloExecutionResult
+from lummevia_memory import (
+    MemoryCategory,
+    MemorySourceType,
+    ProjectMemoryRegistry,
+    build_project_memory_metadata,
+)
 from lummevia_sessions import SessionRegistry, SessionStatus, TaskExecutionSession
 
 from lummevia_runtime.state import RuntimeState
@@ -202,6 +208,33 @@ def update_task_execution_session(
         metadata=metadata or {},
     )
     sync_session_to_runtime_metadata(state, session)
+    if status == SessionStatus.COMPLETED:
+        memory_record = ProjectMemoryRegistry.default().add_memory(
+            project=state.run.project,
+            category=MemoryCategory.TASK_LEARNING,
+            title=f"Task learning for {session.task_id}",
+            content=(
+                f"Task session {session.session_id} completed for {session.task_id}. "
+                f"Outputs: {len(session.outputs)}. Events: {len(session.events)}. "
+                f"Final metadata: {session.metadata}."
+            ),
+            source_type=MemorySourceType.SESSION,
+            source_id=session.session_id,
+            tags=["task", "learning", session.task_id, state.run.issue_id],
+            metadata={
+                "run_id": state.run.run_id,
+                "issue_id": state.run.issue_id,
+                "task_id": session.task_id,
+                "session_status": session.status.value,
+            },
+        )
+        memory_metadata = build_project_memory_metadata(
+            state.run.project,
+            created_records=[memory_record],
+        )
+        state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
+        state.metadata.update(memory_metadata)
+        state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
     return session
 
 

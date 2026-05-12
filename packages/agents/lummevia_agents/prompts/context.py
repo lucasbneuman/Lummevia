@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import Field
@@ -42,6 +43,8 @@ class ContextBuilder:
     def _normalize_artifact(self, artifact: Any) -> Any:
         if hasattr(artifact, "model_dump"):
             return artifact.model_dump(mode="json")
+        if isinstance(artifact, datetime | date):
+            return artifact.isoformat()
         if isinstance(artifact, dict):
             return {
                 key: self._normalize_artifact(value)

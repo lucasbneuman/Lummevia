@@ -13,6 +13,7 @@ COPY packages/datasets /app/packages/datasets
 COPY packages/evaluations /app/packages/evaluations
 COPY packages/kilo-adapter /app/packages/kilo-adapter
 COPY packages/integrations /app/packages/integrations
+COPY packages/memory /app/packages/memory
 COPY packages/model-router /app/packages/model-router
 COPY packages/reviews /app/packages/reviews
 COPY packages/runtime /app/packages/runtime

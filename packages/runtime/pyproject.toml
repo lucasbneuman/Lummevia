@@ -16,6 +16,7 @@ dependencies = [
     "lummevia-conversations",
     "lummevia-core",
     "lummevia-kilo-adapter",
+    "lummevia-memory",
     "lummevia-reviews",
     "lummevia-sessions",
 ]

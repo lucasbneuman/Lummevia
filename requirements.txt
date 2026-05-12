@@ -15,6 +15,7 @@ psycopg[binary]
 -e ./packages/evaluations
 -e ./packages/kilo-adapter
 -e ./packages/integrations
+-e ./packages/memory
 -e ./packages/model-router
 -e ./packages/reviews
 -e ./packages/runtime

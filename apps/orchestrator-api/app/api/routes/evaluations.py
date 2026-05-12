@@ -18,6 +18,12 @@ from lummevia_evaluations import (
 )
 from lummevia_evaluations.regression import PromptRegressionRunner
 from lummevia_integrations import PhoenixClient
+from lummevia_memory import (
+    MemoryCategory,
+    MemorySourceType,
+    ProjectMemoryRegistry,
+    build_project_memory_metadata,
+)
 from lummevia_reviews import HumanReviewRegistry, ReviewType
 
 
@@ -149,6 +155,12 @@ def _observe_promotion_run(
         attributes["review_status"] = review_status
     if review_decision is not None:
         attributes["review_decision"] = review_decision
+    attributes.update(
+        build_project_memory_metadata(
+            project,
+            registry=_get_memory_registry(),
+        )
+    )
     if error is not None:
         attributes["error"] = error
 
@@ -163,6 +175,10 @@ def _get_baseline_registry() -> PromptBaselineRegistry:
 
 def _get_review_registry() -> HumanReviewRegistry:
     return HumanReviewRegistry.default()
+
+
+def _get_memory_registry() -> ProjectMemoryRegistry:
+    return ProjectMemoryRegistry.default()
 
 
 def _resolve_pm_dataset_id(template_id: str) -> str:
@@ -281,6 +297,7 @@ def pm_promote_prompt(
     )
     baseline_registry = _get_baseline_registry()
     review_registry = _get_review_registry()
+    memory_registry = _get_memory_registry()
 
     try:
         regression_run = runner.run_dataset(
@@ -337,6 +354,33 @@ def pm_promote_prompt(
                     "review_id": review.review_id,
                 }
             )
+        memory_registry.add_memory(
+            project=request.project,
+            category=MemoryCategory.PROMPT_LEARNING,
+            title=f"Prompt promotion learning for {request.template_id}",
+            content=(
+                f"Candidate {request.candidate_version} compared against "
+                f"{comparison.baseline_version or 'no-baseline'} with status "
+                f"{comparison.promotion_status.value}. Summary: {comparison.summary}"
+            ),
+            source_type=MemorySourceType.WORKFLOW,
+            source_id=regression_run.regression_run_id,
+            tags=[
+                "prompt",
+                "promotion",
+                request.template_id,
+                request.candidate_version,
+                comparison.promotion_status.value.lower(),
+            ],
+            metadata={
+                "template_id": request.template_id,
+                "candidate_version": request.candidate_version,
+                "baseline_version": comparison.baseline_version,
+                "promotion_status": comparison.promotion_status.value,
+                "regression_run_id": regression_run.regression_run_id,
+                "project": request.project,
+            },
+        )
     except Exception as exc:
         _observe_promotion_run(
             template_id=request.template_id,
