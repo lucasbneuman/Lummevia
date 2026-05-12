@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from lummevia_code_changes import CodeChangeRegistry, CodeChangeStatus
 from lummevia_core import AgentRole, ValidationStatus
 from lummevia_agents import QAAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
@@ -18,6 +19,8 @@ from lummevia_runtime.queue import mark_current_queue_item_completed, sync_task_
 from lummevia_runtime.resources import refresh_current_workspace, release_current_workspace
 from lummevia_runtime.sessions import add_session_output, update_task_execution_session
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.supervisor import record_supervisor_event
+from lummevia_supervisor import ExecutionHealthStatus
 
 
 def qa_validation_node(
@@ -81,6 +84,42 @@ def qa_validation_node(
     )
     state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
+    checked_change_set_id = (
+        state.metadata.get("task_change_set_ids", {}).get(task_package.task_id)
+        or state.metadata.get("current_change_set_id")
+    )
+    validation_metadata = {
+        "validation_status": state.artifacts.validation_package.status.value,
+        "validation_notes": state.artifacts.validation_package.feedback,
+        "qa_checked_change_set_id": checked_change_set_id,
+    }
+    state.metadata.update(validation_metadata)
+    if checked_change_set_id:
+        updated_change_set = CodeChangeRegistry.default().update_status(
+            str(checked_change_set_id),
+            status=(
+                CodeChangeStatus.VALIDATED
+                if state.artifacts.validation_package.status == ValidationStatus.PASSED
+                else CodeChangeStatus.FAILED_VALIDATION
+            ),
+            metadata=validation_metadata,
+        )
+        state.metadata.setdefault("code_change_sets", {})[str(checked_change_set_id)] = (
+            updated_change_set.model_dump(mode="json")
+        )
+        record_supervisor_event(
+            state,
+            event_type="CODE_CHANGE_VALIDATED",
+            status=(
+                ExecutionHealthStatus.HEALTHY
+                if state.artifacts.validation_package.status == ValidationStatus.PASSED
+                else ExecutionHealthStatus.FAILED
+            ),
+            metadata={
+                "change_set_id": str(checked_change_set_id),
+                **validation_metadata,
+            },
+        )
     add_session_output(
         state,
         output_type="validation_package",
@@ -89,6 +128,7 @@ def qa_validation_node(
             "task_id": task_package.task_id,
             "validation_status": state.artifacts.validation_package.status.value,
             "bugs_found": state.artifacts.validation_package.bugs_found,
+            "qa_checked_change_set_id": checked_change_set_id,
         },
     )
     if state.artifacts.validation_package.status == ValidationStatus.FAILED:
@@ -137,6 +177,7 @@ def qa_validation_node(
             "session_id": state.metadata.get("current_session_id"),
             "memory_id": memory_record.memory_id,
             **memory_metadata,
+            **validation_metadata,
         }
         state.run.metadata[step_name] = qa_review_metadata
         state.metadata.setdefault("review_by_step", {})[step_name] = qa_review_metadata
@@ -203,12 +244,15 @@ def qa_validation_node(
                 "session_id": state.metadata.get("current_session_id"),
                 "memory_id": memory_record.memory_id,
                 **memory_metadata,
+                **validation_metadata,
             }
             state.run.metadata[step_name] = qa_review_metadata
             state.metadata.setdefault("review_by_step", {})[step_name] = qa_review_metadata
             state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
             state.metadata.update(memory_metadata)
             state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
+        else:
+            state.run.metadata[step_name] = validation_metadata
         update_task_execution_session(
             state,
             status=SessionStatus.COMPLETED,
@@ -217,6 +261,8 @@ def qa_validation_node(
             metadata={
                 "validation_status": state.artifacts.validation_package.status.value,
                 "session_id": state.metadata.get("current_session_id"),
+                "validation_notes": state.artifacts.validation_package.feedback,
+                "qa_checked_change_set_id": checked_change_set_id,
             },
         )
     if state.artifacts.validation_package.status == ValidationStatus.FAILED:

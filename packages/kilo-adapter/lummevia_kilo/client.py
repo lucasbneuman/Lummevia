@@ -4,6 +4,14 @@ import os
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
+from lummevia_code_changes import (
+    CodeArtifact,
+    CodeChangeRegistry,
+    WorkspaceSnapshot,
+    capture_workspace_snapshot,
+    compare_workspace_snapshots,
+    create_simulated_artifact,
+)
 from lummevia_kilo.exceptions import KiloSafetyViolation
 from lummevia_kilo.safety import KiloSafetyValidator
 from lummevia_kilo.schemas import (
@@ -35,6 +43,10 @@ class KiloExecutionClient:
 
     def execute(self, request: KiloExecutionRequest) -> KiloExecutionResult:
         execution_id = self._build_execution_id(request)
+        before_snapshot = self._capture_before_snapshot(
+            request=request,
+            execution_id=execution_id,
+        )
         request = request.model_copy(
             update={
                 "metadata": {
@@ -45,10 +57,24 @@ class KiloExecutionClient:
         )
 
         if not self.settings.enabled:
-            return self._execute_fake(request, execution_id=execution_id, safety_status="DISABLED")
+            return self._execute_fake(
+                request,
+                execution_id=execution_id,
+                safety_status="DISABLED",
+                before_snapshot=before_snapshot,
+            )
         if self.settings.dry_run:
-            return self._execute_fake(request, execution_id=execution_id, safety_status="DRY_RUN")
-        return self._execute_real(request, execution_id=execution_id)
+            return self._execute_fake(
+                request,
+                execution_id=execution_id,
+                safety_status="DRY_RUN",
+                before_snapshot=before_snapshot,
+            )
+        return self._execute_real(
+            request,
+            execution_id=execution_id,
+            before_snapshot=before_snapshot,
+        )
 
     def _execute_fake(
         self,
@@ -56,6 +82,7 @@ class KiloExecutionClient:
         *,
         execution_id: str,
         safety_status: str,
+        before_snapshot: WorkspaceSnapshot,
     ) -> KiloExecutionResult:
         step_name = request.metadata.get("step_name", "kilo_execution")
         logs = [
@@ -131,7 +158,7 @@ class KiloExecutionClient:
         )
         retry_count = max(0, len(attempts) - 1)
 
-        return KiloExecutionResult(
+        result = KiloExecutionResult(
             execution_id=execution_id,
             role=request.role,
             mode=request.mode,
@@ -157,7 +184,7 @@ class KiloExecutionClient:
                 "exit_code": None,
                 "stdout_preview": "",
                 "stderr_preview": "",
-                "workspace_path": None,
+                "workspace_path": request.metadata.get("worktree_path"),
                 "command_preview": "",
                 "safety_status": safety_status,
                 "stdout_bytes": 0,
@@ -173,12 +200,23 @@ class KiloExecutionClient:
                 "lifecycle": [status.value for status in lifecycle],
             },
         )
+        return self._attach_change_set(
+            request,
+            result=result,
+            workspace_path=request.metadata.get("worktree_path"),
+            artifacts=self._build_simulated_artifacts(
+                request=request,
+                generated_artifacts=generated_artifacts,
+            ),
+            before_snapshot=before_snapshot,
+        )
 
     def _execute_real(
         self,
         request: KiloExecutionRequest,
         *,
         execution_id: str,
+        before_snapshot: WorkspaceSnapshot,
     ) -> KiloExecutionResult:
         max_attempts = int(request.metadata.get("max_attempts", request.retry_policy.max_attempts))
         safety = self.safety_validator.validate(request)
@@ -269,7 +307,7 @@ class KiloExecutionClient:
 
         final_status = attempts[-1].status if attempts else KiloExecutionStatus.FAILED
         retry_count = max(0, len(attempts) - 1)
-        return KiloExecutionResult(
+        result = KiloExecutionResult(
             execution_id=execution_id,
             role=request.role,
             mode=request.mode,
@@ -324,6 +362,13 @@ class KiloExecutionClient:
                 "lifecycle": [status.value for status in lifecycle],
             },
         )
+        return self._attach_change_set(
+            request,
+            result=result,
+            workspace_path=None if last_subprocess is None else last_subprocess.workspace_path,
+            artifacts=self._build_simulated_artifacts(request=request, result=result),
+            before_snapshot=before_snapshot,
+        )
 
     def _build_execution_id(self, request: KiloExecutionRequest) -> str:
         fingerprint = (
@@ -331,6 +376,114 @@ class KiloExecutionClient:
             f"{request.project}|{request.repo_path}|{request.task_package.task_id}"
         )
         return f"kilo-{uuid5(NAMESPACE_URL, fingerprint).hex[:12]}"
+
+    def _attach_change_set(
+        self,
+        request: KiloExecutionRequest,
+        *,
+        result: KiloExecutionResult,
+        workspace_path: str | None,
+        artifacts: list[CodeArtifact],
+        before_snapshot: WorkspaceSnapshot,
+    ) -> KiloExecutionResult:
+        after_snapshot = capture_workspace_snapshot(workspace_path or "<missing-workspace>")
+        diff_result = compare_workspace_snapshots(
+            before=before_snapshot,
+            after=after_snapshot,
+        )
+        change_set = CodeChangeRegistry.default().create_change_set(
+            execution_id=result.execution_id,
+            session_id=request.session_id,
+            task_id=request.task_package.task_id,
+            project=request.project,
+            repo=request.task_package.target_repo or request.project,
+            workspace_id=(
+                str(request.metadata.get("workspace_id"))
+                if request.metadata.get("workspace_id")
+                else None
+            ),
+            files_changed=diff_result.files_changed,
+            diff_summary=diff_result.diff_summary,
+            artifacts=artifacts,
+            metadata={
+                "run_id": request.run_id,
+                "workspace_path": workspace_path,
+                "real_execution": result.metadata.get("real_execution", False),
+                "validation_status": "PENDING",
+                "validation_notes": None,
+                "qa_checked_change_set_id": None,
+            },
+        )
+        return result.model_copy(
+            update={
+                "metadata": {
+                    **result.metadata,
+                    "change_set_id": change_set.change_set_id,
+                    "change_set": change_set.model_dump(mode="json"),
+                    "files_changed_count": change_set.diff_summary.get("files_changed_count", 0),
+                    "lines_added": change_set.diff_summary.get("lines_added", 0),
+                    "lines_removed": change_set.diff_summary.get("lines_removed", 0),
+                    "artifact_count": len(change_set.artifacts),
+                }
+            }
+        )
+
+    def _capture_before_snapshot(
+        self,
+        *,
+        request: KiloExecutionRequest,
+        execution_id: str,
+    ) -> WorkspaceSnapshot:
+        workspace_path = self._resolve_workspace_path(
+            request=request,
+            execution_id=execution_id,
+        )
+        return capture_workspace_snapshot(workspace_path or "<missing-workspace>")
+
+    def _resolve_workspace_path(
+        self,
+        *,
+        request: KiloExecutionRequest,
+        execution_id: str,
+    ) -> str | None:
+        worktree_path = request.metadata.get("worktree_path")
+        if isinstance(worktree_path, str) and worktree_path.strip():
+            return worktree_path
+        if self.settings.workspace_root is None:
+            return None
+        return str((self.settings.workspace_root.resolve(strict=False) / execution_id).resolve(strict=False))
+
+    def _build_simulated_artifacts(
+        self,
+        *,
+        request: KiloExecutionRequest,
+        result: KiloExecutionResult | None = None,
+        generated_artifacts: list[dict[str, object]] | None = None,
+    ) -> list[CodeArtifact]:
+        artifact_payloads = generated_artifacts or (
+            result.generated_artifacts if result is not None else []
+        )
+        if not artifact_payloads:
+            return [
+                create_simulated_artifact(
+                    artifact_type="execution_summary",
+                    path=f"simulated://{request.task_package.task_id}/summary",
+                    content_hint=request.task_package.prompt,
+                    metadata={"simulated": True},
+                )
+            ]
+        artifacts: list[CodeArtifact] = []
+        for payload in artifact_payloads:
+            artifact_name = str(payload.get("name", "artifact"))
+            artifacts.append(
+                create_simulated_artifact(
+                    artifact_type=str(payload.get("kind", "simulated")),
+                    path=f"simulated://{request.task_package.task_id}/{artifact_name}",
+                    content_hint=artifact_name,
+                    metadata={"simulated": True, **payload},
+                )
+            )
+        return artifacts
 
 
 def load_kilo_runtime_settings() -> KiloRuntimeSettings:

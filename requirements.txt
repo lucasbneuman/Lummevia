@@ -10,6 +10,7 @@ sqlalchemy
 psycopg[binary]
 -e ./packages/agents
 -e ./packages/capabilities
+-e ./packages/code-changes
 -e ./packages/core
 -e ./packages/conversations
 -e ./packages/datasets

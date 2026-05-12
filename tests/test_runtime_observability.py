@@ -186,6 +186,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert dev_span.attributes["allocated_resources_count"] >= 1
     assert dev_span.attributes["real_execution"] is False
     assert dev_span.attributes["safety_status"] == "DISABLED"
+    assert str(dev_span.attributes["change_set_id"]).startswith("change-set-")
+    assert dev_span.attributes["artifact_count"] >= 1
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
     assert qa_span.attributes["kilo_status"] == "SUCCESS"
@@ -205,6 +207,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert qa_span.attributes["allocation_status"] == "GRANTED"
     assert qa_span.attributes["real_execution"] is False
     assert qa_span.attributes["safety_status"] == "DISABLED"
+    assert qa_span.attributes["validation_status"] == "FAILED"
+    assert str(qa_span.attributes["qa_checked_change_set_id"]).startswith("change-set-")
 
     founder_review_span = next(
         span for span in exporter.spans if span.name == "step:founder_business_approval"

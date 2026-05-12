@@ -146,6 +146,8 @@ def test_runtime_registers_timeline_metadata_and_registry_snapshot() -> None:
     assert any(event.event_type == "TASK_READY" for event in timeline.events)
     assert any(event.event_type == "TASK_STARTED" for event in timeline.events)
     assert any(event.event_type == "TASK_COMPLETED" for event in timeline.events)
+    assert any(event.event_type == "CODE_CHANGE_DETECTED" for event in timeline.events)
+    assert any(event.event_type == "CODE_CHANGE_VALIDATED" for event in timeline.events)
 
 
 def test_timeline_endpoints_list_and_get_reconstructed_timeline() -> None:

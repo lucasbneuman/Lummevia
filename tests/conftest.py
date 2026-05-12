@@ -47,6 +47,7 @@ RESOURCES_PACKAGE_DIR = ROOT_DIR / "packages" / "resources"
 CAPABILITIES_PACKAGE_DIR = ROOT_DIR / "packages" / "capabilities"
 SUPERVISOR_PACKAGE_DIR = ROOT_DIR / "packages" / "supervisor"
 PERSISTENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "persistence"
+CODE_CHANGES_PACKAGE_DIR = ROOT_DIR / "packages" / "code-changes"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -68,6 +69,8 @@ if str(SUPERVISOR_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(SUPERVISOR_PACKAGE_DIR))
 if str(PERSISTENCE_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(PERSISTENCE_PACKAGE_DIR))
+if str(CODE_CHANGES_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(CODE_CHANGES_PACKAGE_DIR))
 
 
 @pytest.fixture(autouse=True)
@@ -77,6 +80,7 @@ def reset_default_registries():
     from lummevia_memory import ProjectMemoryRegistry
     from lummevia_queue import TaskQueueRegistry
     from lummevia_capabilities import CapabilityRegistry
+    from lummevia_code_changes import CodeChangeRegistry
     from lummevia_resources import ResourceRegistry
     from lummevia_reviews import HumanReviewRegistry
     from lummevia_sessions import SessionRegistry
@@ -93,6 +97,7 @@ def reset_default_registries():
     ProjectMemoryRegistry.default().reset()
     TaskQueueRegistry.default().reset()
     CapabilityRegistry.default().reset()
+    CodeChangeRegistry.default().reset()
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()
@@ -107,6 +112,7 @@ def reset_default_registries():
     ProjectMemoryRegistry.default().reset()
     TaskQueueRegistry.default().reset()
     CapabilityRegistry.default().reset()
+    CodeChangeRegistry.default().reset()
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()

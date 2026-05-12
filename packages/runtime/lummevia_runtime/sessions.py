@@ -213,6 +213,7 @@ def record_kilo_execution_for_session(
             "task_id": result.task_id,
             "generated_artifacts": result.generated_artifacts,
             "logs": result.logs,
+            "change_set_id": result.metadata.get("change_set_id"),
         },
     )
     session = registry.update_status(
@@ -234,6 +235,7 @@ def record_kilo_execution_for_session(
             "allocation_status": result.metadata.get("allocation_status"),
             "capacity_id": result.metadata.get("capacity_id"),
             "allocated_resources": result.metadata.get("allocated_resources", []),
+            "last_change_set_id": result.metadata.get("change_set_id"),
         },
     )
     heartbeat_session_watchdog(state, session_id=session.session_id)

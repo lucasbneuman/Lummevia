@@ -3,15 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lummevia-kilo-adapter"
+name = "lummevia-code-changes"
 version = "0.1.0"
-description = "Fake Kilo execution adapter contracts for Lummevia OS."
+description = "Code change lifecycle contracts and diff capture for Lummevia OS."
 requires-python = ">=3.12"
 dependencies = [
     "pydantic==2.11.4",
-    "lummevia-core",
-    "lummevia-code-changes",
 ]
 
 [tool.setuptools]
-packages = ["lummevia_kilo"]
+packages = ["lummevia_code_changes"]

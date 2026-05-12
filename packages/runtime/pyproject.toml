@@ -14,6 +14,7 @@ dependencies = [
     "sqlalchemy",
     "psycopg[binary]",
     "lummevia-capabilities",
+    "lummevia-code-changes",
     "lummevia-conversations",
     "lummevia-core",
     "lummevia-kilo-adapter",

@@ -132,6 +132,14 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        for key in ("files_changed_count", "lines_added", "lines_removed", "artifact_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
+        for key in ("change_set_id", "current_change_set_id", "validation_status", "validation_notes", "qa_checked_change_set_id"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = str(value)
         workspace_id = state.metadata.get("workspace_id")
         if workspace_id is not None:
             attributes["workspace_id"] = str(workspace_id)
@@ -268,6 +276,16 @@ class PhoenixRuntimeObserver(RuntimeObserver):
                 attributes["stdout_bytes"] = int(kilo_step["stdout_bytes"])
             if kilo_step.get("stderr_bytes") is not None:
                 attributes["stderr_bytes"] = int(kilo_step["stderr_bytes"])
+            if kilo_step.get("change_set_id") is not None:
+                attributes["change_set_id"] = str(kilo_step["change_set_id"])
+            if kilo_step.get("files_changed_count") is not None:
+                attributes["files_changed_count"] = int(kilo_step["files_changed_count"])
+            if kilo_step.get("lines_added") is not None:
+                attributes["lines_added"] = int(kilo_step["lines_added"])
+            if kilo_step.get("lines_removed") is not None:
+                attributes["lines_removed"] = int(kilo_step["lines_removed"])
+            if kilo_step.get("artifact_count") is not None:
+                attributes["artifact_count"] = int(kilo_step["artifact_count"])
         return attributes
 
     def _extract_review_metadata(

@@ -1026,6 +1026,9 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /reviews/{review_id}`
 - `POST /reviews/{review_id}/approve`
 - `POST /reviews/{review_id}/reject`
+- `GET /code-changes`
+- `GET /code-changes/{change_set_id}`
+- `POST /code-changes/{change_set_id}/discard`
 - `GET /memory/projects/{project}`
 - `GET /memory/projects/{project}/category/{category}`
 - `GET /memory/projects/{project}/tags/{tag}`
@@ -1088,6 +1091,42 @@ Ese endpoint:
 - no persiste workflows
 - no usa el workflow principal
 - no hace push, merge ni PR
+
+## Code Change Lifecycle
+
+Lummevia OS ahora agrega una primera capa contractual para lifecycle de cambios de codigo capturados dentro del sandbox de Kilo.
+
+Esta capa vive en `packages/code-changes/` y formaliza:
+
+- `CodeChangeSet` para representar el conjunto de cambios atribuibles a una ejecucion
+- `ChangedFile` para resumir archivos detectados con `change_type`, `lines_added` y `lines_removed`
+- `CodeArtifact` para guardar lineage de artifacts producidos o simulados
+- `CodeChangeRegistry` en memoria para crear, listar, consultar y descartar change sets
+
+Semantica actual:
+
+- despues de cada ejecucion Kilo fake o real se captura un `change_set_id`
+- el runtime asocia ese `change_set_id` a metadata de Kilo, session y QA
+- el diff se calcula con snapshots simples de filesystem, sin depender todavia de `git diff`
+- se ignoran directorios pesados como `.git`, `node_modules`, `.venv`, `__pycache__`, `dist` y `build`
+- no se leen archivos por encima de un limite seguro de bytes
+- `QA` actualiza el status del cambio a `VALIDATED` o `FAILED_VALIDATION`
+- `POST /code-changes/{change_set_id}/discard` solo marca `DISCARDED` y deja trazabilidad; no borra archivos reales ni hace rollback destructivo
+
+Esto todavia no hace:
+
+- `git worktree` real
+- `git diff` real
+- revert real sobre filesystem
+- push, merge o PR automatico
+- cambios sobre repos productivos
+
+Roadmap natural de esta capa:
+
+- snapshots mas ricos por workspace real aislado
+- diff basado en worktree o git cuando la capa de sandbox este mas madura
+- artifacts reales producidos por herramientas de build o test dentro del sandbox
+- rollback seguro sobre workspaces desechables, nunca sobre repos productivos
 
 Ejemplo recomendado para probar sandbox con un repo de prueba:
 

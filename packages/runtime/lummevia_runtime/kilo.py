@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lummevia_code_changes import CodeChangeRegistry
 from lummevia_core import AgentRole, TaskPackage
 from lummevia_capabilities import AllocationStatus
 from lummevia_kilo import (
@@ -26,6 +27,7 @@ from lummevia_runtime.supervisor import (
     annotate_kilo_execution_result,
     heartbeat_queue_item_watchdog,
     heartbeat_session_watchdog,
+    record_supervisor_event,
     register_kilo_execution_watchdog,
 )
 from lummevia_supervisor import ExecutionHealthStatus
@@ -96,6 +98,7 @@ def execute_kilo_step(
             "step_name": step_name,
             "task_id": task_package.task_id,
             "loop_count": state.loop_count,
+            "run_id": state.run.run_id,
             **build_queue_metadata_for_kilo(state, task_package=task_package),
             **build_allocation_metadata_for_kilo(state),
             **(metadata or {}),
@@ -160,7 +163,43 @@ def execute_kilo_step(
             "command_preview": result.metadata.get("command_preview"),
             "stdout_bytes": result.metadata.get("stdout_bytes", 0),
             "stderr_bytes": result.metadata.get("stderr_bytes", 0),
+            "change_set_id": result.metadata.get("change_set_id"),
+            "files_changed_count": result.metadata.get("files_changed_count", 0),
+            "lines_added": result.metadata.get("lines_added", 0),
+            "lines_removed": result.metadata.get("lines_removed", 0),
+            "artifact_count": result.metadata.get("artifact_count", 0),
         }
+        change_set_id = result.metadata.get("change_set_id")
+        if change_set_id is not None:
+            change_set = CodeChangeRegistry.default().get_change_set(str(change_set_id))
+            if change_set is not None:
+                state.metadata.setdefault("code_change_sets", {})[change_set.change_set_id] = (
+                    change_set.model_dump(mode="json")
+                )
+                state.metadata["last_change_set_id"] = change_set.change_set_id
+                state.metadata["files_changed_count"] = change_set.diff_summary.get("files_changed_count", 0)
+                state.metadata["lines_added"] = change_set.diff_summary.get("lines_added", 0)
+                state.metadata["lines_removed"] = change_set.diff_summary.get("lines_removed", 0)
+                state.metadata["artifact_count"] = len(change_set.artifacts)
+                if role == AgentRole.DEV:
+                    state.metadata.setdefault("task_change_set_ids", {})[task_package.task_id] = (
+                        change_set.change_set_id
+                    )
+                    state.metadata["current_change_set_id"] = change_set.change_set_id
+                record_supervisor_event(
+                    state,
+                    event_type="CODE_CHANGE_DETECTED",
+                    status=ExecutionHealthStatus.HEALTHY,
+                    metadata={
+                        "change_set_id": change_set.change_set_id,
+                        "execution_id": result.execution_id,
+                        "task_id": task_package.task_id,
+                        "files_changed_count": change_set.diff_summary.get("files_changed_count", 0),
+                        "lines_added": change_set.diff_summary.get("lines_added", 0),
+                        "lines_removed": change_set.diff_summary.get("lines_removed", 0),
+                        "artifact_count": len(change_set.artifacts),
+                    },
+                )
         health_status = (
             ExecutionHealthStatus.HEALTHY
             if result.final_status.value == "SUCCESS"
