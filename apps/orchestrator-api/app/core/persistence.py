@@ -5,6 +5,7 @@ from typing import Any
 from lummevia_capabilities import CapabilityRegistry
 from lummevia_conversations import ConversationRegistry
 from lummevia_memory import ProjectMemoryRegistry
+from lummevia_planning import AdaptivePlanRegistry
 from lummevia_persistence import OperationalPersistenceService
 from lummevia_queue import TaskQueueRegistry
 from lummevia_resources import ResourceRegistry
@@ -36,6 +37,9 @@ def configure_operational_persistence(
     )
     ProjectMemoryRegistry.default().configure_persistence(
         None if service is None else service.memory
+    )
+    AdaptivePlanRegistry.default().configure_persistence(
+        None if service is None else service.planning
     )
     HumanReviewRegistry.default().configure_persistence(
         None if service is None else service.reviews
@@ -95,6 +99,13 @@ def rehydrate_registries() -> dict[str, dict[str, Any]]:
         results["memory"] = {"status": "ok", "count": len(memories)}
     except Exception as exc:
         results["memory"] = {"status": "error", "detail": str(exc)}
+
+    try:
+        plans = operational_persistence.planning.list_plans()
+        AdaptivePlanRegistry.default().rehydrate(plans)
+        results["planning"] = {"status": "ok", "count": len(plans)}
+    except Exception as exc:
+        results["planning"] = {"status": "error", "detail": str(exc)}
 
     try:
         reviews = operational_persistence.reviews.list_reviews()
@@ -179,6 +190,7 @@ def _resolve_snapshot_versions(state) -> list[int]:
         ("conversation", state.metadata.get("thread_id")),
         ("workspace", state.metadata.get("workspace_id")),
         ("dead_letter", state.metadata.get("dead_letter_id")),
+        ("adaptive_plan", state.metadata.get("adaptive_plan_id")),
     ]
     versions: list[int] = []
     for entity_type, entity_id in candidates:

@@ -144,11 +144,25 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        for key in ("adaptive_plan_count", "mutation_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         for key in ("change_set_id", "current_change_set_id", "validation_status", "validation_notes", "qa_checked_change_set_id"):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = str(value)
-        for key in ("decision_id", "decision_type", "decision_status", "autonomy_level", "decision_review_id"):
+        for key in (
+            "decision_id",
+            "decision_type",
+            "decision_status",
+            "autonomy_level",
+            "decision_review_id",
+            "adaptive_plan_id",
+            "adaptive_plan_status",
+            "replanning_trigger",
+            "adaptive_plan_review_id",
+        ):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = str(value)
@@ -219,6 +233,9 @@ class PhoenixRuntimeObserver(RuntimeObserver):
         memory_categories = state.metadata.get("memory_categories")
         if memory_categories:
             attributes["memory_categories"] = ",".join(str(category) for category in memory_categories)
+        mutation_types = state.metadata.get("mutation_types")
+        if mutation_types:
+            attributes["mutation_types"] = ",".join(str(mutation_type) for mutation_type in mutation_types)
         if self._persistence_metadata_supplier is not None:
             for key, value in self._persistence_metadata_supplier(state).items():
                 if value is None:

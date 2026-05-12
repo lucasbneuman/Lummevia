@@ -517,35 +517,91 @@ def _build_system_events(
             )
         )
     decision_events = state.metadata.get("execution_decisions", [])
-    if not isinstance(decision_events, list):
+    if isinstance(decision_events, list):
+        for raw_decision in decision_events:
+            if not isinstance(raw_decision, dict):
+                continue
+            metadata = raw_decision.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            decision_status = str(raw_decision.get("status", "PROPOSED"))
+            events.append(
+                TimelineEvent(
+                    event_id=str(raw_decision.get("decision_id", "")),
+                    workflow_run_id=workflow_run_id,
+                    event_type=f"DECISION_{decision_status}",
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=str(raw_decision.get("decision_id", "execution_decision")),
+                    title=f"Decision {raw_decision.get('decision_type', 'UNKNOWN')}",
+                    description=str(raw_decision.get("reason", "Execution decision recorded.")),
+                    created_at=raw_decision.get("created_at"),
+                    metadata={
+                        "decision_id": raw_decision.get("decision_id"),
+                        "decision_type": raw_decision.get("decision_type"),
+                        "decision_status": decision_status,
+                        "recommended_action": raw_decision.get("recommended_action"),
+                        "requires_human_review": raw_decision.get("requires_human_review"),
+                        **metadata,
+                    },
+                )
+            )
+    adaptive_plans = state.metadata.get("adaptive_plans", [])
+    if not isinstance(adaptive_plans, list):
         return events
-    for raw_decision in decision_events:
-        if not isinstance(raw_decision, dict):
+    for raw_plan in adaptive_plans:
+        if not isinstance(raw_plan, dict):
             continue
-        metadata = raw_decision.get("metadata", {})
-        if not isinstance(metadata, dict):
-            metadata = {}
-        decision_status = str(raw_decision.get("status", "PROPOSED"))
+        plan_metadata = raw_plan.get("metadata", {})
+        if not isinstance(plan_metadata, dict):
+            plan_metadata = {}
+        plan_id = str(raw_plan.get("adaptive_plan_id", "adaptive_plan"))
+        created_at = raw_plan.get("created_at")
         events.append(
             TimelineEvent(
-                event_id=str(raw_decision.get("decision_id", "")),
+                event_id=f"{plan_id}-created",
                 workflow_run_id=workflow_run_id,
-                event_type=f"DECISION_{decision_status}",
+                event_type="ADAPTIVE_PLAN_CREATED",
                 source_type=TimelineSourceType.SYSTEM,
-                source_id=str(raw_decision.get("decision_id", "execution_decision")),
-                title=f"Decision {raw_decision.get('decision_type', 'UNKNOWN')}",
-                description=str(raw_decision.get("reason", "Execution decision recorded.")),
-                created_at=raw_decision.get("created_at"),
+                source_id=plan_id,
+                title=f"Adaptive plan {plan_id} created",
+                description=str(raw_plan.get("trigger_reason", "Adaptive plan created.")),
+                created_at=created_at,
                 metadata={
-                    "decision_id": raw_decision.get("decision_id"),
-                    "decision_type": raw_decision.get("decision_type"),
-                    "decision_status": decision_status,
-                    "recommended_action": raw_decision.get("recommended_action"),
-                    "requires_human_review": raw_decision.get("requires_human_review"),
-                    **metadata,
+                    "adaptive_plan_id": plan_id,
+                    "adaptive_plan_status": raw_plan.get("status"),
+                    "source_task_id": raw_plan.get("source_task_id"),
+                    **plan_metadata,
                 },
             )
         )
+        mutation_event_type = _mutation_event_type(str(raw_plan.get("status", "PROPOSED")))
+        mutation_created_at = raw_plan.get("updated_at") or created_at
+        for raw_mutation in raw_plan.get("mutations", []):
+            if not isinstance(raw_mutation, dict):
+                continue
+            mutation_metadata = raw_mutation.get("metadata", {})
+            if not isinstance(mutation_metadata, dict):
+                mutation_metadata = {}
+            events.append(
+                TimelineEvent(
+                    event_id=str(raw_mutation.get("mutation_id", "")),
+                    workflow_run_id=workflow_run_id,
+                    event_type=mutation_event_type,
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=plan_id,
+                    title=f"Graph mutation {raw_mutation.get('mutation_type', 'UNKNOWN')}",
+                    description=str(raw_mutation.get("reason", "Graph mutation proposed.")),
+                    created_at=mutation_created_at,
+                    metadata={
+                        "adaptive_plan_id": plan_id,
+                        "adaptive_plan_status": raw_plan.get("status"),
+                        "mutation_id": raw_mutation.get("mutation_id"),
+                        "mutation_type": raw_mutation.get("mutation_type"),
+                        "target": raw_mutation.get("target"),
+                        **mutation_metadata,
+                    },
+                )
+            )
     return events
 
 
@@ -619,3 +675,13 @@ def _review_from_snapshot(
             **payload,
         },
     )
+
+
+def _mutation_event_type(status: str) -> str:
+    if status == "APPROVED":
+        return "GRAPH_MUTATION_APPROVED"
+    if status == "REJECTED":
+        return "GRAPH_MUTATION_REJECTED"
+    if status == "APPLIED":
+        return "GRAPH_MUTATION_APPLIED"
+    return "GRAPH_MUTATION_PROPOSED"

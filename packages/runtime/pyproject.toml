@@ -20,6 +20,7 @@ dependencies = [
     "lummevia-intelligence",
     "lummevia-kilo-adapter",
     "lummevia-memory",
+    "lummevia-planning",
     "lummevia-queue",
     "lummevia-resources",
     "lummevia-reviews",

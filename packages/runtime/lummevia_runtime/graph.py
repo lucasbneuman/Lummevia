@@ -15,6 +15,7 @@ from lummevia_kilo import KiloExecutionClient
 from lummevia_runtime.exceptions import RuntimeNotFoundError
 from lummevia_runtime.intelligence import initialize_intelligence_runtime_state
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
+from lummevia_runtime.planning import initialize_adaptive_planning_runtime_state
 from lummevia_runtime.persistence.repository import WorkflowRunRepository
 from lummevia_runtime.supervisor import initialize_supervisor_runtime_state
 from lummevia_runtime.nodes import (
@@ -97,6 +98,8 @@ class DevelopmentRuntime:
         )
 
     def start_run(self, project: str, issue_id: str) -> RuntimeState:
+        from lummevia_runtime.queue import sync_task_queue_state
+
         initial_state = RuntimeState(
             run=WorkflowRun(
                 workflow_name="development_loop",
@@ -114,11 +117,31 @@ class DevelopmentRuntime:
         )
         initialize_supervisor_runtime_state(initial_state)
         initialize_intelligence_runtime_state(initial_state)
+        initialize_adaptive_planning_runtime_state(initial_state)
         if self.persistence_metadata_resolver is not None:
             initial_state.metadata.update(self.persistence_metadata_resolver(initial_state))
         self.registry.create(initial_state)
         with _observe_workflow_run(self.observer, initial_state):
             final_state = RuntimeState.model_validate(self.graph.invoke(initial_state))
+            if final_state.run.status == WorkflowRunStatus.COMPLETED:
+                queue_id = str(final_state.metadata.get("queue_id", "")).strip()
+                queue_item_id = str(final_state.metadata.get("current_queue_item_id", "")).strip()
+                if queue_id and queue_item_id:
+                    from lummevia_queue import TaskQueueRegistry
+
+                    queue = TaskQueueRegistry.default().get_queue(queue_id)
+                    if queue is not None:
+                        current_item = next(
+                            (
+                                item
+                                for item in queue.items
+                                if item.queue_item_id == queue_item_id
+                            ),
+                            None,
+                        )
+                        if current_item is not None and current_item.status != "COMPLETED":
+                            TaskQueueRegistry.default().mark_completed(queue_id, queue_item_id)
+            sync_task_queue_state(final_state)
             initial_state.run = final_state.run
             initial_state.current_role = final_state.current_role
             initial_state.artifacts = final_state.artifacts

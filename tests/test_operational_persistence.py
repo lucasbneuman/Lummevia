@@ -16,6 +16,7 @@ from lummevia_core import AgentRole
 from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
 from lummevia_kilo import KiloExecutionMode
 from lummevia_memory import MemoryCategory, MemorySourceType, ProjectMemoryRegistry
+from lummevia_planning import AdaptivePlanRegistry, AdaptivePlanningContext, evaluate_adaptive_plan
 from lummevia_persistence import (
     OperationalPersistenceService,
     create_database_engine,
@@ -95,6 +96,18 @@ def test_operational_persistence_rehydrates_after_simulated_restart(tmp_path: Pa
     HumanReviewRegistry.default().complete_review(
         review.review_id,
         decision=ReviewDecision.APPROVED,
+    )
+    adaptive_plan = AdaptivePlanRegistry.default().create_plan(
+        evaluate_adaptive_plan(
+            AdaptivePlanningContext(
+                workflow_run_id="run-001",
+                project="lummevia-os",
+                issue_id="OS-801",
+                source_task_id="OS-801-T1",
+                trigger_reason="large_diff",
+                files_changed_count=10,
+            )
+        )
     )
 
     memory = ProjectMemoryRegistry.default().add_memory(
@@ -187,6 +200,7 @@ def test_operational_persistence_rehydrates_after_simulated_restart(tmp_path: Pa
     SupervisorRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     HumanReviewRegistry.default().reset()
+    AdaptivePlanRegistry.default().reset()
     ConversationRegistry.default().reset()
     ResourceRegistry.default().reset()
     CapabilityRegistry.default().reset()
@@ -199,6 +213,7 @@ def test_operational_persistence_rehydrates_after_simulated_restart(tmp_path: Pa
     assert results["sessions"]["status"] == "ok"
     assert results["supervisor"]["status"] == "ok"
     assert results["memory"]["status"] == "ok"
+    assert results["planning"]["status"] == "ok"
     assert results["reviews"]["status"] == "ok"
     assert results["conversations"]["status"] == "ok"
     assert results["resources"]["status"] == "ok"
@@ -209,6 +224,7 @@ def test_operational_persistence_rehydrates_after_simulated_restart(tmp_path: Pa
     assert ResourceRegistry.default().get_workspace("workspace-001") is not None
     assert ConversationRegistry.default().get_thread(thread.thread_id).messages
     assert HumanReviewRegistry.default().get_review(review.review_id) is not None
+    assert AdaptivePlanRegistry.default().get_plan(adaptive_plan.adaptive_plan_id) is not None
     assert ProjectMemoryRegistry.default().get_memory(memory.memory_id) is not None
     assert CapabilityRegistry.default().list_capacity()
 

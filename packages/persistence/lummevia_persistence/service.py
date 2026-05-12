@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from lummevia_persistence.repositories.capabilities import CapabilitySnapshotRepository
 from lummevia_persistence.repositories.conversations import ConversationSnapshotRepository
 from lummevia_persistence.repositories.memory import MemorySnapshotRepository
+from lummevia_persistence.repositories.planning import AdaptivePlanSnapshotRepository
 from lummevia_persistence.repositories.queues import QueueSnapshotRepository
 from lummevia_persistence.repositories.resources import ResourceSnapshotRepository
 from lummevia_persistence.repositories.reviews import ReviewSnapshotRepository
@@ -21,6 +22,7 @@ class OperationalPersistenceService:
         self.sessions = SessionSnapshotRepository(session_factory, repository_name="sessions")
         self.supervisor = SupervisorSnapshotRepository(session_factory, repository_name="supervisor")
         self.memory = MemorySnapshotRepository(session_factory, repository_name="memory")
+        self.planning = AdaptivePlanSnapshotRepository(session_factory, repository_name="planning")
         self.reviews = ReviewSnapshotRepository(session_factory, repository_name="reviews")
         self.conversations = ConversationSnapshotRepository(session_factory, repository_name="conversations")
         self.resources = ResourceSnapshotRepository(session_factory, repository_name="resources")
@@ -32,6 +34,7 @@ class OperationalPersistenceService:
             self.sessions,
             self.supervisor,
             self.memory,
+            self.planning,
             self.reviews,
             self.conversations,
             self.resources,
@@ -56,6 +59,7 @@ class OperationalPersistenceService:
             "recovery_action": self.supervisor,
             "supervisor_event": self.supervisor,
             "memory_record": self.memory,
+            "adaptive_plan": self.planning,
             "review": self.reviews,
             "conversation": self.conversations,
             "resource_lock": self.resources,

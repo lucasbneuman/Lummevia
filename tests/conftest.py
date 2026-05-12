@@ -49,6 +49,7 @@ SUPERVISOR_PACKAGE_DIR = ROOT_DIR / "packages" / "supervisor"
 PERSISTENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "persistence"
 CODE_CHANGES_PACKAGE_DIR = ROOT_DIR / "packages" / "code-changes"
 INTELLIGENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "intelligence"
+PLANNING_PACKAGE_DIR = ROOT_DIR / "packages" / "planning"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -74,6 +75,8 @@ if str(CODE_CHANGES_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(CODE_CHANGES_PACKAGE_DIR))
 if str(INTELLIGENCE_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(INTELLIGENCE_PACKAGE_DIR))
+if str(PLANNING_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(PLANNING_PACKAGE_DIR))
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +85,7 @@ def reset_default_registries():
     from lummevia_evaluations import PromptBaselineRegistry
     from lummevia_memory import ProjectMemoryRegistry
     from lummevia_intelligence import DecisionRegistry
+    from lummevia_planning import AdaptivePlanRegistry
     from lummevia_queue import TaskQueueRegistry
     from lummevia_capabilities import CapabilityRegistry
     from lummevia_code_changes import CodeChangeRegistry
@@ -100,6 +104,7 @@ def reset_default_registries():
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     DecisionRegistry.default().reset()
+    AdaptivePlanRegistry.default().reset()
     TaskQueueRegistry.default().reset()
     CapabilityRegistry.default().reset()
     CodeChangeRegistry.default().reset()
@@ -116,6 +121,7 @@ def reset_default_registries():
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     DecisionRegistry.default().reset()
+    AdaptivePlanRegistry.default().reset()
     TaskQueueRegistry.default().reset()
     CapabilityRegistry.default().reset()
     CodeChangeRegistry.default().reset()

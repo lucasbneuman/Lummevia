@@ -5,6 +5,11 @@ from lummevia_runtime.intelligence import (
     initialize_intelligence_runtime_state,
     propose_execution_decision,
 )
+from lummevia_runtime.planning import (
+    build_adaptive_planning_context,
+    initialize_adaptive_planning_runtime_state,
+    propose_adaptive_plan,
+)
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
 from lummevia_runtime.persistence import (
     PersistedRunNotFoundError,
@@ -19,7 +24,9 @@ from lummevia_runtime.timeline import sync_timeline_for_state
 __all__ = [
     "DevelopmentRuntime",
     "build_execution_context",
+    "build_adaptive_planning_context",
     "initialize_intelligence_runtime_state",
+    "initialize_adaptive_planning_runtime_state",
     "NoopRuntimeObserver",
     "PersistedRunNotFoundError",
     "RuntimeArtifacts",
@@ -32,5 +39,6 @@ __all__ = [
     "create_session_factory",
     "create_tables",
     "propose_execution_decision",
+    "propose_adaptive_plan",
     "sync_timeline_for_state",
 ]

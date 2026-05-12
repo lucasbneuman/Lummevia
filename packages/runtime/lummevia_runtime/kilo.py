@@ -22,6 +22,7 @@ from lummevia_runtime.capabilities import (
     request_step_allocation,
 )
 from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
+from lummevia_runtime.planning import build_adaptive_planning_context, propose_adaptive_plan
 from lummevia_runtime.sessions import record_kilo_execution_for_session
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.queue import build_queue_metadata_for_kilo
@@ -210,6 +211,20 @@ def execute_kilo_step(
                             task_id=task_package.task_id,
                             files_changed_count=int(change_set.diff_summary.get("files_changed_count", 0)),
                             real_code_touched=role == AgentRole.DEV,
+                            metadata={
+                                "source": "code_change_detection",
+                                "change_set_id": change_set.change_set_id,
+                                "execution_id": result.execution_id,
+                            },
+                        ),
+                    )
+                    propose_adaptive_plan(
+                        state,
+                        context=build_adaptive_planning_context(
+                            state,
+                            trigger_reason="large_diff",
+                            source_task_id=task_package.task_id,
+                            files_changed_count=int(change_set.diff_summary.get("files_changed_count", 0)),
                             metadata={
                                 "source": "code_change_detection",
                                 "change_set_id": change_set.change_set_id,

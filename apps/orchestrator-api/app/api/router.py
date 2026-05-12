@@ -10,6 +10,7 @@ from app.api.routes.memory import router as memory_router
 from app.api.routes.model_execution import router as model_execution_router
 from app.api.routes.model_router import router as model_router_api_router
 from app.api.routes.persistence import router as persistence_router
+from app.api.routes.planning import router as planning_router
 from app.api.routes.queues import router as queues_router
 from app.api.routes.resources import router as resources_router
 from app.api.routes.reviews import router as reviews_router
@@ -34,6 +35,7 @@ api_router.include_router(memory_router)
 api_router.include_router(model_execution_router)
 api_router.include_router(model_router_api_router)
 api_router.include_router(persistence_router)
+api_router.include_router(planning_router)
 api_router.include_router(queues_router)
 api_router.include_router(resources_router)
 api_router.include_router(reviews_router)

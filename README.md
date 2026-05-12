@@ -1330,6 +1330,51 @@ Guardrails:
 - no acciones destructivas autoaplicadas
 - `REQUEUE`, `MARK_DEAD_LETTER`, `RETRY` y `CANCEL` quedan como recomendacion observable en el MVP
 
+## Adaptive Planning Layer
+
+Lummevia OS ahora agrega una primera capa de `adaptive planning` para proponer replanning y mutaciones controladas del graph operacional sin reescribir el workflow principal.
+
+Esta capa vive en `packages/planning/` y agrega:
+
+- `AdaptivePlan` como contrato trazable para replanning
+- `PlanMutation` y `MutationType`
+- `AdaptivePlanRegistry` en memoria con persistencia operacional opcional
+- un planner heuristico deterministico, sin planner LLM
+- propuestas de `proposed_task_packages`, `queue_recommendations` y `mutation proposals`
+
+Heuristicas actuales:
+
+- `files_changed_count` alto propone `SPLIT_TASK`
+- `qa_fail_count >= 2` propone `INSERT_REVIEW`
+- `retry_count >= max_retries` o `dead_letter_risk` propone `ESCALATE_TASK`
+- falta de contexto propone `REGENERATE_PROMPT`
+- dependencias bloqueadas proponen `REQUEUE_TASK` y `REPLAN_DEPENDENCIES`
+- `failed_validation` o validacion inconsistente proponen `INSERT_QA`
+- `TaskPackage` sobredimensionado propone `SPLIT_TASK`
+
+Integracion actual:
+
+- runtime crea `AdaptivePlan` despues de `QA fail`, `large diff`, `supervisor stuck` y riesgo de `dead-letter`
+- mutaciones sensibles (`SPLIT_TASK`, `REPLAN_DEPENDENCIES`, `ESCALATE_TASK`) crean `HumanReview` de tipo `ADAPTIVE_PLAN`
+- `Timeline` registra `ADAPTIVE_PLAN_CREATED`, `GRAPH_MUTATION_PROPOSED`, `GRAPH_MUTATION_APPROVED`, `GRAPH_MUTATION_REJECTED` y `GRAPH_MUTATION_APPLIED`
+- Phoenix recibe `adaptive_plan_id`, `adaptive_plan_count`, `mutation_count`, `mutation_types`, `adaptive_plan_status` y `replanning_trigger`
+- la API expone `GET /planning/adaptive-plans`, `GET /planning/adaptive-plans/{adaptive_plan_id}`, `POST /planning/evaluate`, `POST /planning/adaptive-plans/{adaptive_plan_id}/approve` y `POST /planning/adaptive-plans/{adaptive_plan_id}/reject`
+
+Por que no se autoaplica:
+
+- evita graph mutation destructiva
+- preserva trazabilidad entre plan original y propuesta adaptativa
+- mantiene governance humana sobre mutaciones sensibles
+- evita loops autonomos de replanning
+- deja preparado un roadmap hacia planner autonomo futuro sin habilitarlo todavia
+
+Roadmap posterior:
+
+- policy gates mas finos por tipo de mutacion
+- `apply` explicito para mutaciones no sensibles
+- planner asistido por LLM con explicaciones y scoring
+- integracion mas profunda con requeue real y redistribucion futura
+
 ## Persistencia operacional
 
 Lummevia OS ahora incorpora una estrategia hibrida `in-memory cache + Postgres durable` para el estado operacional critico.
@@ -1341,6 +1386,7 @@ Entidades que ya persisten en snapshots:
 - supervisor state: watchdogs, recovery actions, supervisor events y dead letters
 - conversation threads y mensajes
 - project memory
+- adaptive plans y mutation proposals
 - human reviews
 - resource locks y workspaces
 - capability/capacity snapshots
