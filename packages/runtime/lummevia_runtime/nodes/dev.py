@@ -34,7 +34,14 @@ def dev_implementation_node(
         update={"status": "in_progress"}
     )
     if state.artifacts.task_packages:
-        state.artifacts.task_packages[0] = state.artifacts.current_task_package
+        state.artifacts.task_packages = [
+            (
+                state.artifacts.current_task_package
+                if existing.task_id == state.artifacts.current_task_package.task_id
+                else existing
+            )
+            for existing in state.artifacts.task_packages
+        ]
     kilo_execution = execute_kilo_step(
         state,
         step_name=step_name,

@@ -95,7 +95,7 @@ def build_workflow_timeline(
     ]
     ordered_events = sorted(
         events,
-        key=lambda event: (event.created_at, event.event_id),
+        key=lambda event: (event.created_at, _event_sort_priority(event.event_type), event.event_id),
     )
     source_names = sorted({event.source_type.value for event in ordered_events})
     timeline_created_at = (
@@ -540,6 +540,14 @@ def _build_session_event(
             **event.metadata,
         },
     )
+
+
+def _event_sort_priority(event_type: str) -> int:
+    if event_type == "SESSION_LIFECYCLE_STARTED":
+        return 0
+    if event_type == "SESSION_LIFECYCLE_COMPLETED":
+        return 2
+    return 1
 
 
 def _conversation_message_event_type(author_type: AuthorType) -> str:

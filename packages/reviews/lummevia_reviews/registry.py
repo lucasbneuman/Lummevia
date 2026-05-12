@@ -17,6 +17,7 @@ class HumanReviewRegistry:
 
     def __init__(self) -> None:
         self._reviews: dict[str, HumanReview] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "HumanReviewRegistry":
@@ -26,6 +27,12 @@ class HumanReviewRegistry:
 
     def reset(self) -> None:
         self._reviews.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(self, reviews: list[HumanReview]) -> None:
+        self._reviews = {review.review_id: review for review in reviews}
 
     def create_review(
         self,
@@ -53,6 +60,7 @@ class HumanReviewRegistry:
             metadata=metadata or {},
         )
         self._reviews[review.review_id] = review
+        self._persist_review(review)
         return review
 
     def get_review(self, review_id: str) -> HumanReview | None:
@@ -80,4 +88,13 @@ class HumanReviewRegistry:
             }
         )
         self._reviews[review_id] = updated
+        self._persist_review(updated)
         return updated
+
+    def _persist_review(self, review: HumanReview) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_review(review)
+        except Exception:
+            return

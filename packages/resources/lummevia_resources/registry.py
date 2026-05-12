@@ -18,6 +18,7 @@ class ResourceRegistry:
     def __init__(self) -> None:
         self._locks: dict[str, ResourceLock] = {}
         self._workspaces: dict[str, WorkspaceAllocation] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "ResourceRegistry":
@@ -28,6 +29,18 @@ class ResourceRegistry:
     def reset(self) -> None:
         self._locks.clear()
         self._workspaces.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(
+        self,
+        *,
+        locks: list[ResourceLock],
+        workspaces: list[WorkspaceAllocation],
+    ) -> None:
+        self._locks = {lock.lock_id: lock for lock in locks}
+        self._workspaces = {workspace.workspace_id: workspace for workspace in workspaces}
 
     def acquire_lock(
         self,
@@ -60,6 +73,7 @@ class ResourceRegistry:
             metadata=metadata or {},
         )
         self._locks[lock.lock_id] = lock
+        self._persist_lock(lock)
         return lock
 
     def release_lock(
@@ -79,6 +93,7 @@ class ResourceRegistry:
             }
         )
         self._locks[lock_id] = released
+        self._persist_lock(released)
         return released
 
     def get_lock(self, lock_id: str) -> ResourceLock | None:
@@ -116,6 +131,7 @@ class ResourceRegistry:
 
     def save_workspace(self, workspace: WorkspaceAllocation) -> WorkspaceAllocation:
         self._workspaces[workspace.workspace_id] = workspace
+        self._persist_workspace(workspace)
         return workspace
 
     def get_workspace(self, workspace_id: str) -> WorkspaceAllocation | None:
@@ -146,4 +162,21 @@ class ResourceRegistry:
             }
         )
         self._workspaces[workspace_id] = updated
+        self._persist_workspace(updated)
         return updated
+
+    def _persist_lock(self, lock: ResourceLock) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_lock(lock)
+        except Exception:
+            return
+
+    def _persist_workspace(self, workspace: WorkspaceAllocation) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_workspace(workspace)
+        except Exception:
+            return

@@ -20,6 +20,7 @@ class ConversationRegistry:
 
     def __init__(self) -> None:
         self._threads: dict[str, ConversationThread] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "ConversationRegistry":
@@ -29,6 +30,12 @@ class ConversationRegistry:
 
     def reset(self) -> None:
         self._threads.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(self, threads: list[ConversationThread]) -> None:
+        self._threads = {thread.thread_id: thread for thread in threads}
 
     def create_thread(
         self,
@@ -45,6 +52,7 @@ class ConversationRegistry:
             metadata=metadata or {},
         )
         self._threads[thread.thread_id] = thread
+        self._persist_thread(thread)
         return thread
 
     def add_message(
@@ -72,6 +80,7 @@ class ConversationRegistry:
             }
         )
         self._threads[thread_id] = updated
+        self._persist_thread(updated)
         return updated
 
     def update_thread_status(
@@ -111,3 +120,11 @@ class ConversationRegistry:
 
     def close_thread(self, thread_id: str) -> ConversationThread:
         return self.update_thread_status(thread_id, ConversationStatus.CLOSED)
+
+    def _persist_thread(self, thread: ConversationThread) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_thread(thread)
+        except Exception:
+            return

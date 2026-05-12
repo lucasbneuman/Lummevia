@@ -15,6 +15,7 @@ class ProjectMemoryRegistry:
 
     def __init__(self) -> None:
         self._records: dict[str, ProjectMemoryRecord] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "ProjectMemoryRegistry":
@@ -24,6 +25,12 @@ class ProjectMemoryRegistry:
 
     def reset(self) -> None:
         self._records.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(self, records: list[ProjectMemoryRecord]) -> None:
+        self._records = {record.memory_id: record for record in records}
 
     def add_memory(
         self,
@@ -48,6 +55,7 @@ class ProjectMemoryRegistry:
             metadata=metadata or {},
         )
         self._records[record.memory_id] = record
+        self._persist_record(record)
         return record
 
     def get_memory(self, memory_id: str) -> ProjectMemoryRecord | None:
@@ -82,6 +90,14 @@ class ProjectMemoryRegistry:
             for record in self.list_project_memories(project)
             if record.category == category
         ]
+
+    def _persist_record(self, record: ProjectMemoryRecord) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_record(record)
+        except Exception:
+            return
 
 
 def _truncate_content(content: str, *, limit: int = 180) -> str:

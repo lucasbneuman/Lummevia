@@ -11,6 +11,7 @@ class TaskQueueRegistry:
 
     def __init__(self) -> None:
         self._queues: dict[str, TaskQueue] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "TaskQueueRegistry":
@@ -20,6 +21,12 @@ class TaskQueueRegistry:
 
     def reset(self) -> None:
         self._queues.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(self, queues: list[TaskQueue]) -> None:
+        self._queues = {queue.queue_id: queue for queue in queues}
 
     def create_queue(
         self,
@@ -34,12 +41,14 @@ class TaskQueueRegistry:
             metadata=metadata or {},
         )
         self._queues[queue.queue_id] = queue
+        self._persist_queue(queue)
         return queue
 
     def add_item(self, queue_id: str, item: TaskQueueItem) -> TaskQueueItem:
         queue = self._queues[queue_id]
         updated_queue = queue.model_copy(update={"items": [*queue.items, item]})
         self._queues[queue_id] = self._refresh_queue(updated_queue)
+        self._persist_queue(self._queues[queue_id])
         return next(
             stored_item
             for stored_item in self._queues[queue_id].items
@@ -90,6 +99,7 @@ class TaskQueueRegistry:
                 updated_items.append(item)
         updated_queue = self._refresh_queue(queue.model_copy(update={"items": updated_items}))
         self._queues[queue_id] = updated_queue
+        self._persist_queue(updated_queue)
         return next(item for item in updated_queue.items if item.queue_item_id == queue_item_id)
 
     def list_ready_items(self, queue_id: str) -> list[TaskQueueItem]:
@@ -141,6 +151,14 @@ class TaskQueueRegistry:
                 )
             )
         return queue.model_copy(update={"items": refreshed_items})
+
+    def _persist_queue(self, queue: TaskQueue) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_queue(queue)
+        except Exception:
+            return
 
 
 def queue_priority_weight(priority: TaskPriority) -> int:

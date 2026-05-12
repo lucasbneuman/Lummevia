@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.persistence import annotate_runtime_state, resolve_runtime_persistence_metadata
 from app.core.model_execution import build_pm_conversation_model_executor
 from lummevia_agents import PMAgent
 from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
@@ -36,8 +37,10 @@ def _build_runtime_service() -> DevelopmentRuntime:
                 environment=settings.app_env,
             ),
             environment=settings.app_env,
+            persistence_metadata_supplier=resolve_runtime_persistence_metadata,
         ),
         founder_pm_agent=founder_pm_agent,
+        persistence_metadata_resolver=resolve_runtime_persistence_metadata,
     )
 
 
@@ -56,6 +59,7 @@ def create_development_run(request: DevelopmentRunRequest) -> RuntimeState:
         project=request.project,
         issue_id=request.issue_id,
     )
+    annotate_runtime_state(state)
 
     if (
         runtime_repository is not None
@@ -70,24 +74,24 @@ def create_development_run(request: DevelopmentRunRequest) -> RuntimeState:
 def list_development_runs(limit: int = 50) -> list[RuntimeState]:
     if runtime_repository is not None:
         try:
-            return runtime_repository.list_runs(limit=limit)
+            return [annotate_runtime_state(run) for run in runtime_repository.list_runs(limit=limit)]
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Unable to list persisted runtime runs.",
             ) from exc
 
-    return runtime_service.list_runs()
+    return [annotate_runtime_state(run) for run in runtime_service.list_runs()]
 
 
 @router.get("/development/run/{run_id}", response_model=RuntimeState)
 def get_development_run(run_id: str) -> RuntimeState:
     try:
-        return runtime_service.get_run(run_id)
+        return annotate_runtime_state(runtime_service.get_run(run_id))
     except RuntimeNotFoundError as exc:
         if runtime_repository is not None:
             try:
-                return runtime_repository.get_run(run_id)
+                return annotate_runtime_state(runtime_repository.get_run(run_id))
             except PersistedRunNotFoundError:
                 pass
 

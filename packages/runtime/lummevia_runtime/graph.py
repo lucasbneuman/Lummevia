@@ -77,11 +77,13 @@ class DevelopmentRuntime:
         observer: RuntimeObserver | None = None,
         kilo_client: KiloExecutionClient | None = None,
         founder_pm_agent: PMAgent | None = None,
+        persistence_metadata_resolver: Callable[[RuntimeState], dict[str, object]] | None = None,
     ) -> None:
         self.registry = registry or RuntimeRegistry()
         self.repository = repository
         self.observer = observer or NoopRuntimeObserver()
         self.kilo_client = kilo_client or KiloExecutionClient()
+        self.persistence_metadata_resolver = persistence_metadata_resolver
         self.graph = build_development_graph(
             observer=self.observer,
             kilo_client=self.kilo_client,
@@ -110,6 +112,8 @@ class DevelopmentRuntime:
             },
         )
         initialize_supervisor_runtime_state(initial_state)
+        if self.persistence_metadata_resolver is not None:
+            initial_state.metadata.update(self.persistence_metadata_resolver(initial_state))
         self.registry.create(initial_state)
         with _observe_workflow_run(self.observer, initial_state):
             final_state = RuntimeState.model_validate(self.graph.invoke(initial_state))
@@ -120,10 +124,14 @@ class DevelopmentRuntime:
             initial_state.metadata = final_state.metadata
             initial_state.loop_count = final_state.loop_count
             initial_state.max_loop_count = final_state.max_loop_count
+            if self.persistence_metadata_resolver is not None:
+                initial_state.metadata.update(self.persistence_metadata_resolver(initial_state))
         self.registry.upsert(final_state)
 
         if self.repository is not None:
             self.repository.save_run(final_state)
+        if self.persistence_metadata_resolver is not None:
+            final_state.metadata.update(self.persistence_metadata_resolver(final_state))
 
         return final_state
 

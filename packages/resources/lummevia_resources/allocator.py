@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from datetime import UTC, datetime
-from pathlib import PurePath
+from pathlib import PurePosixPath
 from uuid import NAMESPACE_URL, uuid5
 
 from lummevia_core import TaskPackage
@@ -176,7 +176,7 @@ class WorkspaceAllocator:
         workspace_id: str,
     ) -> str:
         project_slug = _safe_slug(project)
-        return str(PurePath(self.workspace_root) / project_slug / workspace_id)
+        return str(PurePosixPath(self.workspace_root) / project_slug / workspace_id)
 
 
 def _safe_slug(value: str) -> str:

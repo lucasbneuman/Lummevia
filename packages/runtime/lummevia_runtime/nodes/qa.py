@@ -68,7 +68,14 @@ def qa_validation_node(
         update={"status": updated_task_status}
     )
     if state.artifacts.task_packages:
-        state.artifacts.task_packages[0] = state.artifacts.current_task_package
+        state.artifacts.task_packages = [
+            (
+                state.artifacts.current_task_package
+                if existing.task_id == state.artifacts.current_task_package.task_id
+                else existing
+            )
+            for existing in state.artifacts.task_packages
+        ]
     state.metadata.setdefault("artifact_sources", {})["validation_package"] = (
         "prompt_pipeline"
     )

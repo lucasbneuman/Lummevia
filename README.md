@@ -874,7 +874,7 @@ Limitaciones actuales:
 - no hay integracion real con GitHub
 - no hay prompts reales instrumentados
 - no hay tokens ni costos reales instrumentados
-- no hay persistencia en Postgres
+- la persistencia durable de `workflow_runs` y del estado operacional usa snapshots en Postgres cuando `RUNTIME_PERSISTENCE_ENABLED=true`
 - toda la ejecucion es simulada y en memoria
 
 ## Integrations
@@ -1028,6 +1028,8 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /queues`
 - `GET /queues/{queue_id}`
 - `GET /queues/{queue_id}/ready`
+- `GET /persistence/health`
+- `POST /persistence/rehydrate`
 - `GET /timelines`
 - `GET /timelines/{workflow_run_id}`
 - `POST /runtime/development/run`
@@ -1182,6 +1184,51 @@ Roadmap natural despues de este MVP:
 - politicas de starvation por cola
 - scheduler supervisor desacoplado
 - reconciliacion automatica entre runtime y recursos huerfanos
+
+## Persistencia operacional
+
+Lummevia OS ahora incorpora una estrategia hibrida `in-memory cache + Postgres durable` para el estado operacional critico.
+
+Entidades que ya persisten en snapshots:
+
+- queues y queue items
+- task execution sessions
+- supervisor state: watchdogs, recovery actions, supervisor events y dead letters
+- conversation threads y mensajes
+- project memory
+- human reviews
+- resource locks y workspaces
+- capability/capacity snapshots
+- workflow runs
+
+Comportamiento actual:
+
+- los registries siguen sirviendo como cache en memoria del proceso
+- cada cambio critico intenta persistirse en Postgres sin bloquear el flujo si la escritura falla
+- al iniciar la API, los registries pueden rehidratarse desde storage durable
+- el timeline puede reconstruirse desde runtime state o desde snapshots persistidos
+- Phoenix recibe metadata de persistencia como `persistence_enabled`, `repository_write_success`, `repository_read_success`, `snapshot_version` y `rehydrated_from_storage`
+
+Lo que todavia sigue fuera de alcance:
+
+- event sourcing completo
+- locking distribuido real
+- coordinacion cross-node
+- workers o consumers de background
+- CQRS, sharding o streams
+
+Restart safety actual:
+
+- un reinicio no pierde queues, sessions, watchdogs, dead letters, conversaciones activas, memoria ni workspaces persistidos
+- si Postgres falla durante una escritura, el runtime conserva el estado local en memoria y no destruye el cache actual
+- `POST /persistence/rehydrate` fuerza reload desde Postgres sin reiniciar el proceso y sin vaciar memoria local si una lectura falla
+
+Roadmap distribuido posterior:
+
+- reconciliacion de estado entre multiples nodos
+- locking y ownership distribuidos
+- scheduling externo y recovery autonomo
+- politicas de replay y recovery mas finas sobre snapshots
 
 ## Comandos basicos
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.routes.runtime import runtime_service
+from app.api.routes import runtime as runtime_routes
 from lummevia_supervisor import (
     DeadLetterItem,
     ExecutionWatchdog,
@@ -31,7 +31,7 @@ def list_dead_letters() -> list[DeadLetterItem]:
 @router.post("/workflows/{workflow_run_id}/cancel")
 def cancel_workflow(workflow_run_id: str):
     try:
-        state = runtime_service.get_run(workflow_run_id)
+        state = runtime_routes.runtime_service.get_run(workflow_run_id)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -47,7 +47,7 @@ def detect_stuck_watchdogs() -> list[ExecutionWatchdog]:
     detected = SupervisorRegistry.default().detect_stuck()
     for watchdog in detected:
         try:
-            state = runtime_service.get_run(watchdog.workflow_run_id)
+            state = runtime_routes.runtime_service.get_run(watchdog.workflow_run_id)
         except Exception:
             continue
         SupervisorRegistry.default()._sync_runtime_metadata(state)

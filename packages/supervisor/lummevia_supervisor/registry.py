@@ -36,6 +36,7 @@ class SupervisorRegistry:
         self._watchdogs: dict[str, ExecutionWatchdog] = {}
         self._recovery_actions: dict[str, RecoveryAction] = {}
         self._dead_letters: dict[str, DeadLetterItem] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "SupervisorRegistry":
@@ -48,6 +49,22 @@ class SupervisorRegistry:
         self._watchdogs.clear()
         self._recovery_actions.clear()
         self._dead_letters.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(
+        self,
+        *,
+        events: list[SupervisorEvent],
+        watchdogs: list[ExecutionWatchdog],
+        recovery_actions: list[RecoveryAction],
+        dead_letters: list[DeadLetterItem],
+    ) -> None:
+        self._events = {event.event_id: event for event in events}
+        self._watchdogs = {watchdog.watchdog_id: watchdog for watchdog in watchdogs}
+        self._recovery_actions = {action.action_id: action for action in recovery_actions}
+        self._dead_letters = {item.dead_letter_id: item for item in dead_letters}
 
     def register_watchdog(
         self,
@@ -66,6 +83,7 @@ class SupervisorRegistry:
             metadata=metadata or {},
         )
         self._watchdogs[watchdog.watchdog_id] = watchdog
+        self._persist_watchdog(watchdog)
         return watchdog
 
     def heartbeat(
@@ -77,6 +95,7 @@ class SupervisorRegistry:
         watchdog = self._watchdogs[watchdog_id]
         updated = heartbeat_watchdog(watchdog, heartbeat_at=heartbeat_at)
         self._watchdogs[watchdog_id] = updated
+        self._persist_watchdog(updated)
         return updated
 
     def detect_stuck(
@@ -92,6 +111,7 @@ class SupervisorRegistry:
                 continue
             stuck = mark_watchdog_stuck(watchdog, now=reference)
             self._watchdogs[watchdog.watchdog_id] = stuck
+            self._persist_watchdog(stuck)
             detected.append(stuck)
             self.create_supervisor_event(
                 workflow_run_id=stuck.workflow_run_id,
@@ -132,6 +152,7 @@ class SupervisorRegistry:
             metadata=metadata or {},
         )
         self._events[event.event_id] = event
+        self._persist_event(event)
         return event
 
     def create_recovery_action(
@@ -151,6 +172,7 @@ class SupervisorRegistry:
             metadata=metadata or {},
         )
         self._recovery_actions[action.action_id] = action
+        self._persist_recovery_action(action)
         return action
 
     def mark_dead_letter(
@@ -170,6 +192,7 @@ class SupervisorRegistry:
             metadata=metadata or {},
         )
         self._dead_letters[item.dead_letter_id] = item
+        self._persist_dead_letter(item)
         return item
 
     def cancel_workflow(self, state) -> Any:
@@ -251,7 +274,7 @@ class SupervisorRegistry:
             action_type=RecoveryActionType.CANCEL,
             metadata={"queue_item_id": current_queue_item_id or None},
         )
-        self._recovery_actions[action.action_id] = complete_recovery_action(action)
+        self.save_recovery_action(complete_recovery_action(action))
         self.create_supervisor_event(
             workflow_run_id=workflow_run_id,
             session_id=session_id or None,
@@ -288,6 +311,26 @@ class SupervisorRegistry:
 
     def list_events(self) -> list[SupervisorEvent]:
         return sorted(self._events.values(), key=lambda item: (item.created_at, item.event_id), reverse=True)
+
+    def save_watchdog(self, watchdog: ExecutionWatchdog) -> ExecutionWatchdog:
+        self._watchdogs[watchdog.watchdog_id] = watchdog
+        self._persist_watchdog(watchdog)
+        return watchdog
+
+    def save_recovery_action(self, action: RecoveryAction) -> RecoveryAction:
+        self._recovery_actions[action.action_id] = action
+        self._persist_recovery_action(action)
+        return action
+
+    def save_event(self, event: SupervisorEvent) -> SupervisorEvent:
+        self._events[event.event_id] = event
+        self._persist_event(event)
+        return event
+
+    def save_dead_letter(self, item: DeadLetterItem) -> DeadLetterItem:
+        self._dead_letters[item.dead_letter_id] = item
+        self._persist_dead_letter(item)
+        return item
 
     def _apply_stuck_recovery(self, watchdog: ExecutionWatchdog, *, runtime_state=None) -> None:
         retry_attempts = int(watchdog.metadata.get("retry_attempts", 0))
@@ -484,13 +527,15 @@ class SupervisorRegistry:
                 },
             }
         )
-        SessionRegistry.default()._sessions[session_id] = updated
+        SessionRegistry.default().save_session(updated)
 
     def _complete_watchdogs_for_run(self, workflow_run_id: str, *, status: WatchdogStatus) -> None:
         for watchdog in self.list_watchdogs():
             if watchdog.workflow_run_id != workflow_run_id:
                 continue
-            self._watchdogs[watchdog.watchdog_id] = watchdog.model_copy(update={"status": status})
+            updated = watchdog.model_copy(update={"status": status})
+            self._watchdogs[watchdog.watchdog_id] = updated
+            self._persist_watchdog(updated)
 
     def _latest_dead_letter_id(self, workflow_run_id: str) -> str | None:
         for item in self.list_dead_letters():
@@ -541,3 +586,35 @@ class SupervisorRegistry:
             state.metadata["recovery_action_id"] = latest_action["action_id"]
         if latest_dead_letter is not None:
             state.metadata["dead_letter_id"] = latest_dead_letter["dead_letter_id"]
+
+    def _persist_event(self, event: SupervisorEvent) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_event(event)
+        except Exception:
+            return
+
+    def _persist_watchdog(self, watchdog: ExecutionWatchdog) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_watchdog(watchdog)
+        except Exception:
+            return
+
+    def _persist_recovery_action(self, action: RecoveryAction) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_recovery_action(action)
+        except Exception:
+            return
+
+    def _persist_dead_letter(self, item: DeadLetterItem) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_dead_letter(item)
+        except Exception:
+            return

@@ -33,6 +33,7 @@ class CapabilityRegistry:
         self._capacities: dict[str, ExecutionCapacity] = {}
         self._capacity_index: dict[str, str] = {}
         self._active_allocations: dict[str, AllocationResult] = {}
+        self._persistence = None
         self._seed_defaults()
 
     @classmethod
@@ -48,6 +49,31 @@ class CapabilityRegistry:
         self._capacity_index.clear()
         self._active_allocations.clear()
         self._seed_defaults()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+        self._persist_state()
+
+    def rehydrate(self, payload: dict[str, Any]) -> None:
+        self._agent_capabilities = {
+            AgentRole(key): AgentCapability.model_validate(value)
+            for key, value in payload.get("agent_capabilities", {}).items()
+        }
+        self._model_capabilities = {
+            tuple(key.split("|", maxsplit=1)): ModelCapability.model_validate(value)
+            for key, value in payload.get("model_capabilities", {}).items()
+        }
+        self._capacities = {
+            key: ExecutionCapacity.model_validate(value)
+            for key, value in payload.get("capacities", {}).items()
+        }
+        self._capacity_index = {
+            key: str(value) for key, value in payload.get("capacity_index", {}).items()
+        }
+        self._active_allocations = {
+            key: AllocationResult.model_validate(value)
+            for key, value in payload.get("active_allocations", {}).items()
+        }
 
     def register_agent_capability(self, capability: AgentCapability) -> AgentCapability:
         self._agent_capabilities[capability.role] = capability
@@ -68,6 +94,7 @@ class CapabilityRegistry:
             self._capacities[capacity_id] = existing.model_copy(
                 update={"max_slots": capability.max_concurrent_tasks}
             )
+        self._persist_state()
         return capability
 
     def register_model_capability(self, capability: ModelCapability) -> ModelCapability:
@@ -97,6 +124,7 @@ class CapabilityRegistry:
             self._capacities[capacity_id] = existing.model_copy(
                 update={"max_slots": capability.max_concurrent_requests}
             )
+        self._persist_state()
         return capability
 
     def get_agent_capability(self, role: AgentRole) -> AgentCapability | None:
@@ -116,6 +144,7 @@ class CapabilityRegistry:
         self._capacity_index[_capacity_key(capacity.resource_type, capacity.resource_id)] = (
             capacity.capacity_id
         )
+        self._persist_state()
         return capacity
 
     def list_capacity(self) -> list[ExecutionCapacity]:
@@ -179,6 +208,7 @@ class CapabilityRegistry:
             },
         )
         self._active_allocations[result.allocation_id] = result
+        self._persist_state()
         return result
 
     def release_allocation(self, allocation_id: str) -> AllocationResult | None:
@@ -193,6 +223,7 @@ class CapabilityRegistry:
             self._capacities[capacity.capacity_id] = capacity.model_copy(
                 update={"used_slots": max(0, capacity.used_slots - 1)}
             )
+        self._persist_state()
         return result
 
     def list_active_allocations(self) -> list[AllocationResult]:
@@ -277,6 +308,35 @@ class CapabilityRegistry:
     @staticmethod
     def _model_key(provider: str, model: str) -> tuple[str, str]:
         return (provider.strip().upper(), model.strip())
+
+    def _persist_state(self) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_snapshot_state(
+                "default",
+                {
+                    "agent_capabilities": {
+                        role.value: capability.model_dump(mode="json")
+                        for role, capability in self._agent_capabilities.items()
+                    },
+                    "model_capabilities": {
+                        f"{provider}|{model}": capability.model_dump(mode="json")
+                        for (provider, model), capability in self._model_capabilities.items()
+                    },
+                    "capacities": {
+                        capacity_id: capacity.model_dump(mode="json")
+                        for capacity_id, capacity in self._capacities.items()
+                    },
+                    "capacity_index": dict(self._capacity_index),
+                    "active_allocations": {
+                        allocation_id: allocation.model_dump(mode="json")
+                        for allocation_id, allocation in self._active_allocations.items()
+                    },
+                },
+            )
+        except Exception:
+            return
 
 
 def _estimate_cost_tier(role: RouterAgentRole) -> str:

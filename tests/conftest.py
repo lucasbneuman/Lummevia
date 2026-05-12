@@ -46,6 +46,7 @@ QUEUE_PACKAGE_DIR = ROOT_DIR / "packages" / "queue"
 RESOURCES_PACKAGE_DIR = ROOT_DIR / "packages" / "resources"
 CAPABILITIES_PACKAGE_DIR = ROOT_DIR / "packages" / "capabilities"
 SUPERVISOR_PACKAGE_DIR = ROOT_DIR / "packages" / "supervisor"
+PERSISTENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "persistence"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -65,6 +66,8 @@ if str(CAPABILITIES_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(CAPABILITIES_PACKAGE_DIR))
 if str(SUPERVISOR_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(SUPERVISOR_PACKAGE_DIR))
+if str(PERSISTENCE_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(PERSISTENCE_PACKAGE_DIR))
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +82,12 @@ def reset_default_registries():
     from lummevia_sessions import SessionRegistry
     from lummevia_supervisor import SupervisorRegistry
     from lummevia_timeline import TimelineRegistry
+    from app.core.persistence import configure_operational_persistence
+    from app.api.routes import runtime as runtime_routes
 
+    configure_operational_persistence(None)
+    runtime_routes.runtime_service = runtime_routes._build_runtime_service()
+    runtime_routes.runtime_repository = None
     ConversationRegistry.default().reset()
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
@@ -91,6 +99,9 @@ def reset_default_registries():
     SupervisorRegistry.default().reset()
     TimelineRegistry.default().reset()
     yield
+    configure_operational_persistence(None)
+    runtime_routes.runtime_service = runtime_routes._build_runtime_service()
+    runtime_routes.runtime_repository = None
     ConversationRegistry.default().reset()
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()

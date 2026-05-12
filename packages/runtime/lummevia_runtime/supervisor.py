@@ -103,8 +103,8 @@ def complete_queue_item_watchdog(state: RuntimeState, *, queue_item_id: str) -> 
     watchdog = _find_watchdog(state.run.run_id, "TaskQueueItem", queue_item_id)
     if watchdog is None:
         return
-    SupervisorRegistry.default()._watchdogs[watchdog.watchdog_id] = watchdog.model_copy(
-        update={"status": WatchdogStatus.COMPLETED}
+    SupervisorRegistry.default().save_watchdog(
+        watchdog.model_copy(update={"status": WatchdogStatus.COMPLETED})
     )
     _sync_queue_item_health(
         state,
@@ -138,16 +138,18 @@ def register_session_watchdog(
     )
     session = SessionRegistry.default().get_session(session_id)
     if session is not None:
-        SessionRegistry.default()._sessions[session_id] = session.model_copy(
-            update={
-                "watchdog_id": watchdog.watchdog_id,
-                "health_status": ExecutionHealthStatus.RUNNING.value,
-                "metadata": {
-                    **session.metadata,
+        SessionRegistry.default().save_session(
+            session.model_copy(
+                update={
                     "watchdog_id": watchdog.watchdog_id,
                     "health_status": ExecutionHealthStatus.RUNNING.value,
-                },
-            }
+                    "metadata": {
+                        **session.metadata,
+                        "watchdog_id": watchdog.watchdog_id,
+                        "health_status": ExecutionHealthStatus.RUNNING.value,
+                    },
+                }
+            )
         )
         state.metadata.setdefault("sessions", {})[session_id] = (
             SessionRegistry.default().get_session(session_id).model_dump(mode="json")
@@ -176,15 +178,17 @@ def heartbeat_session_watchdog(state: RuntimeState, *, session_id: str) -> None:
     updated = SupervisorRegistry.default().heartbeat(watchdog.watchdog_id)
     session = SessionRegistry.default().get_session(session_id)
     if session is not None:
-        SessionRegistry.default()._sessions[session_id] = session.model_copy(
-            update={
-                "health_status": ExecutionHealthStatus.RUNNING.value,
-                "metadata": {
-                    **session.metadata,
+        SessionRegistry.default().save_session(
+            session.model_copy(
+                update={
                     "health_status": ExecutionHealthStatus.RUNNING.value,
-                    "last_heartbeat_at": updated.last_heartbeat_at.isoformat(),
-                },
-            }
+                    "metadata": {
+                        **session.metadata,
+                        "health_status": ExecutionHealthStatus.RUNNING.value,
+                        "last_heartbeat_at": updated.last_heartbeat_at.isoformat(),
+                    },
+                }
+            )
         )
         state.metadata.setdefault("sessions", {})[session_id] = (
             SessionRegistry.default().get_session(session_id).model_dump(mode="json")
@@ -202,19 +206,21 @@ def finalize_session_health(
 ) -> None:
     watchdog = _find_watchdog(state.run.run_id, "TaskExecutionSession", session_id)
     if watchdog is not None:
-        SupervisorRegistry.default()._watchdogs[watchdog.watchdog_id] = watchdog.model_copy(
-            update={"status": WatchdogStatus.COMPLETED}
+        SupervisorRegistry.default().save_watchdog(
+            watchdog.model_copy(update={"status": WatchdogStatus.COMPLETED})
         )
     session = SessionRegistry.default().get_session(session_id)
     if session is not None:
-        SessionRegistry.default()._sessions[session_id] = session.model_copy(
-            update={
-                "health_status": health_status.value,
-                "metadata": {
-                    **session.metadata,
+        SessionRegistry.default().save_session(
+            session.model_copy(
+                update={
                     "health_status": health_status.value,
-                },
-            }
+                    "metadata": {
+                        **session.metadata,
+                        "health_status": health_status.value,
+                    },
+                }
+            )
         )
         state.metadata.setdefault("sessions", {})[session_id] = (
             SessionRegistry.default().get_session(session_id).model_dump(mode="json")
@@ -298,16 +304,18 @@ def annotate_kilo_execution_result(
     if session_id:
         session = SessionRegistry.default().get_session(session_id)
         if session is not None:
-            SessionRegistry.default()._sessions[session_id] = session.model_copy(
-                update={
-                    "health_status": health_status.value,
-                    "retry_attempts": retry_attempts,
-                    "metadata": {
-                        **session.metadata,
+            SessionRegistry.default().save_session(
+                session.model_copy(
+                    update={
                         "health_status": health_status.value,
                         "retry_attempts": retry_attempts,
-                    },
-                }
+                        "metadata": {
+                            **session.metadata,
+                            "health_status": health_status.value,
+                            "retry_attempts": retry_attempts,
+                        },
+                    }
+                )
             )
             state.metadata.setdefault("sessions", {})[session_id] = (
                 SessionRegistry.default().get_session(session_id).model_dump(mode="json")

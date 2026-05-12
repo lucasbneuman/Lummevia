@@ -16,6 +16,7 @@ COPY packages/kilo-adapter /app/packages/kilo-adapter
 COPY packages/integrations /app/packages/integrations
 COPY packages/memory /app/packages/memory
 COPY packages/model-router /app/packages/model-router
+COPY packages/persistence /app/packages/persistence
 COPY packages/reviews /app/packages/reviews
 COPY packages/queue /app/packages/queue
 COPY packages/resources /app/packages/resources

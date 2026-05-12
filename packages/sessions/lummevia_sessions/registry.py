@@ -19,6 +19,7 @@ class SessionRegistry:
 
     def __init__(self) -> None:
         self._sessions: dict[str, TaskExecutionSession] = {}
+        self._persistence = None
 
     @classmethod
     def default(cls) -> "SessionRegistry":
@@ -28,6 +29,12 @@ class SessionRegistry:
 
     def reset(self) -> None:
         self._sessions.clear()
+
+    def configure_persistence(self, persistence) -> None:
+        self._persistence = persistence
+
+    def rehydrate(self, sessions: list[TaskExecutionSession]) -> None:
+        self._sessions = {session.session_id: session for session in sessions}
 
     def create_session(
         self,
@@ -69,6 +76,7 @@ class SessionRegistry:
             metadata=metadata or {},
         )
         self._sessions[session.session_id] = session
+        self._persist_session(session)
         return session
 
     def add_event(
@@ -95,6 +103,7 @@ class SessionRegistry:
             }
         )
         self._sessions[session_id] = updated
+        self._persist_session(updated)
         return updated
 
     def add_output(
@@ -121,6 +130,7 @@ class SessionRegistry:
             }
         )
         self._sessions[session_id] = updated
+        self._persist_session(updated)
         return updated
 
     def update_status(
@@ -159,6 +169,7 @@ class SessionRegistry:
             }
         )
         self._sessions[session_id] = updated
+        self._persist_session(updated)
         return self.add_event(
             session_id,
             type="STATUS_UPDATED",
@@ -183,3 +194,16 @@ class SessionRegistry:
             key=lambda session: session.updated_at,
             reverse=True,
         )
+
+    def save_session(self, session: TaskExecutionSession) -> TaskExecutionSession:
+        self._sessions[session.session_id] = session
+        self._persist_session(session)
+        return session
+
+    def _persist_session(self, session: TaskExecutionSession) -> None:
+        if self._persistence is None:
+            return
+        try:
+            self._persistence.save_session(session)
+        except Exception:
+            return

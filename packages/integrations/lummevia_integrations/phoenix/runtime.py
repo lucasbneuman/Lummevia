@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Callable
 
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
@@ -17,9 +18,11 @@ class PhoenixRuntimeObserver(RuntimeObserver):
         client: PhoenixClient,
         *,
         environment: str,
+        persistence_metadata_supplier: Callable[[RuntimeState], dict[str, object]] | None = None,
     ) -> None:
         self._client = client
         self._environment = environment
+        self._persistence_metadata_supplier = persistence_metadata_supplier
 
     @contextmanager
     def observe_workflow_run(self, state: RuntimeState) -> Iterator[None]:
@@ -193,6 +196,12 @@ class PhoenixRuntimeObserver(RuntimeObserver):
         memory_categories = state.metadata.get("memory_categories")
         if memory_categories:
             attributes["memory_categories"] = ",".join(str(category) for category in memory_categories)
+        if self._persistence_metadata_supplier is not None:
+            for key, value in self._persistence_metadata_supplier(state).items():
+                if value is None:
+                    continue
+                if isinstance(value, (bool, int, str)):
+                    attributes[key] = value
         review_metadata = self._extract_review_metadata(state, current_step=current_step)
         attributes.update(review_metadata)
         kilo_step = (

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
+from app.core.persistence import operational_persistence
 from app.api.routes import runtime as runtime_routes
 from lummevia_runtime import PersistedRunNotFoundError, RuntimeNotFoundError
 from lummevia_timeline import TimelineRegistry, WorkflowTimeline, build_workflow_timeline
@@ -23,7 +24,34 @@ def _get_timeline(workflow_run_id: str) -> WorkflowTimeline | None:
         except PersistedRunNotFoundError:
             return None
 
-    rebuilt = build_workflow_timeline(state)
+    if operational_persistence is not None:
+        rebuilt = build_workflow_timeline(
+            state,
+            conversations=[
+                thread
+                for thread in operational_persistence.conversations.list_threads()
+                if thread.project == state.run.project and thread.issue_id == state.run.issue_id
+            ],
+            sessions=[
+                session
+                for session in operational_persistence.sessions.list_sessions()
+                if session.project == state.run.project and session.issue_id == state.run.issue_id
+            ],
+            reviews=[
+                review
+                for review in operational_persistence.reviews.list_reviews()
+                if review.metadata.get("project") == state.run.project
+                and review.metadata.get("issue_id") == state.run.issue_id
+            ],
+            memory_records=[
+                record
+                for record in operational_persistence.memory.list_records()
+                if record.project == state.run.project
+                and record.metadata.get("issue_id") == state.run.issue_id
+            ],
+        )
+    else:
+        rebuilt = build_workflow_timeline(state)
     TimelineRegistry.default().create_timeline(
         workflow_run_id=rebuilt.workflow_run_id,
         project=rebuilt.project,
