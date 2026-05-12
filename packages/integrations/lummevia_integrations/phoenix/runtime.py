@@ -108,6 +108,17 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        for key in ("session_attempts", "output_count", "event_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
+        session_id = state.metadata.get("current_session_id")
+        if session_id is not None:
+            attributes["session_id"] = str(session_id)
+        for key in ("session_status", "session_role"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = str(value)
         review_metadata = self._extract_review_metadata(state, current_step=current_step)
         attributes.update(review_metadata)
         kilo_step = (
@@ -118,6 +129,8 @@ class PhoenixRuntimeObserver(RuntimeObserver):
         if kilo_step is not None:
             attributes["kilo_mode"] = kilo_step["kilo_mode"]
             attributes["execution_id"] = kilo_step["execution_id"]
+            if kilo_step.get("session_id") is not None:
+                attributes["session_id"] = kilo_step["session_id"]
             attributes["role"] = kilo_step["role"]
             attributes["task_id"] = kilo_step["task_id"]
             attributes["kilo_status"] = kilo_step["kilo_status"]

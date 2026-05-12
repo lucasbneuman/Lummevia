@@ -38,6 +38,7 @@ class KiloExecutionAttempt(KiloAdapterSchema):
 
 class KiloExecutionRecord(KiloAdapterSchema):
     execution_id: str = Field(min_length=1)
+    session_id: str | None = None
     role: AgentRole
     mode: KiloExecutionMode
     task_id: str = Field(min_length=1)
@@ -51,6 +52,7 @@ class KiloExecutionRecord(KiloAdapterSchema):
 
 class KiloExecutionRequest(KiloAdapterSchema):
     run_id: str = Field(min_length=1)
+    session_id: str | None = None
     role: AgentRole
     mode: KiloExecutionMode
     project: str = Field(min_length=1)

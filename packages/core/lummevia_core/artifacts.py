@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
+
+from pydantic import Field
 
 from .enums import Priority, ValidationStatus
 from .validation import CoreArtifactModel
@@ -65,6 +67,7 @@ class TaskPackage(CoreArtifactModel):
     prompt: str
     expected_artifacts: list[str]
     status: Literal["planned", "in_progress", "completed", "validated"]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ValidationPackage(CoreArtifactModel):

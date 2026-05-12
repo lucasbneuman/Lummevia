@@ -11,6 +11,7 @@ from lummevia_kilo.schemas import KiloExecutionRequest, KiloRetryPolicy
 def build_kilo_execution_request(
     *,
     run_id: str,
+    session_id: str | None = None,
     role: AgentRole,
     project: str,
     repo_path: str,
@@ -22,6 +23,7 @@ def build_kilo_execution_request(
     request_metadata = metadata or {}
     return KiloExecutionRequest(
         run_id=run_id,
+        session_id=session_id,
         role=role,
         mode=mode or resolve_kilo_mode(role),
         project=project,

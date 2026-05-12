@@ -27,6 +27,10 @@ def test_repository_save_and_get_run(tmp_path: Path) -> None:
     assert recovered.run.status == WorkflowRunStatus.COMPLETED
     assert recovered.artifacts.pull_request is not None
     assert recovered.metadata["thread_id"].startswith("thread-")
+    assert recovered.metadata["current_session_id"].startswith("session-")
+    assert recovered.metadata["sessions"][recovered.metadata["current_session_id"]]["status"] == (
+        "COMPLETED"
+    )
     assert recovered.run.metadata["persistence"]["thread_id"] == recovered.metadata["thread_id"]
 
 

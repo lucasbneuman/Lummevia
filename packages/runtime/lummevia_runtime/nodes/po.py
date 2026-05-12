@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from lummevia_core import AgentRole, WorkflowRunStatus
 from lummevia_agents import POAgent
-from lummevia_kilo import KiloExecutionClient
+from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
 
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.kilo import build_runtime_planning_task_package, execute_kilo_step
+from lummevia_runtime.sessions import add_session_output, create_task_execution_session
 from lummevia_runtime.state import RuntimeState
 
 
@@ -151,6 +152,13 @@ def po_task_packages_node(
     state.artifacts.task_packages = task_packages
     state.artifacts.current_task_package = task_packages[0] if task_packages else None
     if state.artifacts.current_task_package is not None:
+        create_task_execution_session(
+            state,
+            task_package=state.artifacts.current_task_package,
+            step_name=step_name,
+            role=AgentRole.PO,
+            mode=resolve_kilo_mode(AgentRole.PO),
+        )
         kilo_execution = execute_kilo_step(
             state,
             step_name=step_name,
@@ -160,6 +168,18 @@ def po_task_packages_node(
             metadata={"target_artifact": "TaskPackageCollection"},
         )
         state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
+        add_session_output(
+            state,
+            output_type="task_package_collection",
+            content=(
+                f"Prepared {len(task_packages)} TaskPackages and activated "
+                f"{state.artifacts.current_task_package.task_id}."
+            ),
+            metadata={
+                "task_package_count": len(task_packages),
+                "current_task_id": state.artifacts.current_task_package.task_id,
+            },
+        )
     state.metadata.setdefault("artifact_sources", {})["task_packages"] = "prompt_pipeline"
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = {
         "target_artifact": "TaskPackage",
@@ -174,6 +194,7 @@ def po_task_packages_node(
         metadata={
             "artifact": "TaskPackageCollection",
             "task_package_count": len(task_packages),
+            "session_id": state.metadata.get("current_session_id"),
             "current_task_package": (
                 state.artifacts.current_task_package.task_id
                 if state.artifacts.current_task_package is not None

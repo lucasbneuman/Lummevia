@@ -71,6 +71,11 @@ packages/
       __init__.py
       schemas.py
       registry.py
+  sessions/
+    lummevia_sessions/
+      __init__.py
+      schemas.py
+      registry.py
   datasets/
     lummevia_datasets/
       __init__.py
@@ -378,6 +383,53 @@ Fuera de alcance en esta etapa:
 - notificaciones reales
 - workflows async complejos
 
+### Task Execution Sessions
+
+`packages/sessions/lummevia_sessions/` agrega la primera capa operacional para representar el ciclo de trabajo sobre un `TaskPackage` sin abrir todavia una terminal viva ni lanzar workers reales.
+
+Incluye:
+
+- `TaskExecutionSession`
+- `SessionStatus` con `CREATED`, `RUNNING`, `WAITING_REVIEW`, `COMPLETED`, `FAILED` y `CANCELLED`
+- `SessionEvent`
+- `SessionOutput`
+- `SessionRegistry` en memoria con `create_session()`, `add_event()`, `add_output()`, `update_status()`, `get_session()` y `list_sessions()`
+
+Lifecycle actual:
+
+```text
+CREATED -> RUNNING -> WAITING_REVIEW -> RUNNING -> COMPLETED
+```
+
+Integracion actual:
+
+- `po_task_packages` crea la session del `TaskPackage` activo
+- `dev_implementation` y `qa_validation` reutilizan la misma session
+- la session queda asociada al `TaskPackage` via `task_package.metadata.session_id`
+- el runtime deja snapshots serializados en `RuntimeState.metadata.sessions`
+- los endpoints `GET /sessions` y `GET /sessions/{session_id}` permiten inspeccionarla
+
+Relacion con Kilo:
+
+- cada ejecucion Kilo del `TaskPackage` activo queda asociada al mismo `session_id`
+- cada ejecucion agrega `SessionEvent` y `SessionOutput` fake
+- `session_attempts` acumula intentos simulados de Kilo durante la vida de la session
+
+Relacion con runtime:
+
+- la session vive en memoria como estado runtime, no como memoria durable de negocio
+- persistence DB todavia no existe para sessions; solo se serializa el snapshot dentro del payload del runtime cuando la persistence del workflow esta habilitada
+- Phoenix recibe metadata de `session_id`, `session_status`, `session_role`, `session_attempts`, `output_count` y `event_count`
+
+Fuera de alcance deliberado por ahora:
+
+- terminal streaming
+- websocket realtime
+- subprocess persistentes
+- workers distribuidos
+- replay real de ejecucion
+- sandboxing real
+
 ### Prompt Regression Datasets
 
 La primera capa de datasets de regression vive en `packages/datasets/lummevia_datasets/`.
@@ -662,9 +714,10 @@ La instrumentacion actual de Phoenix:
 - crea una trace por `WorkflowRun`
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
+- agrega metadata de session: `session_id`, `session_status`, `session_role`, `session_attempts`, `output_count` y `event_count`
 - en el dry-run de `PM` tambien registra `template_id`, `template_version`, `prompt_hash`, `evaluation_status` y `evaluation_score`
 - agrega metadata de review cuando existe: `review_id`, `review_type`, `review_status` y `review_decision`
-- deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `role`, `task_id`, `kilo_status`, `retry_count`, `attempts_count` y `final_status`
+- deja lista metadata adicional por step para `kilo_mode`, `execution_id`, `session_id`, `role`, `task_id`, `kilo_status`, `retry_count`, `attempts_count` y `final_status`
 - agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
 - registra errores de runtime e instrumentacion sin romper el workflow
 
@@ -771,6 +824,8 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /reviews/{review_id}`
 - `POST /reviews/{review_id}/approve`
 - `POST /reviews/{review_id}/reject`
+- `GET /sessions`
+- `GET /sessions/{session_id}`
 - `POST /runtime/development/run`
 - `GET /runtime/development/run/{run_id}`
 - `GET /workflows/development`

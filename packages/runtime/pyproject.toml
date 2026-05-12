@@ -17,6 +17,7 @@ dependencies = [
     "lummevia-core",
     "lummevia-kilo-adapter",
     "lummevia-reviews",
+    "lummevia-sessions",
 ]
 
 [tool.setuptools]

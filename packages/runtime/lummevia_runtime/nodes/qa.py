@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from lummevia_core import AgentRole, ValidationStatus
 from lummevia_agents import QAAgent
-from lummevia_kilo import KiloExecutionClient
+from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
+from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
+from lummevia_sessions import SessionStatus
 
 from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
 from lummevia_runtime.kilo import execute_kilo_step
+from lummevia_runtime.sessions import add_session_output, update_task_execution_session
 from lummevia_runtime.state import RuntimeState
 
 
@@ -63,6 +66,78 @@ def qa_validation_node(
     )
     state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
+    add_session_output(
+        state,
+        output_type="validation_package",
+        content=state.artifacts.validation_package.feedback,
+        metadata={
+            "task_id": task_package.task_id,
+            "validation_status": state.artifacts.validation_package.status.value,
+            "bugs_found": state.artifacts.validation_package.bugs_found,
+        },
+    )
+    if state.artifacts.validation_package.status == ValidationStatus.FAILED:
+        review = HumanReviewRegistry.default().create_review(
+            review_type=ReviewType.QA_VALIDATION,
+            target_id=task_package.task_id,
+            target_type="TaskExecutionSession",
+            requested_by=AgentRole.QA.value,
+            assigned_to=AgentRole.FOUNDER.value,
+            notes="QA failed. Session is waiting for review before the next iteration.",
+            metadata={
+                "issue_id": state.run.issue_id,
+                "project": state.run.project,
+                "task_id": task_package.task_id,
+                "session_id": state.metadata.get("current_session_id"),
+            },
+        )
+        qa_review_metadata = {
+            "review_id": review.review_id,
+            "review_type": review.review_type.value,
+            "review_status": review.status.value,
+            "review_decision": review.decision.value if review.decision is not None else None,
+            "session_id": state.metadata.get("current_session_id"),
+        }
+        state.run.metadata[step_name] = qa_review_metadata
+        state.metadata.setdefault("review_by_step", {})[step_name] = qa_review_metadata
+        update_task_execution_session(
+            state,
+            status=SessionStatus.WAITING_REVIEW,
+            role=AgentRole.QA,
+            mode=resolve_kilo_mode(AgentRole.QA),
+            metadata=qa_review_metadata,
+        )
+    else:
+        existing_review_id = (
+            state.run.metadata.get(step_name, {}).get("review_id")
+            or state.metadata.get("review_by_step", {}).get(step_name, {}).get("review_id")
+        )
+        if existing_review_id:
+            review = HumanReviewRegistry.default().complete_review(
+                existing_review_id,
+                decision=ReviewDecision.APPROVED,
+                notes="Auto-closed after simulated QA pass.",
+                assigned_to=AgentRole.FOUNDER.value,
+            )
+            qa_review_metadata = {
+                "review_id": review.review_id,
+                "review_type": review.review_type.value,
+                "review_status": review.status.value,
+                "review_decision": review.decision.value if review.decision is not None else None,
+                "session_id": state.metadata.get("current_session_id"),
+            }
+            state.run.metadata[step_name] = qa_review_metadata
+            state.metadata.setdefault("review_by_step", {})[step_name] = qa_review_metadata
+        update_task_execution_session(
+            state,
+            status=SessionStatus.COMPLETED,
+            role=AgentRole.QA,
+            mode=resolve_kilo_mode(AgentRole.QA),
+            metadata={
+                "validation_status": state.artifacts.validation_package.status.value,
+                "session_id": state.metadata.get("current_session_id"),
+            },
+        )
     return complete_step(
         state,
         step_name=step_name,

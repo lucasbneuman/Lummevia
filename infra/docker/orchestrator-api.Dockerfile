@@ -16,6 +16,7 @@ COPY packages/integrations /app/packages/integrations
 COPY packages/model-router /app/packages/model-router
 COPY packages/reviews /app/packages/reviews
 COPY packages/runtime /app/packages/runtime
+COPY packages/sessions /app/packages/sessions
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY apps/orchestrator-api /app/apps/orchestrator-api

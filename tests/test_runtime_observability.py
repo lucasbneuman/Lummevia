@@ -114,6 +114,12 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["conversation_status"] == "APPROVED"
     assert workflow_span.attributes["iteration_count"] == 1
     assert workflow_span.attributes["message_count"] >= 2
+    assert str(workflow_span.attributes["session_id"]).startswith("session-")
+    assert workflow_span.attributes["session_status"] == "COMPLETED"
+    assert workflow_span.attributes["session_role"] == "QA"
+    assert workflow_span.attributes["session_attempts"] >= 1
+    assert workflow_span.attributes["output_count"] >= 1
+    assert workflow_span.attributes["event_count"] >= 1
 
     step_names = {span.name for span in exporter.spans}
     assert "step:dev_implementation" in step_names
@@ -134,10 +140,12 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert state.run.status.value == "COMPLETED"
 
     dev_span = next(span for span in exporter.spans if span.name == "step:dev_implementation")
-    qa_span = next(span for span in exporter.spans if span.name == "step:qa_validation")
+    qa_spans = [span for span in exporter.spans if span.name == "step:qa_validation"]
+    qa_span = qa_spans[0]
 
     assert dev_span.attributes["kilo_mode"] == "CODE"
     assert dev_span.attributes["kilo_status"] == "SUCCESS"
+    assert str(dev_span.attributes["session_id"]).startswith("session-")
     assert dev_span.attributes["retry_count"] == 0
     assert dev_span.attributes["attempts_count"] == 1
     assert dev_span.attributes["final_status"] == "SUCCESS"
@@ -147,6 +155,7 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
     assert qa_span.attributes["kilo_status"] == "SUCCESS"
+    assert str(qa_span.attributes["session_id"]).startswith("session-")
     assert qa_span.attributes["retry_count"] == 0
     assert qa_span.attributes["attempts_count"] == 1
     assert qa_span.attributes["final_status"] == "SUCCESS"
@@ -162,6 +171,13 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert founder_review_span.attributes["review_decision"] == "APPROVED"
     assert str(founder_review_span.attributes["review_id"]).startswith("review-")
     assert str(founder_review_span.attributes["thread_id"]).startswith("thread-")
+
+    assert qa_spans[0].attributes["review_type"] == "QA_VALIDATION"
+    assert qa_spans[0].attributes["review_status"] == "PENDING"
+    assert "review_decision" not in qa_spans[0].attributes
+    assert qa_spans[-1].attributes["review_type"] == "QA_VALIDATION"
+    assert qa_spans[-1].attributes["review_status"] == "COMPLETED"
+    assert qa_spans[-1].attributes["review_decision"] == "APPROVED"
 
 
 def test_phoenix_runtime_observer_exports_kilo_retry_metadata_on_steps() -> None:
@@ -182,6 +198,7 @@ def test_phoenix_runtime_observer_exports_kilo_retry_metadata_on_steps() -> None
     dev_span = next(span for span in exporter.spans if span.name == "step:dev_implementation")
 
     assert dev_span.attributes["kilo_status"] == "SUCCESS"
+    assert str(dev_span.attributes["session_id"]).startswith("session-")
     assert dev_span.attributes["retry_count"] == 1
     assert dev_span.attributes["attempts_count"] == 2
     assert dev_span.attributes["final_status"] == "SUCCESS"
