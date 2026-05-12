@@ -14,6 +14,7 @@ from lummevia_kilo import (
 
 from lummevia_runtime.sessions import record_kilo_execution_for_session
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.queue import build_queue_metadata_for_kilo
 
 
 def build_runtime_planning_task_package(
@@ -60,6 +61,7 @@ def execute_kilo_step(
             "step_name": step_name,
             "task_id": task_package.task_id,
             "loop_count": state.loop_count,
+            **build_queue_metadata_for_kilo(state, task_package=task_package),
             **(metadata or {}),
         },
     )
@@ -88,6 +90,8 @@ def execute_kilo_step(
         "role": role.value,
         "kilo_mode": mode.value,
         "task_id": task_package.task_id,
+        "queue_id": result.metadata.get("queue_id"),
+        "queue_item_id": result.metadata.get("queue_item_id"),
         "kilo_status": result.status.value,
         "attempts_count": len(result.attempts),
         "attempts": [attempt.model_dump(mode="json") for attempt in result.attempts],

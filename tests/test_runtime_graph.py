@@ -40,6 +40,8 @@ def test_runtime_executes_complete_workflow() -> None:
     assert state.artifacts.execution_package is not None
     assert state.artifacts.task_plan is not None
     assert state.artifacts.task_packages
+    assert state.metadata["queue_id"].startswith("queue-")
+    assert state.metadata["current_queue_item_id"].startswith("queue-item-")
     assert state.artifacts.implementation_package is not None
     assert state.artifacts.validation_package is not None
     assert state.artifacts.pull_request is not None
@@ -245,6 +247,10 @@ def test_runtime_records_timeline_metadata() -> None:
     assert state.metadata["replay_available"] is True
     assert "WORKFLOW" in state.metadata["timeline_sources"]
     assert "SESSION" in state.metadata["timeline_sources"]
+    assert any(
+        event["event_type"] == "QUEUE_CREATED"
+        for event in state.metadata["timeline"]["events"]
+    )
 
 
 def test_dev_consumes_first_task_package_and_qa_validates_task_package() -> None:
@@ -253,12 +259,37 @@ def test_dev_consumes_first_task_package_and_qa_validates_task_package() -> None
     state = runtime.start_run(project="lummevia-os", issue_id="OS-4D")
 
     assert state.artifacts.current_task_package is not None
+    assert state.artifacts.current_task_package.task_id == state.metadata["current_queue_task_id"]
     assert state.artifacts.implementation_package is not None
     assert state.artifacts.validation_package is not None
     assert state.artifacts.implementation_package.summary.lower().find("task package") != -1
     assert any(
         "task package" in scenario.lower()
         for scenario in state.artifacts.validation_package.scenarios_validated
+    )
+
+
+def test_runtime_creates_queue_from_task_packages_and_executes_only_first_ready_item() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4G")
+    queue_snapshot = state.metadata["task_queue"]
+    task_ids = [task_package.task_id for task_package in state.artifacts.task_packages]
+    queued_task_ids = [item["task_id"] for item in queue_snapshot["items"]]
+    running_or_finished = {
+        item["task_id"]: item["status"]
+        for item in queue_snapshot["items"]
+    }
+
+    assert queued_task_ids == task_ids
+    assert state.metadata["queue_size"] == len(task_ids)
+    assert state.metadata["current_queue_item_id"] in {
+        item["queue_item_id"] for item in queue_snapshot["items"]
+    }
+    assert running_or_finished[task_ids[0]] == "COMPLETED"
+    assert all(
+        running_or_finished[task_id] in {"QUEUED", "BLOCKED", "READY"}
+        for task_id in task_ids[1:]
     )
 
 

@@ -434,6 +434,50 @@ Fuera de alcance en esta etapa:
 - notificaciones reales
 - workflows async complejos
 
+### Task Queue
+
+`packages/queue/lummevia_queue/` agrega la primera capa de queue y orquestacion multi-`TaskPackage` sin introducir workers reales ni paralelismo.
+
+Incluye:
+
+- `TaskQueueItem`
+- `TaskQueueStatus` con `QUEUED`, `READY`, `RUNNING`, `BLOCKED`, `COMPLETED`, `FAILED` y `CANCELLED`
+- `TaskPriority` con `LOW`, `NORMAL`, `HIGH` y `CRITICAL`
+- `TaskQueue`
+- `TaskQueueRegistry` en memoria con `create_queue()`, `add_item()`, `get_queue()`, `list_queues()`, `update_item_status()`, `list_ready_items()` y `mark_completed()`
+- `TaskQueueScheduler` para detectar `READY`, resolver el siguiente item por prioridad y timestamp, y respetar dependencias sin paralelismo real
+
+Semantica actual:
+
+- `po_task_packages` crea una `TaskQueue` con todos los `TaskPackages` producidos por el `PO`
+- el runtime conserva la queue completa en `RuntimeState.metadata.task_queue`
+- el scheduler activa solo el primer item `READY` como MVP y lo expone como `current_task_package`
+- `qa_validation` marca ese item como `COMPLETED` cuando la validacion pasa
+- los dependientes se desbloquean y pasan a `READY`, pero todavia no se ejecutan en la misma corrida
+
+Dependency handling actual:
+
+- cada item puede declarar `dependencies` por `task_id`
+- si una dependencia no termino, el item queda `BLOCKED`
+- cuando la dependencia termina, el item pasa a `READY`
+- la cola sigue siendo in-memory, sin persistence ni scheduling durable
+
+Roadmap inmediato:
+
+- ejecutar mas de un `TaskPackage` por workflow
+- introducir resumability y persistence de queue
+- agregar workers y orchestration real cuando la semantica de contratos este estable
+
+Fuera de alcance deliberado por ahora:
+
+- Celery, RQ, Temporal o Kafka
+- workers distribuidos
+- paralelismo real
+- subprocess Kilo real
+- scheduling persistente
+- locking distribuido
+- git real o multiples PRs reales
+
 ### Task Execution Sessions
 
 `packages/sessions/lummevia_sessions/` agrega la primera capa operacional para representar el ciclo de trabajo sobre un `TaskPackage` sin abrir todavia una terminal viva ni lanzar workers reales.
@@ -457,6 +501,7 @@ Integracion actual:
 - `po_task_packages` crea la session del `TaskPackage` activo
 - `dev_implementation` y `qa_validation` reutilizan la misma session
 - la session queda asociada al `TaskPackage` via `task_package.metadata.session_id`
+- la session tambien registra `queue_id` y `queue_item_id` cuando proviene de la task queue
 - el runtime deja snapshots serializados en `RuntimeState.metadata.sessions`
 - los endpoints `GET /sessions` y `GET /sessions/{session_id}` permiten inspeccionarla
 
@@ -501,6 +546,7 @@ Integracion actual:
 - `qa_validation` aporta reviews pendientes/completadas y transiciones de session
 - las reviews de founder approval quedan reflejadas como eventos historicos
 - project memory y sessions quedan agregadas a la timeline del `workflow_run`
+- la queue aporta eventos `QUEUE_CREATED`, `TASK_QUEUED`, `TASK_READY`, `TASK_STARTED` y `TASK_COMPLETED`
 - Phoenix recibe `timeline_event_count`, `timeline_sources` y `replay_available=true`
 - los endpoints `GET /timelines` y `GET /timelines/{workflow_run_id}` devuelven la timeline reconstruida
 
@@ -755,6 +801,7 @@ El runtime actual:
 - ejecuta pasos simulados para `FOUNDER -> founder_pm_conversation -> PM brief -> founder_business_approval -> PO ExecutionPackage -> PO TaskPlan -> PO TaskPackages -> DEV -> QA -> github_pr -> QC -> PO final`
 - delega la produccion fake de `BusinessBrief`, `ExecutionPackage`, `TaskPlan`, `TaskPackage`, `ImplementationPackage`, `ValidationPackage` y `QualityApproval` a agentes conectados al `PromptPipeline`
 - envia `TaskPackage` o envelopes de planning a un `KiloExecutionClient` fake en `PO`, `DEV` y `QA`
+- crea una `TaskQueue` en memoria para todos los `TaskPackages` y ejecuta solo el primer item `READY`
 - representa explicitamente la publicacion simulada de `github_pr`
 - representa explicitamente el loop `DEV ↔ QA`
 - hace explicito el gate de aprobacion Founder antes del handoff tecnico al PO
@@ -763,7 +810,7 @@ El runtime actual:
 - hace explicita la descomposicion del PO antes de DEV
 - deja lista la arquitectura para checkpoints futuros
 
-En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados. El estado tambien registra `kilo_executions` con `execution_id`, `role`, `mode`, `task_id`, `status`, `attempts`, `retry_count`, `final_status` y `error` cuando aplica.
+En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados y una `TaskQueue` completa con `queue_id`, `queue_item_id`, counts de `ready`, `blocked` y `completed`, y snapshots serializados para timeline y observabilidad. El estado tambien registra `kilo_executions` con `execution_id`, `role`, `mode`, `task_id`, `status`, `attempts`, `retry_count`, `final_status` y `error` cuando aplica.
 
 Limitaciones actuales:
 
@@ -805,6 +852,7 @@ La instrumentacion actual de Phoenix:
 - crea spans por step del workflow
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
 - agrega metadata de session: `session_id`, `session_status`, `session_role`, `session_attempts`, `output_count` y `event_count`
+- agrega metadata de queue: `queue_id`, `queue_size`, `ready_count`, `blocked_count`, `completed_count` y `current_queue_item_id`
 - agrega metadata de project memory: `memory_records_created`, `memory_categories` y `project_memory_count`
 - en el dry-run de `PM` tambien registra `template_id`, `template_version`, `prompt_hash`, `evaluation_status` y `evaluation_score`
 - agrega metadata de review cuando existe: `review_id`, `review_type`, `review_status` y `review_decision`
@@ -920,6 +968,9 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /memory/projects/{project}/tags/{tag}`
 - `GET /sessions`
 - `GET /sessions/{session_id}`
+- `GET /queues`
+- `GET /queues/{queue_id}`
+- `GET /queues/{queue_id}/ready`
 - `GET /timelines`
 - `GET /timelines/{workflow_run_id}`
 - `POST /runtime/development/run`

@@ -141,6 +141,11 @@ def test_runtime_registers_timeline_metadata_and_registry_snapshot() -> None:
     assert "WORKFLOW" in state.metadata["timeline_sources"]
     assert any(event.event_type == "FOUNDER_CONVERSATION_MESSAGE" for event in timeline.events)
     assert any(event.event_type == "REVIEW_COMPLETED" for event in timeline.events)
+    assert any(event.event_type == "QUEUE_CREATED" for event in timeline.events)
+    assert any(event.event_type == "TASK_QUEUED" for event in timeline.events)
+    assert any(event.event_type == "TASK_READY" for event in timeline.events)
+    assert any(event.event_type == "TASK_STARTED" for event in timeline.events)
+    assert any(event.event_type == "TASK_COMPLETED" for event in timeline.events)
 
 
 def test_timeline_endpoints_list_and_get_reconstructed_timeline() -> None:

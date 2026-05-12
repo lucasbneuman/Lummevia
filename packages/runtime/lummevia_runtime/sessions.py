@@ -29,12 +29,20 @@ def create_task_execution_session(
         task_id=task_package.task_id,
         project=state.run.project,
         issue_id=state.run.issue_id,
+        queue_id=str(state.metadata.get("queue_id")) if state.metadata.get("queue_id") else None,
+        queue_item_id=(
+            str(state.metadata.get("current_queue_item_id"))
+            if state.metadata.get("current_queue_item_id")
+            else None
+        ),
         role=role,
         mode=mode,
         metadata={
             "run_id": state.run.run_id,
             "workflow": state.run.workflow_name,
             "step_name": step_name,
+            "queue_id": state.metadata.get("queue_id"),
+            "queue_item_id": state.metadata.get("current_queue_item_id"),
         },
     )
     session = registry.add_event(
@@ -46,6 +54,8 @@ def create_task_execution_session(
             "step_name": step_name,
             "role": role.value,
             "mode": mode.value,
+            "queue_id": state.metadata.get("queue_id"),
+            "queue_item_id": state.metadata.get("current_queue_item_id"),
         },
     )
     session = registry.add_output(

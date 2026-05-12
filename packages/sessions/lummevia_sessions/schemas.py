@@ -47,6 +47,8 @@ class TaskExecutionSession(SessionBaseSchema):
     task_id: str = Field(min_length=1)
     project: str = Field(min_length=1)
     issue_id: str = Field(min_length=1)
+    queue_id: str | None = None
+    queue_item_id: str | None = None
     role: AgentRole
     mode: KiloExecutionMode
     status: SessionStatus

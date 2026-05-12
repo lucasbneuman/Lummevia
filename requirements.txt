@@ -18,6 +18,7 @@ psycopg[binary]
 -e ./packages/memory
 -e ./packages/model-router
 -e ./packages/reviews
+-e ./packages/queue
 -e ./packages/runtime
 -e ./packages/sessions
 -e ./packages/timeline

@@ -21,6 +21,10 @@ def build_kilo_execution_request(
     retry_policy: KiloRetryPolicy | None = None,
 ) -> KiloExecutionRequest:
     request_metadata = metadata or {}
+    request_metadata.setdefault("queue_id", None)
+    request_metadata.setdefault("queue_item_id", None)
+    request_metadata.setdefault("task_priority", None)
+    request_metadata.setdefault("dependencies", [])
     return KiloExecutionRequest(
         run_id=run_id,
         session_id=session_id,

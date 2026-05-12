@@ -126,6 +126,10 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["timeline_event_count"] >= len(state.run.events)
     assert "WORKFLOW" in workflow_span.attributes["timeline_sources"]
     assert workflow_span.attributes["replay_available"] is True
+    assert str(workflow_span.attributes["queue_id"]).startswith("queue-")
+    assert workflow_span.attributes["queue_size"] >= 2
+    assert workflow_span.attributes["completed_count"] >= 1
+    assert str(workflow_span.attributes["current_queue_item_id"]).startswith("queue-item-")
 
     step_names = {span.name for span in exporter.spans}
     assert "step:dev_implementation" in step_names
@@ -158,6 +162,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert dev_span.attributes["role"] == "DEV"
     assert dev_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
     assert str(dev_span.attributes["execution_id"]).startswith("kilo-")
+    assert str(dev_span.attributes["queue_id"]).startswith("queue-")
+    assert str(dev_span.attributes["queue_item_id"]).startswith("queue-item-")
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
     assert qa_span.attributes["kilo_status"] == "SUCCESS"
@@ -168,6 +174,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert qa_span.attributes["role"] == "QA"
     assert qa_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
     assert str(qa_span.attributes["execution_id"]).startswith("kilo-")
+    assert str(qa_span.attributes["queue_id"]).startswith("queue-")
+    assert str(qa_span.attributes["queue_item_id"]).startswith("queue-item-")
 
     founder_review_span = next(
         span for span in exporter.spans if span.name == "step:founder_business_approval"

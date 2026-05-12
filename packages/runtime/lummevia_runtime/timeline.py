@@ -20,3 +20,4 @@ def sync_timeline_for_state(state: RuntimeState) -> None:
     state.metadata["timeline_event_count"] = timeline.metadata["timeline_event_count"]
     state.metadata["timeline_sources"] = timeline.metadata["timeline_sources"]
     state.metadata["replay_available"] = timeline.metadata["replay_available"]
+    state.metadata["timeline"] = stored_timeline.model_dump(mode="json")

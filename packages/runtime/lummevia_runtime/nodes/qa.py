@@ -14,6 +14,7 @@ from lummevia_sessions import SessionStatus
 
 from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
 from lummevia_runtime.kilo import execute_kilo_step
+from lummevia_runtime.queue import mark_current_queue_item_completed, sync_task_queue_state
 from lummevia_runtime.sessions import add_session_output, update_task_execution_session
 from lummevia_runtime.state import RuntimeState
 
@@ -142,6 +143,7 @@ def qa_validation_node(
             metadata=qa_review_metadata,
         )
     else:
+        mark_current_queue_item_completed(state)
         existing_review_id = (
             state.run.metadata.get(step_name, {}).get("review_id")
             or state.metadata.get("review_by_step", {}).get(step_name, {}).get("review_id")
@@ -199,6 +201,8 @@ def qa_validation_node(
                 "session_id": state.metadata.get("current_session_id"),
             },
         )
+    if state.artifacts.validation_package.status == ValidationStatus.FAILED:
+        sync_task_queue_state(state)
     return complete_step(
         state,
         step_name=step_name,

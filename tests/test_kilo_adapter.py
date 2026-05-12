@@ -170,6 +170,8 @@ def test_runtime_registers_kilo_executions_for_po_dev_and_qa() -> None:
         and execution["status"] == KiloExecutionStatus.SUCCESS.value
         for execution in executions
     )
+    assert all("queue_id" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
+    assert all("queue_item_id" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
     assert all("attempts" in execution for execution in executions)
     assert all("retry_count" in execution for execution in executions)
     assert all("final_status" in execution for execution in executions)

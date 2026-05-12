@@ -112,6 +112,17 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        queue_id = state.metadata.get("queue_id")
+        if queue_id is not None:
+            attributes["queue_id"] = str(queue_id)
+        current_queue_item_id = state.metadata.get("current_queue_item_id")
+        if current_queue_item_id is not None:
+            attributes["current_queue_item_id"] = str(current_queue_item_id)
+            attributes["queue_item_id"] = str(current_queue_item_id)
+        for key in ("queue_size", "ready_count", "blocked_count", "completed_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         session_id = state.metadata.get("current_session_id")
         if session_id is not None:
             attributes["session_id"] = str(session_id)
@@ -157,6 +168,10 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             attributes["retry_count"] = kilo_step["retry_count"]
             attributes["attempts_count"] = kilo_step["attempts_count"]
             attributes["final_status"] = kilo_step["final_status"]
+            if kilo_step.get("queue_id") is not None:
+                attributes["queue_id"] = str(kilo_step["queue_id"])
+            if kilo_step.get("queue_item_id") is not None:
+                attributes["queue_item_id"] = str(kilo_step["queue_item_id"])
         return attributes
 
     def _extract_review_metadata(

@@ -91,6 +91,7 @@ def build_workflow_timeline(
         *list(_build_session_events(run_id, resolved_sessions)),
         *list(_build_review_events(run_id, resolved_reviews)),
         *list(_build_memory_events(run_id, resolved_memory_records)),
+        *list(_build_system_events(run_id, state=state)),
     ]
     ordered_events = sorted(
         events,
@@ -449,7 +450,40 @@ def _build_memory_events(
                 "tags": record.tags,
                 **record.metadata,
             },
+            )
+
+
+def _build_system_events(
+    workflow_run_id: str,
+    *,
+    state=None,
+) -> Iterable[TimelineEvent]:
+    if state is None:
+        return []
+    queue_events = state.metadata.get("queue_events", [])
+    if not isinstance(queue_events, list):
+        return []
+    events: list[TimelineEvent] = []
+    for raw_event in queue_events:
+        if not isinstance(raw_event, dict):
+            continue
+        metadata = raw_event.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        events.append(
+            TimelineEvent(
+                event_id=str(raw_event.get("event_id", "")),
+                workflow_run_id=workflow_run_id,
+                event_type=str(raw_event.get("event_type", "SYSTEM_EVENT")),
+                source_type=TimelineSourceType.SYSTEM,
+                source_id=str(metadata.get("queue_id", "task_queue")),
+                title=str(raw_event.get("title", "System event")),
+                description=str(raw_event.get("description", "System event recorded.")),
+                created_at=raw_event.get("created_at"),
+                metadata=metadata,
+            )
         )
+    return events
 
 
 def _build_session_event(

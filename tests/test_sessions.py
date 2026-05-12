@@ -54,6 +54,8 @@ def test_runtime_creates_session_and_tracks_kilo_lifecycle() -> None:
 
     assert task_session is not None
     assert task_session.task_id == state.artifacts.current_task_package.task_id
+    assert task_session.queue_id == state.metadata["queue_id"]
+    assert task_session.queue_item_id == state.metadata["current_queue_item_id"]
     assert task_session.status == SessionStatus.COMPLETED
     assert state.artifacts.current_task_package.metadata["session_id"] == session_id
     assert state.metadata["task_package_sessions"][task_session.task_id] == session_id
@@ -103,3 +105,5 @@ def test_session_endpoints_list_and_get_runtime_sessions() -> None:
     assert get_response.status_code == 200
     assert get_response.json()["session_id"] == session_id
     assert get_response.json()["status"] == "COMPLETED"
+    assert get_response.json()["queue_id"].startswith("queue-")
+    assert get_response.json()["queue_item_id"].startswith("queue-item-")
