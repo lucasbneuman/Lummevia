@@ -4,6 +4,7 @@ from app.api.routes.capabilities import router as capabilities_router
 from app.api.routes.code_changes import router as code_changes_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.evaluations import router as evaluations_router
+from app.api.routes.intelligence import router as intelligence_router
 from app.api.routes.kilo import router as kilo_router
 from app.api.routes.memory import router as memory_router
 from app.api.routes.model_execution import router as model_execution_router
@@ -27,6 +28,7 @@ api_router.include_router(code_changes_router)
 api_router.include_router(conversations_router)
 api_router.include_router(system_router)
 api_router.include_router(evaluations_router)
+api_router.include_router(intelligence_router)
 api_router.include_router(kilo_router)
 api_router.include_router(memory_router)
 api_router.include_router(model_execution_router)

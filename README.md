@@ -78,6 +78,13 @@ packages/
       schemas.py
       scoring.py
       registry.py
+  intelligence/
+    lummevia_intelligence/
+      __init__.py
+      schemas.py
+      policies.py
+      engine.py
+      registry.py
   reviews/
     lummevia_reviews/
       __init__.py
@@ -1026,6 +1033,11 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /reviews/{review_id}`
 - `POST /reviews/{review_id}/approve`
 - `POST /reviews/{review_id}/reject`
+- `GET /intelligence/decisions`
+- `GET /intelligence/decisions/{decision_id}`
+- `POST /intelligence/decisions/{decision_id}/accept`
+- `POST /intelligence/decisions/{decision_id}/reject`
+- `POST /intelligence/evaluate`
 - `GET /code-changes`
 - `GET /code-changes/{change_set_id}`
 - `POST /code-changes/{change_set_id}/discard`
@@ -1272,6 +1284,51 @@ Roadmap natural despues de este MVP:
 - politicas de starvation por cola
 - scheduler supervisor desacoplado
 - reconciliacion automatica entre runtime y recursos huerfanos
+
+## Execution Intelligence Layer
+
+Lummevia OS ahora agrega una primera capa de inteligencia operacional para proponer decisiones de ejecucion sin habilitar autonomia peligrosa.
+
+Esta capa vive en `packages/intelligence/` y agrega:
+
+- `ExecutionDecision` como contrato trazable
+- `DecisionType`, `DecisionStatus` y `AutonomyLevel`
+- `DecisionRegistry` en memoria
+- un `policy engine` deterministico con heuristicas simples, sin planner LLM
+- gates de autonomia y human review explicitos
+
+Heuristicas actuales:
+
+- `QA FAILED` propone `RETRY` o `ESCALATE_REVIEW`
+- `retry_count >= max_retries` propone `STOP`
+- `files_changed_count` alto propone `ESCALATE_REVIEW`
+- `validation_status=FAILED` propone `RETRY`
+- falta de contexto propone `REQUEST_MORE_CONTEXT`
+- tarea demasiado grande propone `SPLIT_TASK`
+- baja confianza propone `ESCALATE_REVIEW`
+- stuck detection propone `REQUEUE` o `STOP`
+
+Autonomy levels:
+
+- `MANUAL`: default seguro. Solo propone, no aplica.
+- `ASSISTED`: puede autoaplicar `CONTINUE`, pero `RETRY`, `SPLIT_TASK` y `STOP` siguen gated.
+- `SUPERVISED`: puede aplicar `RETRY` o `REQUEUE` solo si no toca codigo real.
+- `AUTONOMOUS`: existe como contrato, pero no queda habilitado por default.
+
+Integracion del MVP:
+
+- runtime crea decisiones despues de `QA fail`, fallo Kilo, validacion de code changes y stuck/dead-letter del supervisor
+- si `requires_human_review=true`, se crea un `HumanReview` de tipo `EXECUTION_DECISION`
+- `Timeline` registra eventos `DECISION_PROPOSED`, `DECISION_ACCEPTED`, `DECISION_REJECTED` y `DECISION_APPLIED`
+- Phoenix recibe `decision_id`, `decision_type`, `decision_status`, `autonomy_level`, `confidence` y `requires_human_review`
+
+Guardrails:
+
+- no planner LLM
+- no loops autonomos infinitos
+- no merge, push o PR automaticos
+- no acciones destructivas autoaplicadas
+- `REQUEUE`, `MARK_DEAD_LETTER`, `RETRY` y `CANCEL` quedan como recomendacion observable en el MVP
 
 ## Persistencia operacional
 

@@ -17,6 +17,7 @@ dependencies = [
     "lummevia-code-changes",
     "lummevia-conversations",
     "lummevia-core",
+    "lummevia-intelligence",
     "lummevia-kilo-adapter",
     "lummevia-memory",
     "lummevia-queue",

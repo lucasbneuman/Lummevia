@@ -7,6 +7,7 @@ from lummevia_queue import TaskQueueRegistry, TaskQueueStatus
 from lummevia_sessions import SessionRegistry
 from lummevia_supervisor import ExecutionHealthStatus, SupervisorRegistry, WatchdogStatus
 
+from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.timeline import sync_timeline_for_state
 
@@ -330,7 +331,36 @@ def annotate_kilo_execution_result(
 
 
 def detect_stuck_watchdogs(state: RuntimeState) -> None:
+    previous_dead_letter_count = int(state.metadata.get("dead_letter_count", 0))
     SupervisorRegistry.default().detect_stuck(runtime_state=state)
+    action_id = state.metadata.get("recovery_action_id")
+    if action_id:
+        action = next(
+            (
+                item
+                for item in SupervisorRegistry.default().list_recovery_actions()
+                if item.action_id == action_id
+            ),
+            None,
+        )
+        if action is not None:
+            propose_execution_decision(
+                state,
+                context=build_execution_context(
+                    state,
+                    task_id=str(action.metadata.get("task_id")) if action.metadata.get("task_id") else None,
+                    retry_count=int(action.metadata.get("retry_attempts", 0)),
+                    max_retries=int(action.metadata.get("max_retries", 1)),
+                    stuck_detected=True,
+                    dead_lettered=int(state.metadata.get("dead_letter_count", 0)) > previous_dead_letter_count,
+                    real_code_touched=False,
+                    metadata={
+                        "source": "supervisor_stuck_detection",
+                        "recovery_action_id": action.action_id,
+                        "recovery_action_type": action.action_type.value,
+                    },
+                ),
+            )
     sync_timeline_for_state(state)
 
 

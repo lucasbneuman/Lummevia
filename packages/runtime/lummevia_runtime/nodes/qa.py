@@ -14,6 +14,7 @@ from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 from lummevia_sessions import SessionStatus
 
 from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
+from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
 from lummevia_runtime.kilo import execute_kilo_step
 from lummevia_runtime.queue import mark_current_queue_item_completed, sync_task_queue_state
 from lummevia_runtime.resources import refresh_current_workspace, release_current_workspace
@@ -132,6 +133,23 @@ def qa_validation_node(
         },
     )
     if state.artifacts.validation_package.status == ValidationStatus.FAILED:
+        propose_execution_decision(
+            state,
+            context=build_execution_context(
+                state,
+                task_id=task_package.task_id,
+                validation_status=ValidationStatus.FAILED.value,
+                qa_status=ValidationStatus.FAILED.value,
+                retry_count=state.loop_count,
+                max_retries=1,
+                real_code_touched=True,
+                metadata={
+                    "source": "qa_validation",
+                    "change_set_id": checked_change_set_id,
+                    "bugs_found": state.artifacts.validation_package.bugs_found,
+                },
+            ),
+        )
         review = HumanReviewRegistry.default().create_review(
             review_type=ReviewType.QA_VALIDATION,
             target_id=task_package.task_id,

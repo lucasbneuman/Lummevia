@@ -13,6 +13,7 @@ COPY packages/conversations /app/packages/conversations
 COPY packages/core /app/packages/core
 COPY packages/datasets /app/packages/datasets
 COPY packages/evaluations /app/packages/evaluations
+COPY packages/intelligence /app/packages/intelligence
 COPY packages/kilo-adapter /app/packages/kilo-adapter
 COPY packages/integrations /app/packages/integrations
 COPY packages/memory /app/packages/memory

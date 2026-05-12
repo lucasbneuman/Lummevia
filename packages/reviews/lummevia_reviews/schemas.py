@@ -32,6 +32,7 @@ class ReviewType(StrEnum):
     TASK_PLAN = "TASK_PLAN"
     QA_VALIDATION = "QA_VALIDATION"
     QC_APPROVAL = "QC_APPROVAL"
+    EXECUTION_DECISION = "EXECUTION_DECISION"
 
 
 class HumanReview(ReviewBaseSchema):

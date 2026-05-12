@@ -484,7 +484,7 @@ def _build_system_events(
             )
     supervisor_events = state.metadata.get("supervisor_events", [])
     if not isinstance(supervisor_events, list):
-        return events
+        supervisor_events = []
     for raw_event in supervisor_events:
         if not isinstance(raw_event, dict):
             continue
@@ -513,6 +513,36 @@ def _build_system_events(
                 metadata={
                     **metadata,
                     "status": raw_event.get("status"),
+                },
+            )
+        )
+    decision_events = state.metadata.get("execution_decisions", [])
+    if not isinstance(decision_events, list):
+        return events
+    for raw_decision in decision_events:
+        if not isinstance(raw_decision, dict):
+            continue
+        metadata = raw_decision.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        decision_status = str(raw_decision.get("status", "PROPOSED"))
+        events.append(
+            TimelineEvent(
+                event_id=str(raw_decision.get("decision_id", "")),
+                workflow_run_id=workflow_run_id,
+                event_type=f"DECISION_{decision_status}",
+                source_type=TimelineSourceType.SYSTEM,
+                source_id=str(raw_decision.get("decision_id", "execution_decision")),
+                title=f"Decision {raw_decision.get('decision_type', 'UNKNOWN')}",
+                description=str(raw_decision.get("reason", "Execution decision recorded.")),
+                created_at=raw_decision.get("created_at"),
+                metadata={
+                    "decision_id": raw_decision.get("decision_id"),
+                    "decision_type": raw_decision.get("decision_type"),
+                    "decision_status": decision_status,
+                    "recommended_action": raw_decision.get("recommended_action"),
+                    "requires_human_review": raw_decision.get("requires_human_review"),
+                    **metadata,
                 },
             )
         )

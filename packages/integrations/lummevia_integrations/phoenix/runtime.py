@@ -124,6 +124,10 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = bool(value)
+        for key in ("decision_requires_human_review",):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = bool(value)
         for key in ("iteration_count", "message_count"):
             value = state.metadata.get(key)
             if value is not None:
@@ -136,10 +140,21 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        for key in ("decision_count",):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         for key in ("change_set_id", "current_change_set_id", "validation_status", "validation_notes", "qa_checked_change_set_id"):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = str(value)
+        for key in ("decision_id", "decision_type", "decision_status", "autonomy_level", "decision_review_id"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = str(value)
+        decision_confidence = state.metadata.get("decision_confidence")
+        if decision_confidence is not None:
+            attributes["confidence"] = float(decision_confidence)
         workspace_id = state.metadata.get("workspace_id")
         if workspace_id is not None:
             attributes["workspace_id"] = str(workspace_id)

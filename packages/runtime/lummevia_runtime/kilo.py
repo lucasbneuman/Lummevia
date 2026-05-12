@@ -5,6 +5,7 @@ from typing import Any
 from lummevia_code_changes import CodeChangeRegistry
 from lummevia_core import AgentRole, TaskPackage
 from lummevia_capabilities import AllocationStatus
+from lummevia_intelligence import DEFAULT_HIGH_FILES_CHANGED_COUNT
 from lummevia_kilo import (
     KiloExecutionClient,
     KiloExecutionRecord,
@@ -20,6 +21,7 @@ from lummevia_runtime.capabilities import (
     release_step_allocation,
     request_step_allocation,
 )
+from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
 from lummevia_runtime.sessions import record_kilo_execution_for_session
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.queue import build_queue_metadata_for_kilo
@@ -200,6 +202,21 @@ def execute_kilo_step(
                         "artifact_count": len(change_set.artifacts),
                     },
                 )
+                if change_set.diff_summary.get("files_changed_count", 0) >= DEFAULT_HIGH_FILES_CHANGED_COUNT:
+                    propose_execution_decision(
+                        state,
+                        context=build_execution_context(
+                            state,
+                            task_id=task_package.task_id,
+                            files_changed_count=int(change_set.diff_summary.get("files_changed_count", 0)),
+                            real_code_touched=role == AgentRole.DEV,
+                            metadata={
+                                "source": "code_change_detection",
+                                "change_set_id": change_set.change_set_id,
+                                "execution_id": result.execution_id,
+                            },
+                        ),
+                    )
         health_status = (
             ExecutionHealthStatus.HEALTHY
             if result.final_status.value == "SUCCESS"
@@ -226,6 +243,24 @@ def execute_kilo_step(
             retry_attempts=result.retry_count,
             health_status=health_status,
         )
+        if health_status == ExecutionHealthStatus.FAILED:
+            propose_execution_decision(
+                state,
+                context=build_execution_context(
+                    state,
+                    task_id=task_package.task_id,
+                    retry_count=result.retry_count,
+                    max_retries=max(1, int(result.metadata.get("max_attempts", 1)) - 1),
+                    kilo_failed=True,
+                    real_code_touched=role == AgentRole.DEV,
+                    metadata={
+                        "source": "kilo_execution",
+                        "step_name": step_name,
+                        "execution_id": result.execution_id,
+                        "final_status": result.final_status.value,
+                    },
+                ),
+            )
         if request.session_id is not None:
             record_kilo_execution_for_session(
                 state,

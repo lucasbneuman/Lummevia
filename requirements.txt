@@ -15,6 +15,7 @@ psycopg[binary]
 -e ./packages/conversations
 -e ./packages/datasets
 -e ./packages/evaluations
+-e ./packages/intelligence
 -e ./packages/kilo-adapter
 -e ./packages/integrations
 -e ./packages/memory
