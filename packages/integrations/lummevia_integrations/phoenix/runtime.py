@@ -104,6 +104,23 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = value
+        for key in (
+            "health_status",
+            "watchdog_id",
+            "recovery_action_id",
+            "dead_letter_id",
+        ):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = str(value)
+        for key in ("retry_attempts", "watchdog_count", "recovery_action_count", "dead_letter_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
+        for key in ("stuck_detected", "workflow_cancelled"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = bool(value)
         for key in ("iteration_count", "message_count"):
             value = state.metadata.get(key)
             if value is not None:
@@ -192,8 +209,18 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             attributes["task_id"] = kilo_step["task_id"]
             attributes["kilo_status"] = kilo_step["kilo_status"]
             attributes["retry_count"] = kilo_step["retry_count"]
+            if kilo_step.get("retry_attempts") is not None:
+                attributes["retry_attempts"] = int(kilo_step["retry_attempts"])
             attributes["attempts_count"] = kilo_step["attempts_count"]
             attributes["final_status"] = kilo_step["final_status"]
+            if kilo_step.get("health_status") is not None:
+                attributes["health_status"] = str(kilo_step["health_status"])
+            if kilo_step.get("watchdog_id") is not None:
+                attributes["watchdog_id"] = str(kilo_step["watchdog_id"])
+            if kilo_step.get("recovery_action_id") is not None:
+                attributes["recovery_action_id"] = str(kilo_step["recovery_action_id"])
+            if kilo_step.get("dead_letter_id") is not None:
+                attributes["dead_letter_id"] = str(kilo_step["dead_letter_id"])
             if kilo_step.get("queue_id") is not None:
                 attributes["queue_id"] = str(kilo_step["queue_id"])
             if kilo_step.get("queue_item_id") is not None:

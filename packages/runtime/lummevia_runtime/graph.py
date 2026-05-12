@@ -15,6 +15,7 @@ from lummevia_kilo import KiloExecutionClient
 from lummevia_runtime.exceptions import RuntimeNotFoundError
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
 from lummevia_runtime.persistence.repository import WorkflowRunRepository
+from lummevia_runtime.supervisor import initialize_supervisor_runtime_state
 from lummevia_runtime.nodes import (
     dev_implementation_node,
     dev_qa_iteration_node,
@@ -108,6 +109,7 @@ class DevelopmentRuntime:
                 "repo_path": DEFAULT_REPO_PATH,
             },
         )
+        initialize_supervisor_runtime_state(initial_state)
         self.registry.create(initial_state)
         with _observe_workflow_run(self.observer, initial_state):
             final_state = RuntimeState.model_validate(self.graph.invoke(initial_state))

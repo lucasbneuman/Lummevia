@@ -60,6 +60,10 @@ class SessionRegistry:
             role=role,
             mode=mode,
             status=SessionStatus.CREATED,
+            health_status=str((metadata or {}).get("health_status", "WAITING")),
+            watchdog_id=(metadata or {}).get("watchdog_id"),
+            retry_attempts=int((metadata or {}).get("retry_attempts", 0)),
+            recovery_history=list((metadata or {}).get("recovery_history", [])),
             started_at=timestamp,
             updated_at=timestamp,
             metadata=metadata or {},
@@ -143,6 +147,12 @@ class SessionRegistry:
                 "role": role or session.role,
                 "mode": mode or session.mode,
                 "attempts": attempts if attempts is not None else session.attempts,
+                "retry_attempts": int(merged_metadata.get("retry_attempts", session.retry_attempts)),
+                "watchdog_id": merged_metadata.get("watchdog_id", session.watchdog_id),
+                "health_status": str(merged_metadata.get("health_status", session.health_status)),
+                "recovery_history": list(
+                    merged_metadata.get("recovery_history", session.recovery_history)
+                ),
                 "updated_at": datetime.now(UTC),
                 "completed_at": datetime.now(UTC) if is_terminal else None,
                 "metadata": merged_metadata,
@@ -158,6 +168,9 @@ class SessionRegistry:
                 "role": updated.role.value,
                 "mode": updated.mode.value,
                 "attempts": updated.attempts,
+                "retry_attempts": updated.retry_attempts,
+                "health_status": updated.health_status,
+                "watchdog_id": updated.watchdog_id,
             },
         )
 

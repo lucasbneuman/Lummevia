@@ -16,6 +16,13 @@ from lummevia_queue import (
 
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.resources import allocate_workspace_for_queue_item
+from lummevia_runtime.supervisor import (
+    complete_queue_item_watchdog,
+    heartbeat_queue_item_watchdog,
+    record_supervisor_event,
+    register_queue_item_watchdog,
+)
+from lummevia_supervisor import ExecutionHealthStatus
 
 
 def initialize_task_queue(
@@ -53,6 +60,12 @@ def initialize_task_queue(
                 mode=resolve_kilo_mode(AgentRole.DEV),
                 metadata={
                     "title": task_package.title,
+                    "health_status": ExecutionHealthStatus.WAITING.value,
+                    "recovery_action_id": None,
+                    "dead_letter_id": None,
+                    "retry_attempts": 0,
+                    "last_heartbeat_at": None,
+                    "watchdog_id": None,
                     "allocation_id": None,
                     "allocation_status": None,
                     "allocation_reason": None,
@@ -102,6 +115,13 @@ def initialize_task_queue(
                 queue_item=started_item,
                 task_package=task_package,
             )
+        watchdog_id = register_queue_item_watchdog(
+            state,
+            queue_id=queue.queue_id,
+            queue_item_id=started_item.queue_item_id,
+            task_id=started_item.task_id,
+        )
+        heartbeat_queue_item_watchdog(state, queue_item_id=started_item.queue_item_id)
         _record_queue_event(
             state,
             event_type="TASK_STARTED",
@@ -111,7 +131,20 @@ def initialize_task_queue(
                 "queue_id": queue.queue_id,
                 "queue_item_id": started_item.queue_item_id,
                 "task_id": started_item.task_id,
+                "watchdog_id": watchdog_id,
             },
+        )
+        record_supervisor_event(
+            state,
+            event_type="QUEUE_ITEM_ACTIVATED",
+            status=ExecutionHealthStatus.RUNNING,
+            metadata={
+                "queue_id": queue.queue_id,
+                "queue_item_id": started_item.queue_item_id,
+                "task_id": started_item.task_id,
+                "watchdog_id": watchdog_id,
+            },
+            queue_item_id=started_item.queue_item_id,
         )
     sync_task_queue_state(state, queue_id=queue.queue_id)
 
@@ -123,6 +156,7 @@ def mark_current_queue_item_completed(state: RuntimeState) -> None:
         return
     registry = TaskQueueRegistry.default()
     completed_item = registry.mark_completed(queue_id, queue_item_id)
+    complete_queue_item_watchdog(state, queue_item_id=queue_item_id)
     _record_queue_event(
         state,
         event_type="TASK_COMPLETED",
@@ -133,6 +167,17 @@ def mark_current_queue_item_completed(state: RuntimeState) -> None:
             "queue_item_id": queue_item_id,
             "task_id": completed_item.task_id,
         },
+    )
+    record_supervisor_event(
+        state,
+        event_type="TASK_REQUEUED" if completed_item.status == TaskQueueStatus.READY else "QUEUE_ITEM_COMPLETED",
+        status=ExecutionHealthStatus.HEALTHY,
+        metadata={
+            "queue_id": queue_id,
+            "queue_item_id": queue_item_id,
+            "task_id": completed_item.task_id,
+        },
+        queue_item_id=queue_item_id,
     )
     queue = registry.get_queue(queue_id)
     if queue is not None:
@@ -243,6 +288,21 @@ def build_queue_metadata_for_kilo(
             queue_item.get("metadata", {}).get("workspace_status")
             if isinstance(queue_item, dict)
             else state.metadata.get("workspace_status")
+        ),
+        "health_status": (
+            queue_item.get("metadata", {}).get("health_status")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("health_status")
+        ),
+        "watchdog_id": (
+            queue_item.get("metadata", {}).get("watchdog_id")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("watchdog_id")
+        ),
+        "retry_attempts": (
+            queue_item.get("metadata", {}).get("retry_attempts", 0)
+            if isinstance(queue_item, dict)
+            else state.metadata.get("retry_attempts", 0)
         ),
         "allocation_id": (
             queue_item.get("metadata", {}).get("allocation_id")

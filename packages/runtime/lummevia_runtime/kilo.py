@@ -22,6 +22,13 @@ from lummevia_runtime.capabilities import (
 from lummevia_runtime.sessions import record_kilo_execution_for_session
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.queue import build_queue_metadata_for_kilo
+from lummevia_runtime.supervisor import (
+    annotate_kilo_execution_result,
+    heartbeat_queue_item_watchdog,
+    heartbeat_session_watchdog,
+    register_kilo_execution_watchdog,
+)
+from lummevia_supervisor import ExecutionHealthStatus
 
 
 def build_runtime_planning_task_package(
@@ -95,6 +102,11 @@ def execute_kilo_step(
         },
     )
     try:
+        current_queue_item_id = state.metadata.get("current_queue_item_id")
+        if isinstance(current_queue_item_id, str):
+            heartbeat_queue_item_watchdog(state, queue_item_id=current_queue_item_id)
+        if isinstance(session_id, str):
+            heartbeat_session_watchdog(state, session_id=session_id)
         result = client.execute(request)
         record = KiloExecutionRecord(
             execution_id=result.execution_id,
@@ -142,6 +154,32 @@ def execute_kilo_step(
             "status": result.status.value,
             "error": result.error,
         }
+        health_status = (
+            ExecutionHealthStatus.HEALTHY
+            if result.final_status.value == "SUCCESS"
+            else ExecutionHealthStatus.FAILED
+        )
+        watchdog_id = register_kilo_execution_watchdog(
+            state,
+            execution_id=result.execution_id,
+            step_name=step_name,
+            task_id=task_package.task_id,
+            retry_attempts=result.retry_count,
+            health_status=health_status,
+        )
+        state.metadata["kilo_execution_results"][result.execution_id]["metadata"]["watchdog_id"] = watchdog_id
+        state.metadata["kilo_execution_results"][result.execution_id]["metadata"]["health_status"] = health_status.value
+        state.metadata["kilo_execution_results"][result.execution_id]["metadata"]["retry_attempts"] = result.retry_count
+        state.metadata["kilo_execution_by_step"][step_name]["watchdog_id"] = watchdog_id
+        state.metadata["kilo_execution_by_step"][step_name]["health_status"] = health_status.value
+        state.metadata["kilo_execution_by_step"][step_name]["retry_attempts"] = result.retry_count
+        annotate_kilo_execution_result(
+            state,
+            step_name=step_name,
+            result_metadata={"watchdog_id": watchdog_id},
+            retry_attempts=result.retry_count,
+            health_status=health_status,
+        )
         if request.session_id is not None:
             record_kilo_execution_for_session(
                 state,

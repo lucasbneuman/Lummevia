@@ -13,7 +13,14 @@ from lummevia_memory import (
 from lummevia_sessions import SessionRegistry, SessionStatus, TaskExecutionSession
 
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.supervisor import (
+    finalize_session_health,
+    heartbeat_session_watchdog,
+    record_supervisor_event,
+    register_session_watchdog,
+)
 from lummevia_runtime.timeline import sync_timeline_for_state
+from lummevia_supervisor import ExecutionHealthStatus
 
 
 def create_task_execution_session(
@@ -60,6 +67,7 @@ def create_task_execution_session(
             "run_id": state.run.run_id,
             "workflow": state.run.workflow_name,
             "step_name": step_name,
+            "health_status": ExecutionHealthStatus.WAITING.value,
             "queue_id": state.metadata.get("queue_id"),
             "queue_item_id": state.metadata.get("current_queue_item_id"),
             "workspace_id": state.metadata.get("workspace_id"),
@@ -107,7 +115,15 @@ def create_task_execution_session(
         status=SessionStatus.RUNNING,
         role=role,
         mode=mode,
-        metadata={"current_step": step_name},
+        metadata={
+            "current_step": step_name,
+            "health_status": ExecutionHealthStatus.RUNNING.value,
+        },
+    )
+    register_session_watchdog(
+        state,
+        session_id=session.session_id,
+        task_id=task_package.task_id,
     )
     attach_session_to_task_package(
         state,
@@ -208,12 +224,19 @@ def record_kilo_execution_for_session(
         metadata={
             "current_step": step_name,
             "last_execution_id": result.execution_id,
+            "health_status": (
+                ExecutionHealthStatus.HEALTHY.value
+                if result.final_status.value == "SUCCESS"
+                else ExecutionHealthStatus.FAILED.value
+            ),
+            "retry_attempts": result.retry_count,
             "allocation_id": result.metadata.get("allocation_id"),
             "allocation_status": result.metadata.get("allocation_status"),
             "capacity_id": result.metadata.get("capacity_id"),
             "allocated_resources": result.metadata.get("allocated_resources", []),
         },
     )
+    heartbeat_session_watchdog(state, session_id=session.session_id)
     sync_session_to_runtime_metadata(state, session)
     return session
 
@@ -258,6 +281,31 @@ def update_task_execution_session(
         metadata=metadata or {},
     )
     sync_session_to_runtime_metadata(state, session)
+    if status == SessionStatus.WAITING_REVIEW:
+        finalize_session_health(
+            state,
+            session_id=session.session_id,
+            health_status=ExecutionHealthStatus.WAITING,
+        )
+        record_supervisor_event(
+            state,
+            event_type="QA_FAILED",
+            status=ExecutionHealthStatus.WAITING,
+            metadata={"session_id": session.session_id},
+            session_id=session.session_id,
+        )
+    elif status == SessionStatus.COMPLETED:
+        finalize_session_health(
+            state,
+            session_id=session.session_id,
+            health_status=ExecutionHealthStatus.HEALTHY,
+        )
+    elif status == SessionStatus.CANCELLED:
+        finalize_session_health(
+            state,
+            session_id=session.session_id,
+            health_status=ExecutionHealthStatus.CANCELLED,
+        )
     if status == SessionStatus.COMPLETED:
         memory_record = ProjectMemoryRegistry.default().add_memory(
             project=state.run.project,
@@ -297,8 +345,11 @@ def sync_session_to_runtime_metadata(
     state.metadata["session_status"] = session.status.value
     state.metadata["session_role"] = session.role.value
     state.metadata["session_attempts"] = session.attempts
+    state.metadata["retry_attempts"] = session.retry_attempts
     state.metadata["output_count"] = len(session.outputs)
     state.metadata["event_count"] = len(session.events)
+    state.metadata["health_status"] = session.health_status
+    state.metadata["watchdog_id"] = session.watchdog_id
     state.metadata["workspace_id"] = session.workspace_id
     state.metadata["branch_name"] = session.branch_name
     state.metadata["worktree_path"] = session.worktree_path

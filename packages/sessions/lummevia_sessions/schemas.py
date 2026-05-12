@@ -60,6 +60,10 @@ class TaskExecutionSession(SessionBaseSchema):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     attempts: int = Field(default=0, ge=0)
+    health_status: str = "WAITING"
+    watchdog_id: str | None = None
+    retry_attempts: int = Field(default=0, ge=0)
+    recovery_history: list[str] = Field(default_factory=list)
     events: list[SessionEvent] = Field(default_factory=list)
     outputs: list[SessionOutput] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)

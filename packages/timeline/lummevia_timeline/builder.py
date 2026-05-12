@@ -460,11 +460,32 @@ def _build_system_events(
 ) -> Iterable[TimelineEvent]:
     if state is None:
         return []
-    queue_events = state.metadata.get("queue_events", [])
-    if not isinstance(queue_events, list):
-        return []
     events: list[TimelineEvent] = []
-    for raw_event in queue_events:
+    queue_events = state.metadata.get("queue_events", [])
+    if isinstance(queue_events, list):
+        for raw_event in queue_events:
+            if not isinstance(raw_event, dict):
+                continue
+            metadata = raw_event.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            events.append(
+                TimelineEvent(
+                    event_id=str(raw_event.get("event_id", "")),
+                    workflow_run_id=workflow_run_id,
+                    event_type=str(raw_event.get("event_type", "SYSTEM_EVENT")),
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=str(metadata.get("queue_id", "task_queue")),
+                    title=str(raw_event.get("title", "System event")),
+                    description=str(raw_event.get("description", "System event recorded.")),
+                    created_at=raw_event.get("created_at"),
+                    metadata=metadata,
+                )
+            )
+    supervisor_events = state.metadata.get("supervisor_events", [])
+    if not isinstance(supervisor_events, list):
+        return events
+    for raw_event in supervisor_events:
         if not isinstance(raw_event, dict):
             continue
         metadata = raw_event.get("metadata", {})
@@ -474,13 +495,25 @@ def _build_system_events(
             TimelineEvent(
                 event_id=str(raw_event.get("event_id", "")),
                 workflow_run_id=workflow_run_id,
-                event_type=str(raw_event.get("event_type", "SYSTEM_EVENT")),
+                event_type=str(raw_event.get("event_type", "SUPERVISOR_EVENT")),
                 source_type=TimelineSourceType.SYSTEM,
-                source_id=str(metadata.get("queue_id", "task_queue")),
-                title=str(raw_event.get("title", "System event")),
-                description=str(raw_event.get("description", "System event recorded.")),
+                source_id=str(
+                    metadata.get("queue_item_id")
+                    or metadata.get("session_id")
+                    or metadata.get("watchdog_id")
+                    or "supervisor"
+                ),
+                title=str(raw_event.get("event_type", "Supervisor event")),
+                description=str(
+                    metadata.get("reason")
+                    or metadata.get("action_type")
+                    or raw_event.get("event_type", "Supervisor event recorded.")
+                ),
                 created_at=raw_event.get("created_at"),
-                metadata=metadata,
+                metadata={
+                    **metadata,
+                    "status": raw_event.get("status"),
+                },
             )
         )
     return events

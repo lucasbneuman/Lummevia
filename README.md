@@ -1128,6 +1128,61 @@ Todavia no se ejecuta:
 
 La ruta futura es reemplazar el `worktree_path` simulado por workspaces reales bajo `KILO_WORKSPACE_ROOT`, manteniendo el mismo contrato observable para que el runtime no tenga que redisenarse cuando llegue esa capa.
 
+## Supervisor Layer
+
+Lummevia OS ahora incluye una primera capa MVP de supervision operacional para workflows, sessions, queue items y ejecuciones Kilo.
+
+Esta capa vive en `packages/supervisor` y agrega:
+
+- `watchdogs` en memoria con heartbeats on-demand
+- `ExecutionHealthStatus` comun para runtime, queue, sessions y metadata Kilo
+- `SupervisorEvent` y `RecoveryAction` trazables
+- `dead-letter` para tasks que agotan retries contractuales
+- cancelacion explicita de workflow con liberacion de locks, workspace y allocation
+- metadata observable en timeline y Phoenix
+
+Semantica actual del MVP:
+
+- un target `RUNNING` sin heartbeat por encima de su `timeout_seconds` pasa a `STUCK`
+- un `STUCK` puede disparar `RETRY`
+- si los retries contractuales se agotan, el item pasa a `DEAD_LETTER`
+- `cancel_workflow` no mata procesos reales: marca estado, registra recovery, libera recursos simulados y deja trazabilidad
+
+Eventos de timeline agregados:
+
+- `WATCHDOG_CREATED`
+- `EXECUTION_STUCK`
+- `RECOVERY_TRIGGERED`
+- `TASK_REQUEUED`
+- `DEAD_LETTERED`
+- `WORKFLOW_CANCELLED`
+
+Endpoints nuevos:
+
+- `GET /supervisor/watchdogs`
+- `GET /supervisor/recovery-actions`
+- `GET /supervisor/dead-letters`
+- `POST /supervisor/workflows/{workflow_run_id}/cancel`
+- `POST /supervisor/watchdogs/detect-stuck`
+
+Limites actuales:
+
+- sin workers reales
+- sin threads ni cron
+- sin retries distribuidos
+- sin scheduler externo
+- sin persistence dedicada del supervisor
+- sin kill real de procesos
+- sin auto-recovery destructivo
+
+Roadmap natural despues de este MVP:
+
+- persistencia durable de watchdogs y dead-letters
+- requeue real y resume real de ejecuciones
+- politicas de starvation por cola
+- scheduler supervisor desacoplado
+- reconciliacion automatica entre runtime y recursos huerfanos
+
 ## Comandos basicos
 
 ```powershell
