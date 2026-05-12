@@ -130,6 +130,12 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["queue_size"] >= 2
     assert workflow_span.attributes["completed_count"] >= 1
     assert str(workflow_span.attributes["current_queue_item_id"]).startswith("queue-item-")
+    assert str(workflow_span.attributes["workspace_id"]).startswith("workspace-")
+    assert str(workflow_span.attributes["branch_name"]).startswith("lummevia/")
+    assert "kilo-workspaces" in str(workflow_span.attributes["worktree_path"])
+    assert workflow_span.attributes["resource_locks_count"] >= 3
+    assert workflow_span.attributes["active_locks_count"] >= 0
+    assert workflow_span.attributes["workspace_status"] == "RELEASED"
 
     step_names = {span.name for span in exporter.spans}
     assert "step:dev_implementation" in step_names
@@ -164,6 +170,10 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert str(dev_span.attributes["execution_id"]).startswith("kilo-")
     assert str(dev_span.attributes["queue_id"]).startswith("queue-")
     assert str(dev_span.attributes["queue_item_id"]).startswith("queue-item-")
+    assert str(dev_span.attributes["workspace_id"]).startswith("workspace-")
+    assert str(dev_span.attributes["branch_name"]).startswith("lummevia/")
+    assert "kilo-workspaces" in str(dev_span.attributes["worktree_path"])
+    assert dev_span.attributes["workspace_status"] == "ACTIVE"
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
     assert qa_span.attributes["kilo_status"] == "SUCCESS"
@@ -176,6 +186,9 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert str(qa_span.attributes["execution_id"]).startswith("kilo-")
     assert str(qa_span.attributes["queue_id"]).startswith("queue-")
     assert str(qa_span.attributes["queue_item_id"]).startswith("queue-item-")
+    assert str(qa_span.attributes["workspace_id"]).startswith("workspace-")
+    assert str(qa_span.attributes["branch_name"]).startswith("lummevia/")
+    assert "kilo-workspaces" in str(qa_span.attributes["worktree_path"])
 
     founder_review_span = next(
         span for span in exporter.spans if span.name == "step:founder_business_approval"

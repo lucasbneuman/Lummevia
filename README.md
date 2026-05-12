@@ -1040,6 +1040,37 @@ No ejecuta workflows reales, no persiste estado, no usa base de datos y no conec
 
 Por defecto la API queda disponible en [http://localhost:8000](http://localhost:8000) y Phoenix local en [http://localhost:6006](http://localhost:6006).
 
+## Resource Locks y Workspace Isolation
+
+Lummevia OS ahora agrega una primera capa contractual de `Resource Locks` y `Workspace Isolation` para preparar la ejecucion paralela segura de `TaskPackages`.
+
+Esto existe porque dos tareas DEV o QA sobre el mismo repo o workspace pueden pisarse entre si incluso antes de tener paralelismo real, worktrees o merges automatizados.
+
+La estrategia actual es deliberadamente conservadora:
+
+- cada `TaskQueueItem` activo recibe un `workspace_id` aislado
+- el runtime reserva locks en memoria para `REPO`, `WORKSPACE` y `PATH`
+- se propagan `branch_name`, `worktree_path` y `lock_ids` a queue, sessions, requests Kilo y Phoenix
+- `QA PASS` libera el workspace y sus locks
+- `QA FAIL` conserva el workspace activo para revision o rework
+
+Limites recomendados en esta etapa:
+
+- un solo `TaskQueueItem` activo por queue
+- un workspace activo por item
+- evitar mas de una task simultanea por repo hasta introducir politicas de concurrencia mas finas
+
+Todavia no se ejecuta:
+
+- `git worktree`
+- `git checkout`
+- mutacion real de filesystem
+- Kilo real
+- paralelismo real
+- merge orchestration
+
+La ruta futura es reemplazar el `worktree_path` simulado por workspaces reales bajo `KILO_WORKSPACE_ROOT`, manteniendo el mismo contrato observable para que el runtime no tenga que redisenarse cuando llegue esa capa.
+
 ## Comandos basicos
 
 ```powershell

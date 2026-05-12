@@ -25,6 +25,11 @@ def build_kilo_execution_request(
     request_metadata.setdefault("queue_item_id", None)
     request_metadata.setdefault("task_priority", None)
     request_metadata.setdefault("dependencies", [])
+    request_metadata.setdefault("workspace_id", None)
+    request_metadata.setdefault("branch_name", None)
+    request_metadata.setdefault("worktree_path", None)
+    request_metadata.setdefault("lock_ids", [])
+    request_metadata.setdefault("workspace_status", None)
     return KiloExecutionRequest(
         run_id=run_id,
         session_id=session_id,

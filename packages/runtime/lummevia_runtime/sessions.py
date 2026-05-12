@@ -35,6 +35,25 @@ def create_task_execution_session(
             if state.metadata.get("current_queue_item_id")
             else None
         ),
+        workspace_id=(
+            str(state.metadata.get("workspace_id"))
+            if state.metadata.get("workspace_id")
+            else None
+        ),
+        branch_name=(
+            str(state.metadata.get("branch_name"))
+            if state.metadata.get("branch_name")
+            else None
+        ),
+        worktree_path=(
+            str(state.metadata.get("worktree_path"))
+            if state.metadata.get("worktree_path")
+            else None
+        ),
+        lock_ids=[
+            str(lock_id)
+            for lock_id in state.metadata.get("lock_ids", [])
+        ],
         role=role,
         mode=mode,
         metadata={
@@ -43,6 +62,10 @@ def create_task_execution_session(
             "step_name": step_name,
             "queue_id": state.metadata.get("queue_id"),
             "queue_item_id": state.metadata.get("current_queue_item_id"),
+            "workspace_id": state.metadata.get("workspace_id"),
+            "branch_name": state.metadata.get("branch_name"),
+            "worktree_path": state.metadata.get("worktree_path"),
+            "lock_ids": state.metadata.get("lock_ids", []),
         },
     )
     session = registry.add_event(
@@ -56,6 +79,10 @@ def create_task_execution_session(
             "mode": mode.value,
             "queue_id": state.metadata.get("queue_id"),
             "queue_item_id": state.metadata.get("current_queue_item_id"),
+            "workspace_id": state.metadata.get("workspace_id"),
+            "branch_name": state.metadata.get("branch_name"),
+            "worktree_path": state.metadata.get("worktree_path"),
+            "lock_ids": state.metadata.get("lock_ids", []),
         },
     )
     session = registry.add_output(
@@ -260,4 +287,8 @@ def sync_session_to_runtime_metadata(
     state.metadata["session_attempts"] = session.attempts
     state.metadata["output_count"] = len(session.outputs)
     state.metadata["event_count"] = len(session.events)
+    state.metadata["workspace_id"] = session.workspace_id
+    state.metadata["branch_name"] = session.branch_name
+    state.metadata["worktree_path"] = session.worktree_path
+    state.metadata["lock_ids"] = session.lock_ids
     sync_timeline_for_state(state)

@@ -112,6 +112,22 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        workspace_id = state.metadata.get("workspace_id")
+        if workspace_id is not None:
+            attributes["workspace_id"] = str(workspace_id)
+        branch_name = state.metadata.get("branch_name")
+        if branch_name is not None:
+            attributes["branch_name"] = str(branch_name)
+        worktree_path = state.metadata.get("worktree_path")
+        if worktree_path is not None:
+            attributes["worktree_path"] = str(worktree_path)
+        workspace_status = state.metadata.get("workspace_status")
+        if workspace_status is not None:
+            attributes["workspace_status"] = str(workspace_status)
+        for key in ("resource_locks_count", "active_locks_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         queue_id = state.metadata.get("queue_id")
         if queue_id is not None:
             attributes["queue_id"] = str(queue_id)
@@ -172,6 +188,14 @@ class PhoenixRuntimeObserver(RuntimeObserver):
                 attributes["queue_id"] = str(kilo_step["queue_id"])
             if kilo_step.get("queue_item_id") is not None:
                 attributes["queue_item_id"] = str(kilo_step["queue_item_id"])
+            if kilo_step.get("workspace_id") is not None:
+                attributes["workspace_id"] = str(kilo_step["workspace_id"])
+            if kilo_step.get("branch_name") is not None:
+                attributes["branch_name"] = str(kilo_step["branch_name"])
+            if kilo_step.get("worktree_path") is not None:
+                attributes["worktree_path"] = str(kilo_step["worktree_path"])
+            if kilo_step.get("workspace_status") is not None:
+                attributes["workspace_status"] = str(kilo_step["workspace_status"])
         return attributes
 
     def _extract_review_metadata(

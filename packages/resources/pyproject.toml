@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lummevia-resources"
+version = "0.1.0"
+description = "In-memory resource locks and workspace allocation contracts for Lummevia OS."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic==2.11.4",
+    "lummevia-core",
+    "lummevia-queue",
+]
+
+[tool.setuptools]
+packages = ["lummevia_resources"]

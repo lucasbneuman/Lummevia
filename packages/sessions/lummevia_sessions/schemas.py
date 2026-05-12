@@ -49,6 +49,10 @@ class TaskExecutionSession(SessionBaseSchema):
     issue_id: str = Field(min_length=1)
     queue_id: str | None = None
     queue_item_id: str | None = None
+    workspace_id: str | None = None
+    branch_name: str | None = None
+    worktree_path: str | None = None
+    lock_ids: list[str] = Field(default_factory=list)
     role: AgentRole
     mode: KiloExecutionMode
     status: SessionStatus

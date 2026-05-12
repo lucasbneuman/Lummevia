@@ -15,6 +15,7 @@ from lummevia_queue import (
 )
 
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.resources import allocate_workspace_for_queue_item
 
 
 def initialize_task_queue(
@@ -84,6 +85,20 @@ def initialize_task_queue(
             )
     started_item = TaskQueueScheduler(registry).start_next_item(queue.queue_id)
     if started_item is not None:
+        task_package = next(
+            (
+                item
+                for item in task_packages
+                if item.task_id == started_item.task_id
+            ),
+            None,
+        )
+        if task_package is not None:
+            allocate_workspace_for_queue_item(
+                state,
+                queue_item=started_item,
+                task_package=task_package,
+            )
         _record_queue_event(
             state,
             event_type="TASK_STARTED",
@@ -200,6 +215,31 @@ def build_queue_metadata_for_kilo(
             queue_item.get("dependencies", [])
             if isinstance(queue_item, dict)
             else []
+        ),
+        "workspace_id": (
+            queue_item.get("metadata", {}).get("workspace_id")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("workspace_id")
+        ),
+        "branch_name": (
+            queue_item.get("metadata", {}).get("branch_name")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("branch_name")
+        ),
+        "worktree_path": (
+            queue_item.get("metadata", {}).get("worktree_path")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("worktree_path")
+        ),
+        "lock_ids": (
+            queue_item.get("metadata", {}).get("lock_ids", [])
+            if isinstance(queue_item, dict)
+            else state.metadata.get("lock_ids", [])
+        ),
+        "workspace_status": (
+            queue_item.get("metadata", {}).get("workspace_status")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("workspace_status")
         ),
     }
 

@@ -15,6 +15,7 @@ from lummevia_sessions import SessionStatus
 from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
 from lummevia_runtime.kilo import execute_kilo_step
 from lummevia_runtime.queue import mark_current_queue_item_completed, sync_task_queue_state
+from lummevia_runtime.resources import refresh_current_workspace, release_current_workspace
 from lummevia_runtime.sessions import add_session_output, update_task_execution_session
 from lummevia_runtime.state import RuntimeState
 
@@ -135,6 +136,9 @@ def qa_validation_node(
         state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
         state.metadata.update(memory_metadata)
         state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
+        refresh_current_workspace(state)
+        if state.metadata.get("workspace_id"):
+            state.metadata["workspace_status"] = "ACTIVE"
         update_task_execution_session(
             state,
             status=SessionStatus.WAITING_REVIEW,
@@ -143,6 +147,13 @@ def qa_validation_node(
             metadata=qa_review_metadata,
         )
     else:
+        release_current_workspace(
+            state,
+            metadata={
+                "released_by": "qa_validation",
+                "validation_status": state.artifacts.validation_package.status.value,
+            },
+        )
         mark_current_queue_item_completed(state)
         existing_review_id = (
             state.run.metadata.get(step_name, {}).get("review_id")

@@ -18,6 +18,7 @@ dependencies = [
     "lummevia-kilo-adapter",
     "lummevia-memory",
     "lummevia-queue",
+    "lummevia-resources",
     "lummevia-reviews",
     "lummevia-sessions",
     "lummevia-timeline",

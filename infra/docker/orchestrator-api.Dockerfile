@@ -17,6 +17,7 @@ COPY packages/memory /app/packages/memory
 COPY packages/model-router /app/packages/model-router
 COPY packages/reviews /app/packages/reviews
 COPY packages/queue /app/packages/queue
+COPY packages/resources /app/packages/resources
 COPY packages/runtime /app/packages/runtime
 COPY packages/sessions /app/packages/sessions
 COPY packages/timeline /app/packages/timeline
