@@ -256,6 +256,18 @@ class PhoenixRuntimeObserver(RuntimeObserver):
                 attributes["allocated_resources_count"] = int(
                     kilo_step["allocated_resources_count"]
                 )
+            if kilo_step.get("real_execution") is not None:
+                attributes["real_execution"] = bool(kilo_step["real_execution"])
+            if kilo_step.get("exit_code") is not None:
+                attributes["exit_code"] = int(kilo_step["exit_code"])
+            if kilo_step.get("safety_status") is not None:
+                attributes["safety_status"] = str(kilo_step["safety_status"])
+            if kilo_step.get("workspace_path") is not None:
+                attributes["workspace_path"] = str(kilo_step["workspace_path"])
+            if kilo_step.get("stdout_bytes") is not None:
+                attributes["stdout_bytes"] = int(kilo_step["stdout_bytes"])
+            if kilo_step.get("stderr_bytes") is not None:
+                attributes["stderr_bytes"] = int(kilo_step["stderr_bytes"])
         return attributes
 
     def _extract_review_metadata(

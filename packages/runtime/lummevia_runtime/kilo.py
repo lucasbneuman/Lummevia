@@ -153,6 +153,13 @@ def execute_kilo_step(
             "final_status": result.final_status.value,
             "status": result.status.value,
             "error": result.error,
+            "real_execution": bool(result.metadata.get("real_execution", False)),
+            "exit_code": result.metadata.get("exit_code"),
+            "safety_status": result.metadata.get("safety_status"),
+            "workspace_path": result.metadata.get("workspace_path"),
+            "command_preview": result.metadata.get("command_preview"),
+            "stdout_bytes": result.metadata.get("stdout_bytes", 0),
+            "stderr_bytes": result.metadata.get("stderr_bytes", 0),
         }
         health_status = (
             ExecutionHealthStatus.HEALTHY

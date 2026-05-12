@@ -723,6 +723,10 @@ Incluye:
 - `KiloExecutionResult`
 - `KiloExecutionClient`
 - `KiloExecutionMode`
+- `KiloRuntimeSettings`
+- `KiloSafetyValidator`
+- `ControlledSubprocessExecutor`
+- `KiloWorkspaceManager`
 - helpers para construir requests y envelopes de planning
 
 Modes implementados:
@@ -741,15 +745,16 @@ Mapeo inicial por rol:
 
 En esta etapa:
 
-- el client es deterministicamente fake
+- el client sigue siendo fake por default
 - simula lifecycle sincrono `QUEUED -> RUNNING -> SUCCESS | FAILED | RETRYING | CANCELLED`
 - soporta retries fake via `max_attempts` y `fail_first_attempt` en metadata
-- expone configuracion futura para CLI real, pero `KILO_ENABLED=false` por defecto
-- puede validar `KILO_CLI_PATH` y `KILO_WORKSPACE_ROOT` solo a nivel de settings cuando se habilite
-- no usa `subprocess`
-- no ejecuta terminal real
-- no ejecuta Kilo CLI real todavia
-- no muta filesystem
+- agrega una primera capa real controlada opt-in para sandbox
+- solo ejecuta real si `KILO_ENABLED=true` y `KILO_DRY_RUN=false`
+- valida allowlist via `KILO_ALLOWED_REPOS`
+- prepara workspaces aislados bajo `KILO_WORKSPACE_ROOT/<execution_id>`
+- usa `subprocess.run(..., shell=False)` con timeout y truncado de output
+- registra metadata compacta: `real_execution`, `exit_code`, `stdout_preview`, `stderr_preview`, `workspace_path`, `command_preview`, `safety_status`
+- no clona repos ni modifica el repo original
 - no toca git real
 - no abre PRs reales
 - no conecta providers reales ni Kilo CLI real
@@ -939,15 +944,19 @@ Variables futuras para Kilo:
 - `KILO_WORKSPACE_ROOT`
 - `KILO_DEFAULT_TIMEOUT_SECONDS=300`
 - `KILO_DRY_RUN=true`
+- `KILO_ALLOWED_REPOS=`
+- `KILO_MAX_OUTPUT_BYTES=32768`
 
 Comportamiento actual de Kilo:
 
-- el adapter de `packages/kilo-adapter/` sigue siendo fake y deterministico
+- el adapter de `packages/kilo-adapter/` sigue siendo fake y deterministico por default
 - `KILO_ENABLED=false` por defecto
 - con `KILO_ENABLED=false` no se exige `KILO_CLI_PATH` ni `KILO_WORKSPACE_ROOT`
-- con `KILO_ENABLED=true` solo se valida que `KILO_CLI_PATH` y `KILO_WORKSPACE_ROOT` existan en el filesystem
-- aun con `KILO_ENABLED=true`, Lummevia OS no ejecuta Kilo CLI real todavia
-- `KILO_DRY_RUN=true` queda como default seguro para la futura transicion a ejecucion real
+- `KILO_DRY_RUN=true` queda como default seguro
+- `KILO_ALLOWED_REPOS` queda vacio por defecto y bloquea cualquier ejecucion real
+- `KILO_MAX_OUTPUT_BYTES` limita previews persistidas para stdout y stderr
+- con `KILO_ENABLED=true` solo se permite sandbox real si pasan enablement, dry-run off, allowlist, root de workspace y path safety
+- aun con sandbox real habilitado, Lummevia OS no hace push, merge, PR automatico ni git destructivo
 
 ConvenciÃ³n recomendada para Phoenix:
 
@@ -1010,6 +1019,7 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `POST /evaluations/pm/regression-run`
 - `POST /evaluations/pm/promote`
 - `POST /model-execution/pm/dry-run`
+- `POST /kilo/sandbox/run`
 - `GET /model-router/roles`
 - `POST /model-router/resolve`
 - `GET /reviews`
@@ -1059,6 +1069,45 @@ Ese endpoint:
 - no persiste workflows
 - no crea artefactos reales en YouTrack
 - no habilita DeepSeek real para `PO`, `DEV`, `QA` ni `QC`
+
+El endpoint `POST /kilo/sandbox/run` tambien es de diagnostico controlado.
+
+Input minimo:
+
+- `project`
+- `repo_path`
+- `task_id`
+- `prompt`
+- `mode`
+
+Ese endpoint:
+
+- valida safety antes de cualquier ejecucion real
+- usa fake si `KILO_ENABLED=false` o `KILO_DRY_RUN=true`
+- solo ejecuta Kilo CLI real dentro del sandbox si el repo esta en `KILO_ALLOWED_REPOS`
+- no persiste workflows
+- no usa el workflow principal
+- no hace push, merge ni PR
+
+Ejemplo recomendado para probar sandbox con un repo de prueba:
+
+```powershell
+$env:KILO_ENABLED="true"
+$env:KILO_DRY_RUN="false"
+$env:KILO_CLI_PATH="C:\sandbox\kilo.exe"
+$env:KILO_WORKSPACE_ROOT="C:\sandbox\lummevia-kilo"
+$env:KILO_ALLOWED_REPOS="lummevia-os-sandbox"
+
+curl -X POST http://localhost:8000/kilo/sandbox/run `
+  -H "Content-Type: application/json" `
+  -d '{
+    "project": "lummevia-os-sandbox",
+    "repo_path": "C:/sandbox/lummevia-os-sandbox",
+    "task_id": "OS-900-T1",
+    "prompt": "Run sandbox validation only.",
+    "mode": "CODE"
+  }'
+```
 
 Roadmap futuro de evaluacion:
 

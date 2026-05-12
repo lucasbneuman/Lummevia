@@ -176,6 +176,8 @@ def test_runtime_registers_kilo_executions_for_po_dev_and_qa() -> None:
     assert all("branch_name" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
     assert all("worktree_path" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
     assert all("lock_ids" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
+    assert all("real_execution" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
+    assert all("safety_status" in execution.get("metadata", {}) for execution in state.metadata["kilo_execution_results"].values())
     assert all("attempts" in execution for execution in executions)
     assert all("retry_count" in execution for execution in executions)
     assert all("final_status" in execution for execution in executions)

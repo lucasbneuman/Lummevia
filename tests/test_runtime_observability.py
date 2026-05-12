@@ -184,6 +184,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert dev_span.attributes["capacity_used_slots"] >= 1
     assert dev_span.attributes["capacity_max_slots"] >= 1
     assert dev_span.attributes["allocated_resources_count"] >= 1
+    assert dev_span.attributes["real_execution"] is False
+    assert dev_span.attributes["safety_status"] == "DISABLED"
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
     assert qa_span.attributes["kilo_status"] == "SUCCESS"
@@ -201,6 +203,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert "kilo-workspaces" in str(qa_span.attributes["worktree_path"])
     assert str(qa_span.attributes["allocation_id"]).startswith("allocation-")
     assert qa_span.attributes["allocation_status"] == "GRANTED"
+    assert qa_span.attributes["real_execution"] is False
+    assert qa_span.attributes["safety_status"] == "DISABLED"
 
     founder_review_span = next(
         span for span in exporter.spans if span.name == "step:founder_business_approval"

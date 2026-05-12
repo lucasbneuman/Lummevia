@@ -6,6 +6,7 @@ from app.core.persistence import annotate_runtime_state, resolve_runtime_persist
 from app.core.model_execution import build_pm_conversation_model_executor
 from lummevia_agents import PMAgent
 from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
+from lummevia_kilo import KiloExecutionClient, KiloRuntimeSettings
 from lummevia_runtime import (
     DevelopmentRuntime,
     PersistedRunNotFoundError,
@@ -39,8 +40,21 @@ def _build_runtime_service() -> DevelopmentRuntime:
             environment=settings.app_env,
             persistence_metadata_supplier=resolve_runtime_persistence_metadata,
         ),
+        kilo_client=KiloExecutionClient(settings=_build_kilo_runtime_settings()),
         founder_pm_agent=founder_pm_agent,
         persistence_metadata_resolver=resolve_runtime_persistence_metadata,
+    )
+
+
+def _build_kilo_runtime_settings() -> KiloRuntimeSettings:
+    return KiloRuntimeSettings(
+        enabled=settings.kilo.enabled,
+        dry_run=settings.kilo.dry_run,
+        cli_path=settings.kilo.cli_path,
+        workspace_root=settings.kilo.workspace_root,
+        default_timeout_seconds=settings.kilo.default_timeout_seconds,
+        allowed_repos=settings.kilo.allowed_repos,
+        max_output_bytes=settings.kilo.max_output_bytes,
     )
 
 

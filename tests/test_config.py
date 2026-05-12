@@ -37,6 +37,8 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.kilo.workspace_root is None
     assert settings.kilo.default_timeout_seconds == 300
     assert settings.kilo.dry_run is True
+    assert settings.kilo.allowed_repos == ()
+    assert settings.kilo.max_output_bytes == 32768
 
 
 def test_settings_load_safe_values_from_env() -> None:
@@ -74,6 +76,8 @@ def test_settings_load_safe_values_from_env() -> None:
             "KILO_WORKSPACE_ROOT": str(kilo_workspace_root),
             "KILO_DEFAULT_TIMEOUT_SECONDS": "120",
             "KILO_DRY_RUN": "false",
+            "KILO_ALLOWED_REPOS": "lummevia-os, sandbox-repo ",
+            "KILO_MAX_OUTPUT_BYTES": "2048",
         }
     )
 
@@ -109,6 +113,8 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.kilo.workspace_root == kilo_workspace_root
     assert settings.kilo.default_timeout_seconds == 120
     assert settings.kilo.dry_run is False
+    assert settings.kilo.allowed_repos == ("lummevia-os", "sandbox-repo")
+    assert settings.kilo.max_output_bytes == 2048
 
 
 def test_settings_build_phoenix_base_url_from_host_and_port_when_not_provided() -> None:
@@ -226,6 +232,8 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "KILO_WORKSPACE_ROOT=",
         "KILO_DEFAULT_TIMEOUT_SECONDS=",
         "KILO_DRY_RUN=",
+        "KILO_ALLOWED_REPOS=",
+        "KILO_MAX_OUTPUT_BYTES=",
     ]
 
     for variable in expected_variables:

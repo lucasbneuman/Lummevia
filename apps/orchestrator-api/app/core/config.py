@@ -42,6 +42,13 @@ def _read_optional_path(env: Mapping[str, str], key: str) -> Path | None:
     return Path(value).expanduser() if value is not None else None
 
 
+def _read_csv(env: Mapping[str, str], key: str) -> tuple[str, ...]:
+    value = env.get(key)
+    if value is None or not value.strip():
+        return ()
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
 def _read_int(env: Mapping[str, str], key: str, default: int) -> int:
     value = env.get(key)
 
@@ -133,6 +140,8 @@ class KiloSettings:
     workspace_root: Path | None
     default_timeout_seconds: int
     dry_run: bool
+    allowed_repos: tuple[str, ...]
+    max_output_bytes: int
 
 
 @dataclass(frozen=True)
@@ -175,6 +184,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     kilo_default_timeout_seconds = _read_int(
         environment, "KILO_DEFAULT_TIMEOUT_SECONDS", 300
     )
+    kilo_dry_run = _read_bool(environment, "KILO_DRY_RUN", True)
+    kilo_allowed_repos = _read_csv(environment, "KILO_ALLOWED_REPOS")
+    kilo_max_output_bytes = _read_int(environment, "KILO_MAX_OUTPUT_BYTES", 32768)
 
     if kilo_enabled:
         if kilo_cli_path is None:
@@ -254,7 +266,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             cli_path=kilo_cli_path,
             workspace_root=kilo_workspace_root,
             default_timeout_seconds=kilo_default_timeout_seconds,
-            dry_run=_read_bool(environment, "KILO_DRY_RUN", True),
+            dry_run=kilo_dry_run,
+            allowed_repos=kilo_allowed_repos,
+            max_output_bytes=kilo_max_output_bytes,
         ),
     )
 

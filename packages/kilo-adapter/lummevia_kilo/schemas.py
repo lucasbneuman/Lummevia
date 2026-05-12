@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,6 +25,43 @@ class KiloExecutionStatus(str, Enum):
     FAILED = "FAILED"
     RETRYING = "RETRYING"
     CANCELLED = "CANCELLED"
+
+
+class KiloRuntimeSettings(KiloAdapterSchema):
+    enabled: bool = False
+    dry_run: bool = True
+    cli_path: Path | None = None
+    workspace_root: Path | None = None
+    default_timeout_seconds: int = Field(default=300, ge=1)
+    allowed_repos: tuple[str, ...] = Field(default_factory=tuple)
+    max_output_bytes: int = Field(default=32768, ge=1)
+
+
+class KiloSafetyCheckResult(KiloAdapterSchema):
+    allowed: bool
+    status: str = Field(min_length=1)
+    reason: str | None = None
+    repo_name: str | None = None
+    normalized_repo_path: str | None = None
+    workspace_root: str | None = None
+
+
+class KiloPreparedWorkspace(KiloAdapterSchema):
+    workspace_path: Path
+    source_repo_path: Path | None = None
+    source_repo_readonly: bool = True
+
+
+class KiloSubprocessResult(KiloAdapterSchema):
+    exit_code: int
+    stdout_preview: str = ""
+    stderr_preview: str = ""
+    stdout_bytes: int = Field(default=0, ge=0)
+    stderr_bytes: int = Field(default=0, ge=0)
+    duration_ms: int = Field(default=0, ge=0)
+    timed_out: bool = False
+    command_preview: str = Field(min_length=1)
+    workspace_path: str = Field(min_length=1)
 
 
 class KiloRetryPolicy(KiloAdapterSchema):
