@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from lummevia_core import AgentRole, ExecutionPackage, TaskPlan, WorkflowRun, WorkflowRunStatus
 from lummevia_kilo import resolve_kilo_mode
+from lummevia_kilo import KiloExecutionClient
 from lummevia_resources import (
     ResourceLockStatus,
     ResourceRegistry,
@@ -12,12 +13,23 @@ from lummevia_resources import (
 from lummevia_runtime.nodes.dev import dev_implementation_node
 from lummevia_runtime.nodes.po import po_task_packages_node
 from lummevia_runtime.nodes.qa import qa_validation_node
+from lummevia_runtime import DevelopmentRuntime
 from lummevia_runtime.state import RuntimeArtifacts, RuntimeState
 from lummevia_sessions import SessionRegistry, SessionStatus
 from main import app
 
 
 client = TestClient(app)
+
+
+class RecordingAllocationKiloClient(KiloExecutionClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.requests = []
+
+    def execute(self, request):
+        self.requests.append(request)
+        return super().execute(request)
 
 
 def test_resource_registry_acquires_blocks_duplicates_and_releases() -> None:
@@ -115,6 +127,8 @@ def test_runtime_assigns_workspace_and_session_metadata_to_active_task() -> None
     assert running_or_completed["metadata"]["branch_name"].startswith("lummevia/")
     assert "worktree_path" in running_or_completed["metadata"]
     assert running_or_completed["metadata"]["lock_ids"]
+    assert running_or_completed["metadata"]["allocation_id"].startswith("allocation-")
+    assert running_or_completed["metadata"]["allocation_status"] == "GRANTED"
 
     session = SessionRegistry.default().get_session(state["metadata"]["current_session_id"])
     assert session is not None
@@ -123,6 +137,10 @@ def test_runtime_assigns_workspace_and_session_metadata_to_active_task() -> None
     assert session.worktree_path == state["metadata"]["worktree_path"]
     assert session.lock_ids == state["metadata"]["lock_ids"]
     assert session.status == SessionStatus.COMPLETED
+    assert session.metadata["allocation_id"].startswith("allocation-")
+    assert session.metadata["allocation_status"] == "GRANTED"
+    assert session.metadata["capacity_id"]
+    assert session.metadata["allocated_resources"]
 
     task_bound_results = [
         result
@@ -134,6 +152,24 @@ def test_runtime_assigns_workspace_and_session_metadata_to_active_task() -> None
     assert all(result["metadata"]["branch_name"] == state["metadata"]["branch_name"] for result in task_bound_results)
     assert all(result["metadata"]["worktree_path"] == state["metadata"]["worktree_path"] for result in task_bound_results)
     assert all(result["metadata"]["lock_ids"] == state["metadata"]["lock_ids"] for result in task_bound_results)
+    assert all(result["metadata"]["allocation_id"].startswith("allocation-") for result in task_bound_results)
+    assert all(result["metadata"]["allocation_status"] == "GRANTED" for result in task_bound_results)
+    assert all(result["metadata"]["capacity_id"] for result in task_bound_results)
+    assert all(result["metadata"]["allocated_resources"] for result in task_bound_results)
+
+
+def test_runtime_requests_allocation_before_kilo_execution() -> None:
+    kilo_client = RecordingAllocationKiloClient()
+    runtime = DevelopmentRuntime(kilo_client=kilo_client)
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-901A")
+
+    assert state.run.status.value == "COMPLETED"
+    assert kilo_client.requests
+    assert all(request.metadata["allocation_id"].startswith("allocation-") for request in kilo_client.requests)
+    assert all(request.metadata["allocation_status"] == "GRANTED" for request in kilo_client.requests)
+    assert all(request.metadata["capacity_id"] for request in kilo_client.requests)
+    assert all(request.metadata["allocated_resources"] for request in kilo_client.requests)
 
 
 def test_qa_fail_keeps_workspace_active_and_session_waiting_review() -> None:

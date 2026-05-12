@@ -128,6 +128,16 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        allocation_id = state.metadata.get("allocation_id")
+        if allocation_id is not None:
+            attributes["allocation_id"] = str(allocation_id)
+        allocation_status = state.metadata.get("allocation_status")
+        if allocation_status is not None:
+            attributes["allocation_status"] = str(allocation_status)
+        for key in ("capacity_used_slots", "capacity_max_slots", "allocated_resources_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         queue_id = state.metadata.get("queue_id")
         if queue_id is not None:
             attributes["queue_id"] = str(queue_id)
@@ -196,6 +206,20 @@ class PhoenixRuntimeObserver(RuntimeObserver):
                 attributes["worktree_path"] = str(kilo_step["worktree_path"])
             if kilo_step.get("workspace_status") is not None:
                 attributes["workspace_status"] = str(kilo_step["workspace_status"])
+            if kilo_step.get("allocation_id") is not None:
+                attributes["allocation_id"] = str(kilo_step["allocation_id"])
+            if kilo_step.get("allocation_status") is not None:
+                attributes["allocation_status"] = str(kilo_step["allocation_status"])
+            if kilo_step.get("capacity_id") is not None:
+                attributes["capacity_id"] = str(kilo_step["capacity_id"])
+            if kilo_step.get("capacity_used_slots") is not None:
+                attributes["capacity_used_slots"] = int(kilo_step["capacity_used_slots"])
+            if kilo_step.get("capacity_max_slots") is not None:
+                attributes["capacity_max_slots"] = int(kilo_step["capacity_max_slots"])
+            if kilo_step.get("allocated_resources_count") is not None:
+                attributes["allocated_resources_count"] = int(
+                    kilo_step["allocated_resources_count"]
+                )
         return attributes
 
     def _extract_review_metadata(

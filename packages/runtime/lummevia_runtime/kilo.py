@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from lummevia_core import AgentRole, TaskPackage
+from lummevia_capabilities import AllocationStatus
 from lummevia_kilo import (
     KiloExecutionClient,
     KiloExecutionRecord,
@@ -12,6 +13,12 @@ from lummevia_kilo import (
     resolve_kilo_mode,
 )
 
+from lummevia_runtime.capabilities import (
+    build_allocation_metadata_for_kilo,
+    mark_task_waiting_for_allocation,
+    release_step_allocation,
+    request_step_allocation,
+)
 from lummevia_runtime.sessions import record_kilo_execution_for_session
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.queue import build_queue_metadata_for_kilo
@@ -50,6 +57,27 @@ def execute_kilo_step(
 ) -> dict[str, Any]:
     mode = resolve_kilo_mode(role)
     session_id = state.metadata.get("current_session_id")
+    allocation = request_step_allocation(
+        state,
+        step_name=step_name,
+        role=role,
+        mode=mode,
+        task_package=task_package,
+    )
+    if allocation.status != AllocationStatus.GRANTED:
+        mark_task_waiting_for_allocation(state, allocation=allocation)
+        state.metadata.setdefault("kilo_execution_skipped", {})[step_name] = {
+            "task_id": task_package.task_id,
+            "role": role.value,
+            "mode": mode.value,
+            "allocation_id": allocation.allocation_id,
+            "allocation_status": allocation.status.value,
+            "allocation_reason": allocation.reason,
+        }
+        return {
+            "skipped": True,
+            "allocation": allocation.model_dump(mode="json"),
+        }
     request = build_kilo_execution_request(
         run_id=state.run.run_id,
         session_id=session_id if isinstance(session_id, str) else None,
@@ -62,55 +90,66 @@ def execute_kilo_step(
             "task_id": task_package.task_id,
             "loop_count": state.loop_count,
             **build_queue_metadata_for_kilo(state, task_package=task_package),
+            **build_allocation_metadata_for_kilo(state),
             **(metadata or {}),
         },
     )
-    result = client.execute(request)
-    record = KiloExecutionRecord(
-        execution_id=result.execution_id,
-        session_id=request.session_id,
-        role=role,
-        mode=mode,
-        task_id=task_package.task_id,
-        status=result.status,
-        final_status=result.final_status,
-        retry_count=result.retry_count,
-        attempts=result.attempts,
-        lifecycle=result.lifecycle,
-        error=result.error,
-    )
-    state.kilo_executions.append(record)
-    state.metadata.setdefault("kilo_executions", []).append(record.model_dump(mode="json"))
-    state.metadata.setdefault("kilo_execution_results", {})[result.execution_id] = (
-        result.model_dump(mode="json")
-    )
-    state.metadata.setdefault("kilo_execution_by_step", {})[step_name] = {
-        "execution_id": result.execution_id,
-        "session_id": request.session_id,
-        "role": role.value,
-        "kilo_mode": mode.value,
-        "task_id": task_package.task_id,
-        "queue_id": result.metadata.get("queue_id"),
-        "queue_item_id": result.metadata.get("queue_item_id"),
-        "workspace_id": result.metadata.get("workspace_id"),
-        "branch_name": result.metadata.get("branch_name"),
-        "worktree_path": result.metadata.get("worktree_path"),
-        "lock_ids": result.metadata.get("lock_ids", []),
-        "workspace_status": result.metadata.get("workspace_status"),
-        "kilo_status": result.status.value,
-        "attempts_count": len(result.attempts),
-        "attempts": [attempt.model_dump(mode="json") for attempt in result.attempts],
-        "retry_count": result.retry_count,
-        "final_status": result.final_status.value,
-        "status": result.status.value,
-        "error": result.error,
-    }
-    if request.session_id is not None:
-        record_kilo_execution_for_session(
-            state,
-            step_name=step_name,
+    try:
+        result = client.execute(request)
+        record = KiloExecutionRecord(
+            execution_id=result.execution_id,
+            session_id=request.session_id,
             role=role,
             mode=mode,
-            result=KiloExecutionResult.model_validate(result.model_dump(mode="json")),
+            task_id=task_package.task_id,
+            status=result.status,
+            final_status=result.final_status,
+            retry_count=result.retry_count,
+            attempts=result.attempts,
+            lifecycle=result.lifecycle,
+            error=result.error,
         )
-    return result.model_dump(mode="json")
+        state.kilo_executions.append(record)
+        state.metadata.setdefault("kilo_executions", []).append(record.model_dump(mode="json"))
+        state.metadata.setdefault("kilo_execution_results", {})[result.execution_id] = (
+            result.model_dump(mode="json")
+        )
+        state.metadata.setdefault("kilo_execution_by_step", {})[step_name] = {
+            "execution_id": result.execution_id,
+            "session_id": request.session_id,
+            "role": role.value,
+            "kilo_mode": mode.value,
+            "task_id": task_package.task_id,
+            "queue_id": result.metadata.get("queue_id"),
+            "queue_item_id": result.metadata.get("queue_item_id"),
+            "workspace_id": result.metadata.get("workspace_id"),
+            "branch_name": result.metadata.get("branch_name"),
+            "worktree_path": result.metadata.get("worktree_path"),
+            "lock_ids": result.metadata.get("lock_ids", []),
+            "workspace_status": result.metadata.get("workspace_status"),
+            "allocation_id": result.metadata.get("allocation_id"),
+            "allocation_status": result.metadata.get("allocation_status"),
+            "capacity_id": result.metadata.get("capacity_id"),
+            "capacity_used_slots": result.metadata.get("capacity_used_slots"),
+            "capacity_max_slots": result.metadata.get("capacity_max_slots"),
+            "allocated_resources": result.metadata.get("allocated_resources", []),
+            "allocated_resources_count": result.metadata.get("allocated_resources_count", 0),
+            "kilo_status": result.status.value,
+            "attempts_count": len(result.attempts),
+            "attempts": [attempt.model_dump(mode="json") for attempt in result.attempts],
+            "retry_count": result.retry_count,
+            "final_status": result.final_status.value,
+            "status": result.status.value,
+            "error": result.error,
+        }
+        if request.session_id is not None:
+            record_kilo_execution_for_session(
+                state,
+                step_name=step_name,
+                role=role,
+                mode=mode,
+                result=KiloExecutionResult.model_validate(result.model_dump(mode="json")),
+            )
+        return result.model_dump(mode="json")
+    finally:
+        release_step_allocation(state, allocation_id=allocation.allocation_id)

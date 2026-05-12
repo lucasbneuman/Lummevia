@@ -170,6 +170,11 @@ def test_queue_endpoints_list_queue_and_ready_items() -> None:
     get_response = client.get(f"/queues/{queue_id}")
     assert get_response.status_code == 200
     assert get_response.json()["queue_id"] == queue_id
+    assert any(
+        item["metadata"]["allocation_status"] == "GRANTED"
+        for item in get_response.json()["items"]
+        if item["queue_item_id"] == runtime_response.json()["metadata"]["current_queue_item_id"]
+    )
 
     ready_response = client.get(f"/queues/{queue_id}/ready")
     assert ready_response.status_code == 200

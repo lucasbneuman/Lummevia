@@ -44,6 +44,7 @@ SESSIONS_PACKAGE_DIR = ROOT_DIR / "packages" / "sessions"
 TIMELINE_PACKAGE_DIR = ROOT_DIR / "packages" / "timeline"
 QUEUE_PACKAGE_DIR = ROOT_DIR / "packages" / "queue"
 RESOURCES_PACKAGE_DIR = ROOT_DIR / "packages" / "resources"
+CAPABILITIES_PACKAGE_DIR = ROOT_DIR / "packages" / "capabilities"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -59,6 +60,8 @@ if str(QUEUE_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(QUEUE_PACKAGE_DIR))
 if str(RESOURCES_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(RESOURCES_PACKAGE_DIR))
+if str(CAPABILITIES_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(CAPABILITIES_PACKAGE_DIR))
 
 
 @pytest.fixture(autouse=True)
@@ -67,6 +70,7 @@ def reset_default_registries():
     from lummevia_evaluations import PromptBaselineRegistry
     from lummevia_memory import ProjectMemoryRegistry
     from lummevia_queue import TaskQueueRegistry
+    from lummevia_capabilities import CapabilityRegistry
     from lummevia_resources import ResourceRegistry
     from lummevia_reviews import HumanReviewRegistry
     from lummevia_sessions import SessionRegistry
@@ -76,6 +80,7 @@ def reset_default_registries():
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     TaskQueueRegistry.default().reset()
+    CapabilityRegistry.default().reset()
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()
@@ -85,6 +90,7 @@ def reset_default_registries():
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     TaskQueueRegistry.default().reset()
+    CapabilityRegistry.default().reset()
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()

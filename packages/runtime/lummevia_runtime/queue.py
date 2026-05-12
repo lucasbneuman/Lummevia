@@ -53,6 +53,9 @@ def initialize_task_queue(
                 mode=resolve_kilo_mode(AgentRole.DEV),
                 metadata={
                     "title": task_package.title,
+                    "allocation_id": None,
+                    "allocation_status": None,
+                    "allocation_reason": None,
                 },
             ),
         )
@@ -240,6 +243,31 @@ def build_queue_metadata_for_kilo(
             queue_item.get("metadata", {}).get("workspace_status")
             if isinstance(queue_item, dict)
             else state.metadata.get("workspace_status")
+        ),
+        "allocation_id": (
+            queue_item.get("metadata", {}).get("allocation_id")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("allocation_id")
+        ),
+        "allocation_status": (
+            queue_item.get("metadata", {}).get("allocation_status")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("allocation_status")
+        ),
+        "allocation_reason": (
+            queue_item.get("metadata", {}).get("allocation_reason")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("allocation_reason")
+        ),
+        "capacity_id": (
+            queue_item.get("metadata", {}).get("capacity_id")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("capacity_id")
+        ),
+        "allocated_resources": (
+            queue_item.get("metadata", {}).get("allocated_resources", [])
+            if isinstance(queue_item, dict)
+            else state.metadata.get("allocated_resources", [])
         ),
     }
 

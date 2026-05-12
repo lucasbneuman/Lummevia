@@ -30,6 +30,14 @@ def build_kilo_execution_request(
     request_metadata.setdefault("worktree_path", None)
     request_metadata.setdefault("lock_ids", [])
     request_metadata.setdefault("workspace_status", None)
+    request_metadata.setdefault("allocation_id", None)
+    request_metadata.setdefault("allocation_status", None)
+    request_metadata.setdefault("allocation_reason", None)
+    request_metadata.setdefault("capacity_id", None)
+    request_metadata.setdefault("capacity_used_slots", None)
+    request_metadata.setdefault("capacity_max_slots", None)
+    request_metadata.setdefault("allocated_resources", [])
+    request_metadata.setdefault("allocated_resources_count", 0)
     return KiloExecutionRequest(
         run_id=run_id,
         session_id=session_id,

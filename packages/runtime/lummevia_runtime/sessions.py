@@ -66,6 +66,10 @@ def create_task_execution_session(
             "branch_name": state.metadata.get("branch_name"),
             "worktree_path": state.metadata.get("worktree_path"),
             "lock_ids": state.metadata.get("lock_ids", []),
+            "allocation_id": state.metadata.get("allocation_id"),
+            "allocation_status": state.metadata.get("allocation_status"),
+            "capacity_id": state.metadata.get("capacity_id"),
+            "allocated_resources": state.metadata.get("allocated_resources", []),
         },
     )
     session = registry.add_event(
@@ -83,6 +87,10 @@ def create_task_execution_session(
             "branch_name": state.metadata.get("branch_name"),
             "worktree_path": state.metadata.get("worktree_path"),
             "lock_ids": state.metadata.get("lock_ids", []),
+            "allocation_id": state.metadata.get("allocation_id"),
+            "allocation_status": state.metadata.get("allocation_status"),
+            "capacity_id": state.metadata.get("capacity_id"),
+            "allocated_resources": state.metadata.get("allocated_resources", []),
         },
     )
     session = registry.add_output(
@@ -200,6 +208,10 @@ def record_kilo_execution_for_session(
         metadata={
             "current_step": step_name,
             "last_execution_id": result.execution_id,
+            "allocation_id": result.metadata.get("allocation_id"),
+            "allocation_status": result.metadata.get("allocation_status"),
+            "capacity_id": result.metadata.get("capacity_id"),
+            "allocated_resources": result.metadata.get("allocated_resources", []),
         },
     )
     sync_session_to_runtime_metadata(state, session)
@@ -291,4 +303,14 @@ def sync_session_to_runtime_metadata(
     state.metadata["branch_name"] = session.branch_name
     state.metadata["worktree_path"] = session.worktree_path
     state.metadata["lock_ids"] = session.lock_ids
+    if "allocation_id" in session.metadata:
+        state.metadata["allocation_id"] = session.metadata.get("allocation_id")
+    if "allocation_status" in session.metadata:
+        state.metadata["allocation_status"] = session.metadata.get("allocation_status")
+    if "capacity_id" in session.metadata:
+        state.metadata["capacity_id"] = session.metadata.get("capacity_id")
+    if "allocated_resources" in session.metadata:
+        allocated_resources = session.metadata.get("allocated_resources", [])
+        state.metadata["allocated_resources"] = allocated_resources
+        state.metadata["allocated_resources_count"] = len(allocated_resources)
     sync_timeline_for_state(state)

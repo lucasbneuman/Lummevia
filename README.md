@@ -43,6 +43,13 @@ packages/
       dev.py
       qa.py
       qc.py
+  capabilities/
+    lummevia_capabilities/
+      __init__.py
+      schemas.py
+      registry.py
+      allocator.py
+      policies.py
   model-router/
     model_router/
       __init__.py
@@ -478,6 +485,49 @@ Fuera de alcance deliberado por ahora:
 - locking distribuido
 - git real o multiples PRs reales
 
+### Capabilities y Resource Allocation
+
+`packages/capabilities/lummevia_capabilities/` agrega la primera capa de capabilities, capacity registry y allocation policy para controlar concurrencia antes de permitir ejecucion paralela real.
+
+Incluye:
+
+- `AgentCapability`
+- `ModelCapability`
+- `ExecutionCapacity`
+- `AllocationRequest`
+- `AllocationResult`
+- `AllocationStatus` con `GRANTED`, `WAITING` y `DENIED`
+- `CapabilityRegistry` en memoria con registro de capabilities, capacities y allocations activos
+- `CapabilityAllocator` como facade simple para pedir y liberar allocations
+- `evaluate_allocation_request(...)` con politica inicial deterministica
+
+Semantica actual:
+
+- cada rol operativo (`PM`, `PO`, `DEV`, `QA`, `QC`) arranca con `max_concurrent_tasks=1`
+- cada modelo resuelto por `model-router` arranca con `max_concurrent_requests=1`
+- antes de ejecutar un paso Kilo fake, el runtime pide allocation para rol y modelo
+- si hay slots disponibles, la request queda `GRANTED`
+- si no hay slots, queda `WAITING`
+- si el capability no existe o el modo no aplica al rol, queda `DENIED`
+- la metadata de allocation se propaga a queue, sessions, requests Kilo y Phoenix
+- al finalizar cada ejecucion Kilo fake, el allocation se libera
+
+Guardrails actuales:
+
+- no existe paralelismo real aunque ya exista capacity metadata
+- no hay quotas persistidas en DB
+- no hay billing real ni rate limit externo real
+- no hay autoscaling ni control distribuido
+- el sistema sigue ejecutando un solo `TaskQueueItem` activo por queue como MVP
+
+Roadmap posterior de esta capa:
+
+- politicas de costo mas finas por provider y proyecto
+- fairness entre colas o proyectos
+- quotas persistidas cuando exista storage dedicado
+- asignacion real multi-worker cuando el runtime deje de ser single-runner
+- integracion futura con providers reales sin romper estos contratos
+
 ### Task Execution Sessions
 
 `packages/sessions/lummevia_sessions/` agrega la primera capa operacional para representar el ciclo de trabajo sobre un `TaskPackage` sin abrir todavia una terminal viva ni lanzar workers reales.
@@ -812,6 +862,8 @@ El runtime actual:
 
 En esta etapa, DEV y QA trabajan sobre el primer `TaskPackage` simulado como MVP, mientras el estado runtime conserva todos los `TaskPackages` generados y una `TaskQueue` completa con `queue_id`, `queue_item_id`, counts de `ready`, `blocked` y `completed`, y snapshots serializados para timeline y observabilidad. El estado tambien registra `kilo_executions` con `execution_id`, `role`, `mode`, `task_id`, `status`, `attempts`, `retry_count`, `final_status` y `error` cuando aplica.
 
+Ademas, antes de cada ejecucion Kilo fake, el runtime registra una `AllocationRequest` y conserva metadata de `allocation_id`, `allocation_status`, `capacity_id`, `capacity_used_slots`, `capacity_max_slots` y `allocated_resources` para trazabilidad de capacidad.
+
 Limitaciones actuales:
 
 - no hay llamadas reales a modelos
@@ -853,6 +905,7 @@ La instrumentacion actual de Phoenix:
 - registra metadata de `run_id`, `workflow`, `project`, `issue_id`, `environment`, `current_step`, `status` y `loop_count`
 - agrega metadata de session: `session_id`, `session_status`, `session_role`, `session_attempts`, `output_count` y `event_count`
 - agrega metadata de queue: `queue_id`, `queue_size`, `ready_count`, `blocked_count`, `completed_count` y `current_queue_item_id`
+- agrega metadata de allocation: `allocation_id`, `allocation_status`, `capacity_used_slots`, `capacity_max_slots` y `allocated_resources_count`
 - agrega metadata de project memory: `memory_records_created`, `memory_categories` y `project_memory_count`
 - en el dry-run de `PM` tambien registra `template_id`, `template_version`, `prompt_hash`, `evaluation_status` y `evaluation_score`
 - agrega metadata de review cuando existe: `review_id`, `review_type`, `review_status` y `review_decision`
@@ -968,6 +1021,10 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /memory/projects/{project}/tags/{tag}`
 - `GET /sessions`
 - `GET /sessions/{session_id}`
+- `GET /capabilities/agents`
+- `GET /capabilities/models`
+- `GET /capabilities/capacity`
+- `GET /capabilities/allocations`
 - `GET /queues`
 - `GET /queues/{queue_id}`
 - `GET /queues/{queue_id}/ready`
