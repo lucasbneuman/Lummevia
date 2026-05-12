@@ -100,6 +100,14 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "status": state.run.status.value,
             "loop_count": state.loop_count,
         }
+        for key in ("thread_id", "conversation_status"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = value
+        for key in ("iteration_count", "message_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         review_metadata = self._extract_review_metadata(state, current_step=current_step)
         attributes.update(review_metadata)
         kilo_step = (

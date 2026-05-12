@@ -8,7 +8,6 @@ from app.api.routes import runtime as runtime_routes
 from app.api.router import api_router
 from app.core.config import settings
 from lummevia_runtime import (
-    DevelopmentRuntime,
     SqlAlchemyWorkflowRunRepository,
     create_database_engine,
     create_session_factory,
@@ -27,7 +26,8 @@ async def lifespan(_: FastAPI):
         create_tables(engine)
         repository = SqlAlchemyWorkflowRunRepository(create_session_factory(engine))
         runtime_routes.runtime_repository = repository
-        runtime_routes.runtime_service = DevelopmentRuntime(repository=repository)
+        runtime_routes.runtime_service = runtime_routes._build_runtime_service()
+        runtime_routes.runtime_service.repository = repository
 
     yield
 

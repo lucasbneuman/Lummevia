@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from lummevia_agents import PMAgent
+from lummevia_conversations import (
+    AuthorType,
+    ConversationRegistry,
+    ConversationStatus,
+)
 from lummevia_core import AgentRole
 from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 
@@ -20,22 +26,109 @@ def founder_input_node(state: RuntimeState) -> RuntimeState:
     return complete_step(state, step_name=step_name, role=AgentRole.FOUNDER)
 
 
-def founder_pm_conversation_node(state: RuntimeState) -> RuntimeState:
+def founder_pm_conversation_node(
+    state: RuntimeState,
+    *,
+    agent: PMAgent | None = None,
+) -> RuntimeState:
     step_name = "founder_pm_conversation"
     state = start_step(state, step_name=step_name, role=AgentRole.PM)
+    registry = ConversationRegistry.default()
+    pm_agent = agent or PMAgent()
+    founder_input = state.run.metadata.get("founder_input", {})
+    founder_message = founder_input.get(
+        "summary",
+        f"Initial founder intent captured for issue {state.run.issue_id}.",
+    )
+    thread = registry.create_thread(
+        topic=f"Founder strategic iteration for {state.run.issue_id}",
+        project=state.run.project,
+        issue_id=state.run.issue_id,
+        metadata={
+            "run_id": state.run.run_id,
+            "workflow": state.run.workflow_name,
+        },
+    )
+    thread = registry.add_message(
+        thread.thread_id,
+        role="user",
+        author_type=AuthorType.FOUNDER,
+        content=founder_message,
+        metadata={"iteration": 1, "kind": "initial_intent"},
+    )
+    pm_response = pm_agent.execute_model(
+        (
+            "Founder intent:\n"
+            f"{founder_message}\n\n"
+            "Respond as PM with a short strategic alignment summary, "
+            "proposed scope, and one concise next-step recommendation."
+        ),
+        project=state.run.project,
+        metadata={
+            "run_id": state.run.run_id,
+            "step_name": step_name,
+            "conversation_thread_id": thread.thread_id,
+            "conversation_mode": "founder_pm_iteration",
+        },
+    )
+    thread = registry.add_message(
+        thread.thread_id,
+        role="assistant",
+        author_type=AuthorType.PM,
+        content=pm_response.output,
+        metadata={
+            "iteration": 1,
+            "provider": pm_response.provider,
+            "model": pm_response.model,
+            "effective_provider": pm_response.effective_provider,
+            "effective_model": pm_response.effective_model,
+            "fallback_used": pm_response.fallback_used,
+        },
+    )
+    founder_feedback = (
+        "Founder feedback: proceed with a narrowed first iteration and keep the "
+        "brief in draft until explicit approval."
+    )
+    thread = registry.add_message(
+        thread.thread_id,
+        role="user",
+        author_type=AuthorType.FOUNDER,
+        content=founder_feedback,
+        metadata={"iteration": 1, "kind": "feedback"},
+    )
+
     state.run.metadata["founder_pm_conversation"] = {
         "status": "completed",
         "summary": (
-            "Founder and PM iterated in a simulated chat loop before drafting "
+            "Founder and PM completed one strategic iteration before drafting "
             "the BusinessBrief."
         ),
-        "iterations": 1,
+        "thread_id": thread.thread_id,
+        "conversation_status": thread.status.value,
+        "iteration_count": 1,
+        "message_count": len(thread.messages),
+        "provider": pm_response.provider,
+        "model": pm_response.model,
+        "effective_provider": pm_response.effective_provider,
+        "effective_model": pm_response.effective_model,
+        "fallback_used": pm_response.fallback_used,
     }
+    state.run.metadata.setdefault("persistence", {})["thread_id"] = thread.thread_id
+    state.metadata["thread_id"] = thread.thread_id
+    state.metadata["conversation_status"] = thread.status.value
+    state.metadata["iteration_count"] = 1
+    state.metadata["message_count"] = len(thread.messages)
+    state.metadata["conversation_thread"] = thread.model_dump(mode="json")
     return complete_step(
         state,
         step_name=step_name,
         role=AgentRole.PM,
-        metadata={"conversation_loop": True, "iterations": 1},
+        metadata={
+            "conversation_loop": True,
+            "iterations": 1,
+            "thread_id": thread.thread_id,
+            "message_count": len(thread.messages),
+        },
     )
 
 
@@ -45,6 +138,18 @@ def founder_business_approval_node(state: RuntimeState) -> RuntimeState:
     business_brief = state.artifacts.business_brief
     if business_brief is None:
         raise ValueError("BusinessBrief must exist before founder approval.")
+    thread_id = str(state.metadata.get("thread_id", "")).strip()
+    if not thread_id:
+        raise ValueError("Conversation thread must exist before founder approval.")
+    conversation_registry = ConversationRegistry.default()
+    thread = conversation_registry.update_thread_status(
+        thread_id,
+        ConversationStatus.APPROVED,
+        metadata={
+            "business_brief_issue_id": business_brief.issue_id,
+            "business_brief_status": "approved",
+        },
+    )
     review_registry = HumanReviewRegistry.default()
     review = review_registry.create_review(
         review_type=ReviewType.BUSINESS_BRIEF,
@@ -75,13 +180,22 @@ def founder_business_approval_node(state: RuntimeState) -> RuntimeState:
     state.run.metadata["founder_business_approval"] = {
         "approved": True,
         "approved_by": AgentRole.FOUNDER.value,
+        "thread_id": thread.thread_id,
+        "conversation_status": thread.status.value,
+        "message_count": len(thread.messages),
         "review_id": review.review_id,
         "review_type": review.review_type.value,
         "review_status": review.status.value,
         "review_decision": review.decision.value if review.decision is not None else None,
     }
+    state.run.metadata.setdefault("persistence", {})["thread_id"] = thread.thread_id
     state.metadata["founder_approved"] = True
     state.metadata["business_brief_status"] = "approved"
+    state.metadata["business_brief_thread_id"] = thread.thread_id
+    state.metadata["thread_id"] = thread.thread_id
+    state.metadata["conversation_status"] = thread.status.value
+    state.metadata["message_count"] = len(thread.messages)
+    state.metadata["conversation_thread"] = thread.model_dump(mode="json")
     state.metadata.setdefault("review_by_step", {})[step_name] = state.run.metadata[
         "founder_business_approval"
     ]

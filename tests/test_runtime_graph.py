@@ -34,6 +34,9 @@ def test_runtime_executes_complete_workflow() -> None:
     assert state.artifacts.business_brief is not None
     assert state.artifacts.business_brief.business_brief_status == "approved"
     assert state.artifacts.business_brief.founder_approved is True
+    assert state.metadata["thread_id"].startswith("thread-")
+    assert state.metadata["conversation_status"] == "APPROVED"
+    assert state.metadata["iteration_count"] == 1
     assert state.artifacts.execution_package is not None
     assert state.artifacts.task_plan is not None
     assert state.artifacts.task_packages
@@ -213,6 +216,23 @@ def test_runtime_registers_founder_conversation_and_approval_events() -> None:
         "STEP_COMPLETED",
     ]
     assert approval_events[-1].metadata["founder_approved"] is True
+    assert state.run.metadata["founder_pm_conversation"]["thread_id"].startswith("thread-")
+    assert state.run.metadata["founder_pm_conversation"]["iteration_count"] == 1
+    assert state.run.metadata["founder_pm_conversation"]["message_count"] >= 2
+    assert state.run.metadata["founder_business_approval"]["thread_id"].startswith("thread-")
+
+
+def test_runtime_founder_conversation_creates_pm_response_and_thread_metadata() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4E")
+    thread = state.metadata["conversation_thread"]
+
+    assert thread["thread_id"] == state.metadata["thread_id"]
+    assert thread["status"] == "APPROVED"
+    assert len(thread["messages"]) >= 2
+    assert thread["messages"][0]["author_type"] == "FOUNDER"
+    assert any(message["author_type"] == "PM" for message in thread["messages"])
 
 
 def test_dev_consumes_first_task_package_and_qa_validates_task_package() -> None:

@@ -39,3 +39,7 @@ def build_dry_run_model_executor(
             timeout_seconds=deepseek.timeout_seconds,
         )
     )
+
+
+def build_pm_conversation_model_executor(*, deepseek: DeepSeekSettings) -> ModelExecutor:
+    return build_dry_run_model_executor(AgentRole.PM, deepseek=deepseek)

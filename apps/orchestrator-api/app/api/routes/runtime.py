@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.model_execution import build_pm_conversation_model_executor
+from lummevia_agents import PMAgent
 from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
 from lummevia_runtime import (
     DevelopmentRuntime,
@@ -14,17 +16,32 @@ from lummevia_runtime.persistence.repository import WorkflowRunRepository
 
 router = APIRouter(prefix="/runtime", tags=["runtime"])
 
-runtime_service = DevelopmentRuntime(
-    observer=PhoenixRuntimeObserver(
-        PhoenixClient(
-            base_url=settings.phoenix.base_url,
-            enabled=settings.phoenix.enabled,
-            service_name=settings.app_name,
+
+def _build_runtime_service() -> DevelopmentRuntime:
+    try:
+        founder_pm_agent = PMAgent(
+            model_executor=build_pm_conversation_model_executor(
+                deepseek=settings.deepseek,
+            )
+        )
+    except ValueError:
+        founder_pm_agent = PMAgent()
+
+    return DevelopmentRuntime(
+        observer=PhoenixRuntimeObserver(
+            PhoenixClient(
+                base_url=settings.phoenix.base_url,
+                enabled=settings.phoenix.enabled,
+                service_name=settings.app_name,
+                environment=settings.app_env,
+            ),
             environment=settings.app_env,
         ),
-        environment=settings.app_env,
+        founder_pm_agent=founder_pm_agent,
     )
-)
+
+
+runtime_service = _build_runtime_service()
 runtime_repository: WorkflowRunRepository | None = None
 
 

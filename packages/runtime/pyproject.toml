@@ -13,6 +13,7 @@ dependencies = [
     "langchain-core==1.3.3",
     "sqlalchemy",
     "psycopg[binary]",
+    "lummevia-conversations",
     "lummevia-core",
     "lummevia-kilo-adapter",
     "lummevia-reviews",

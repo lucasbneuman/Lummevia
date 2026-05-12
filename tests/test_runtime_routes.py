@@ -29,6 +29,9 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["artifacts"]["business_brief"]["issue_id"] == "OS-100"
     assert body["artifacts"]["business_brief"]["business_brief_status"] == "approved"
     assert body["artifacts"]["business_brief"]["founder_approved"] is True
+    assert body["metadata"]["thread_id"].startswith("thread-")
+    assert body["metadata"]["conversation_status"] == "APPROVED"
+    assert body["metadata"]["iteration_count"] == 1
     assert body["artifacts"]["task_plan"]["issue_id"] == "OS-100"
     assert len(body["artifacts"]["task_packages"]) >= 2
     assert body["artifacts"]["current_task_package"]["task_id"].startswith("OS-100-T")
@@ -38,10 +41,13 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["artifacts"]["quality_approval"]["pr_ok"] is True
     assert body["artifacts"]["final_validation"]["approved"] is True
     assert body["run"]["events"]
+    assert body["run"]["metadata"]["founder_pm_conversation"]["thread_id"].startswith("thread-")
+    assert body["run"]["metadata"]["founder_pm_conversation"]["message_count"] >= 2
     assert body["run"]["metadata"]["founder_business_approval"]["review_id"]
     assert body["run"]["metadata"]["founder_business_approval"]["review_type"] == "BUSINESS_BRIEF"
     assert body["run"]["metadata"]["founder_business_approval"]["review_status"] == "COMPLETED"
     assert body["run"]["metadata"]["founder_business_approval"]["review_decision"] == "APPROVED"
+    assert body["run"]["metadata"]["founder_business_approval"]["thread_id"].startswith("thread-")
 
     github_pr_started_index = next(
         index

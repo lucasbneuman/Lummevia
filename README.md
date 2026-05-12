@@ -54,6 +54,11 @@ packages/
     lummevia_core/
       workflow.py
       workflow_steps.py
+  conversations/
+    lummevia_conversations/
+      __init__.py
+      schemas.py
+      registry.py
   evaluations/
     lummevia_evaluations/
       __init__.py
@@ -218,6 +223,37 @@ En esta etapa:
 - solo existe un dry-run controlado para `PM` que puede usar DeepSeek API directa cuando se habilita
 - `PO`, `DEV`, `QA` y `QC` siguen en fake
 - no hay integraciones externas productivas
+
+## Founder conversation memory
+
+`packages/conversations/lummevia_conversations/` agrega la primera capa stateful minima para la iteracion estrategica `Founder ↔ PM` antes de aprobar el `BusinessBrief`.
+
+Alcance actual:
+
+- define contratos para `ConversationMessage`, `ConversationThread`, `ConversationStatus` y `AuthorType`
+- mantiene un `ConversationRegistry` en memoria con `create_thread`, `add_message`, `get_thread`, `list_threads` y `close_thread`
+- permite un ciclo simple `Founder -> PM -> Founder feedback` dentro del runtime
+- asocia el `BusinessBrief` aprobado con `thread_id` via metadata runtime
+- expone endpoints `GET /conversations`, `GET /conversations/{thread_id}` y `POST /conversations/{thread_id}/message`
+- guarda solo `thread_id` en persistence runtime cuando esta habilitada
+- agrega metadata de conversacion a Phoenix: `thread_id`, `conversation_status`, `iteration_count`, `message_count`
+
+Lifecycle actual del thread:
+
+```text
+ACTIVE -> APPROVED -> CLOSED
+```
+
+Roadmap deliberadamente fuera de alcance en esta etapa:
+
+- chat UI
+- websocket realtime
+- auth real
+- vector DB o embeddings
+- memoria semantica avanzada
+- agentes conversacionales autonomos
+- colaboracion multi-user
+- integraciones Slack o Discord
 
 ### Prompt Pipeline
 

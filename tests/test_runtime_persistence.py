@@ -26,6 +26,8 @@ def test_repository_save_and_get_run(tmp_path: Path) -> None:
     assert recovered.run.run_id == state.run.run_id
     assert recovered.run.status == WorkflowRunStatus.COMPLETED
     assert recovered.artifacts.pull_request is not None
+    assert recovered.metadata["thread_id"].startswith("thread-")
+    assert recovered.run.metadata["persistence"]["thread_id"] == recovered.metadata["thread_id"]
 
 
 def test_repository_list_runs_returns_latest_first(tmp_path: Path) -> None:
@@ -44,4 +46,3 @@ def test_repository_list_runs_returns_latest_first(tmp_path: Path) -> None:
     runs = repository.list_runs(limit=50)
 
     assert [run.run.issue_id for run in runs[:2]] == ["OS-203", "OS-202"]
-

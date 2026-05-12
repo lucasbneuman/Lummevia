@@ -75,6 +75,7 @@ class DevelopmentRuntime:
         repository: WorkflowRunRepository | None = None,
         observer: RuntimeObserver | None = None,
         kilo_client: KiloExecutionClient | None = None,
+        founder_pm_agent: PMAgent | None = None,
     ) -> None:
         self.registry = registry or RuntimeRegistry()
         self.repository = repository
@@ -83,6 +84,7 @@ class DevelopmentRuntime:
         self.graph = build_development_graph(
             observer=self.observer,
             kilo_client=self.kilo_client,
+            founder_pm_agent=founder_pm_agent,
             pm_agent=PMAgent(),
             po_agent=POAgent(),
             dev_agent=DevAgent(),
@@ -109,6 +111,13 @@ class DevelopmentRuntime:
         self.registry.create(initial_state)
         with _observe_workflow_run(self.observer, initial_state):
             final_state = RuntimeState.model_validate(self.graph.invoke(initial_state))
+            initial_state.run = final_state.run
+            initial_state.current_role = final_state.current_role
+            initial_state.artifacts = final_state.artifacts
+            initial_state.kilo_executions = final_state.kilo_executions
+            initial_state.metadata = final_state.metadata
+            initial_state.loop_count = final_state.loop_count
+            initial_state.max_loop_count = final_state.max_loop_count
         self.registry.upsert(final_state)
 
         if self.repository is not None:
@@ -126,6 +135,7 @@ class DevelopmentRuntime:
 def build_development_graph(
     observer: RuntimeObserver | None = None,
     *,
+    founder_pm_agent: PMAgent | None = None,
     pm_agent: PMAgent | None = None,
     po_agent: POAgent | None = None,
     dev_agent: DevAgent | None = None,
@@ -134,6 +144,7 @@ def build_development_graph(
     kilo_client: KiloExecutionClient | None = None,
 ):
     runtime_observer = observer or NoopRuntimeObserver()
+    founder_pm_agent = founder_pm_agent or PMAgent()
     pm_agent = pm_agent or PMAgent()
     po_agent = po_agent or POAgent()
     dev_agent = dev_agent or DevAgent()
@@ -158,7 +169,7 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "founder_pm_conversation",
-            founder_pm_conversation_node,
+            partial(founder_pm_conversation_node, agent=founder_pm_agent),
         ),
     )
     graph.add_node(

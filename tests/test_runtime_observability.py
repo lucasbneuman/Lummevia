@@ -110,6 +110,10 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["workflow"] == "development_loop"
     assert workflow_span.attributes["environment"] == "test"
     assert workflow_span.attributes["status"] == "COMPLETED"
+    assert str(workflow_span.attributes["thread_id"]).startswith("thread-")
+    assert workflow_span.attributes["conversation_status"] == "APPROVED"
+    assert workflow_span.attributes["iteration_count"] == 1
+    assert workflow_span.attributes["message_count"] >= 2
 
     step_names = {span.name for span in exporter.spans}
     assert "step:dev_implementation" in step_names
@@ -157,6 +161,7 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert founder_review_span.attributes["review_status"] == "COMPLETED"
     assert founder_review_span.attributes["review_decision"] == "APPROVED"
     assert str(founder_review_span.attributes["review_id"]).startswith("review-")
+    assert str(founder_review_span.attributes["thread_id"]).startswith("thread-")
 
 
 def test_phoenix_runtime_observer_exports_kilo_retry_metadata_on_steps() -> None:

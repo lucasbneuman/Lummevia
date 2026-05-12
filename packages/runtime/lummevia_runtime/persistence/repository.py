@@ -27,7 +27,7 @@ class SqlAlchemyWorkflowRunRepository:
         self._session_factory = session_factory
 
     def save_run(self, state: RuntimeState) -> RuntimeState:
-        payload = state.model_dump(mode="json")
+        payload = self._build_persisted_payload(state)
 
         with self._session_factory() as session:
             record = session.get(WorkflowRunRecord, state.run.run_id)
@@ -54,6 +54,22 @@ class SqlAlchemyWorkflowRunRepository:
             session.commit()
 
         return state
+
+    def _build_persisted_payload(self, state: RuntimeState) -> dict[str, object]:
+        payload = state.model_dump(mode="json")
+        metadata = dict(payload.get("metadata", {}))
+        metadata.pop("conversation_thread", None)
+        payload["metadata"] = metadata
+        run_payload = dict(payload.get("run", {}))
+        run_metadata = dict(run_payload.get("metadata", {}))
+        persistence_metadata = dict(run_metadata.get("persistence", {}))
+        thread_id = metadata.get("thread_id")
+        if thread_id is not None:
+            persistence_metadata["thread_id"] = thread_id
+        run_metadata["persistence"] = persistence_metadata
+        run_payload["metadata"] = run_metadata
+        payload["run"] = run_payload
+        return payload
 
     def get_run(self, run_id: str) -> RuntimeState:
         with self._session_factory() as session:
