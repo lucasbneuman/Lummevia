@@ -119,6 +119,17 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = str(value)
+        timeline_event_count = state.metadata.get("timeline_event_count")
+        if timeline_event_count is not None:
+            attributes["timeline_event_count"] = int(timeline_event_count)
+        timeline_sources = state.metadata.get("timeline_sources")
+        if timeline_sources:
+            attributes["timeline_sources"] = ",".join(
+                str(source) for source in timeline_sources
+            )
+        replay_available = state.metadata.get("replay_available")
+        if replay_available is not None:
+            attributes["replay_available"] = bool(replay_available)
         memory_records_created = state.metadata.get("memory_records_created")
         if memory_records_created is not None:
             attributes["memory_records_created"] = int(memory_records_created)

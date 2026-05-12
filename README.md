@@ -81,6 +81,12 @@ packages/
       __init__.py
       schemas.py
       registry.py
+  timeline/
+    lummevia_timeline/
+      __init__.py
+      schemas.py
+      registry.py
+      builder.py
   datasets/
     lummevia_datasets/
       __init__.py
@@ -475,6 +481,44 @@ Fuera de alcance deliberado por ahora:
 - workers distribuidos
 - replay real de ejecucion
 - sandboxing real
+
+### Workflow Timelines
+
+`packages/timeline/lummevia_timeline/` agrega la primera capa de timeline historico y replay contractual para workflows sin introducir todavia replay ejecutable real.
+
+Incluye:
+
+- `TimelineEvent`
+- `TimelineSourceType` con `WORKFLOW`, `CONVERSATION`, `SESSION`, `REVIEW`, `MEMORY` y `SYSTEM`
+- `WorkflowTimeline`
+- `TimelineRegistry` en memoria con `create_timeline()`, `add_event()`, `get_timeline()` y `list_timelines()`
+- `build_workflow_timeline(...)` para reconstruir una timeline cronologica desde workflow events, conversaciones, sessions, reviews y memory
+
+Integracion actual:
+
+- el runtime sincroniza una `WorkflowTimeline` reconstruida durante la ejecucion
+- `founder_pm_conversation` aporta mensajes y estado del thread
+- `qa_validation` aporta reviews pendientes/completadas y transiciones de session
+- las reviews de founder approval quedan reflejadas como eventos historicos
+- project memory y sessions quedan agregadas a la timeline del `workflow_run`
+- Phoenix recibe `timeline_event_count`, `timeline_sources` y `replay_available=true`
+- los endpoints `GET /timelines` y `GET /timelines/{workflow_run_id}` devuelven la timeline reconstruida
+
+Arquitectura de replay actual:
+
+- replay disponible solo como reconstruccion historica de eventos
+- no hay replay de ejecucion real
+- no hay time travel
+- no hay event sourcing completo
+- no hay streaming realtime
+
+Roadmap futuro deliberado:
+
+- replay navegable por step y source
+- snapshots mas ricos para reconstruccion post-persistencia
+- filtros por source type y step
+- persistencia durable de timelines
+- herramientas de diagnostico y auditoria sobre la historia del workflow
 
 ### Prompt Regression Datasets
 
@@ -876,6 +920,8 @@ Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para u
 - `GET /memory/projects/{project}/tags/{tag}`
 - `GET /sessions`
 - `GET /sessions/{session_id}`
+- `GET /timelines`
+- `GET /timelines/{workflow_run_id}`
 - `POST /runtime/development/run`
 - `GET /runtime/development/run/{run_id}`
 - `GET /workflows/development`

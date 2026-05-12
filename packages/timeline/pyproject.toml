@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lummevia-timeline"
+version = "0.1.0"
+description = "Workflow timeline contracts and reconstruction helpers for Lummevia OS."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic==2.11.4",
+    "lummevia-conversations",
+    "lummevia-core",
+    "lummevia-memory",
+    "lummevia-reviews",
+    "lummevia-sessions",
+]
+
+[tool.setuptools]
+packages = ["lummevia_timeline"]

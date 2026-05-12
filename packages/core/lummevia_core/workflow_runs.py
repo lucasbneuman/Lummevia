@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -18,6 +19,7 @@ class WorkflowRunEvent(CoreArtifactModel):
     step_name: str
     status: WorkflowRunStatus
     message: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -7,6 +7,7 @@ from uuid import uuid4
 from lummevia_core import AgentRole, WorkflowRunEvent, WorkflowRunStatus
 
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.timeline import sync_timeline_for_state
 
 
 class RuntimeEventType(str, Enum):
@@ -40,6 +41,7 @@ def append_runtime_event(
             },
         )
     )
+    sync_timeline_for_state(state)
     return state
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Protocol
 
 from pydantic import ValidationError
@@ -25,9 +26,16 @@ class WorkflowRunRepository(Protocol):
 class SqlAlchemyWorkflowRunRepository:
     def __init__(self, session_factory: sessionmaker) -> None:
         self._session_factory = session_factory
+        self._save_counter = 0
 
     def save_run(self, state: RuntimeState) -> RuntimeState:
-        payload = self._build_persisted_payload(state)
+        persisted_at = datetime.now(timezone.utc)
+        self._save_counter += 1
+        payload = self._build_persisted_payload(
+            state,
+            persisted_at=persisted_at,
+            persisted_order=self._save_counter,
+        )
 
         with self._session_factory() as session:
             record = session.get(WorkflowRunRecord, state.run.run_id)
@@ -50,15 +58,24 @@ class SqlAlchemyWorkflowRunRepository:
                 record.status = state.run.status.value
                 record.current_step = state.run.current_step
                 record.payload = payload
+            record.updated_at = persisted_at
 
             session.commit()
 
         return state
 
-    def _build_persisted_payload(self, state: RuntimeState) -> dict[str, object]:
+    def _build_persisted_payload(
+        self,
+        state: RuntimeState,
+        *,
+        persisted_at: datetime,
+        persisted_order: int,
+    ) -> dict[str, object]:
         payload = state.model_dump(mode="json")
         metadata = dict(payload.get("metadata", {}))
         metadata.pop("conversation_thread", None)
+        metadata["persisted_at"] = persisted_at.isoformat()
+        metadata["persisted_order"] = persisted_order
         payload["metadata"] = metadata
         run_payload = dict(payload.get("run", {}))
         run_metadata = dict(run_payload.get("metadata", {}))
@@ -108,4 +125,8 @@ class SqlAlchemyWorkflowRunRepository:
                         exc,
                     )
 
-            return hydrated_runs
+            return sorted(
+                hydrated_runs,
+                key=lambda run: int(run.metadata.get("persisted_order", 0)),
+                reverse=True,
+            )

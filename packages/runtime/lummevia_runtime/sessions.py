@@ -13,6 +13,7 @@ from lummevia_memory import (
 from lummevia_sessions import SessionRegistry, SessionStatus, TaskExecutionSession
 
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.timeline import sync_timeline_for_state
 
 
 def create_task_execution_session(
@@ -249,3 +250,4 @@ def sync_session_to_runtime_metadata(
     state.metadata["session_attempts"] = session.attempts
     state.metadata["output_count"] = len(session.outputs)
     state.metadata["event_count"] = len(session.events)
+    sync_timeline_for_state(state)

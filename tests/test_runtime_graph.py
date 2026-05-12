@@ -235,6 +235,18 @@ def test_runtime_founder_conversation_creates_pm_response_and_thread_metadata() 
     assert any(message["author_type"] == "PM" for message in thread["messages"])
 
 
+def test_runtime_records_timeline_metadata() -> None:
+    runtime = DevelopmentRuntime()
+
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-4F")
+
+    assert state.metadata["timeline_id"].startswith("timeline-")
+    assert state.metadata["timeline_event_count"] >= len(state.run.events)
+    assert state.metadata["replay_available"] is True
+    assert "WORKFLOW" in state.metadata["timeline_sources"]
+    assert "SESSION" in state.metadata["timeline_sources"]
+
+
 def test_dev_consumes_first_task_package_and_qa_validates_task_package() -> None:
     runtime = DevelopmentRuntime()
 

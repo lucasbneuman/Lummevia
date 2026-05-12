@@ -9,6 +9,7 @@ from lummevia_runtime.persistence import (
     create_tables,
 )
 from lummevia_runtime.state import RuntimeArtifacts, RuntimeState
+from lummevia_runtime.timeline import sync_timeline_for_state
 
 __all__ = [
     "DevelopmentRuntime",
@@ -23,4 +24,5 @@ __all__ = [
     "create_database_engine",
     "create_session_factory",
     "create_tables",
+    "sync_timeline_for_state",
 ]

@@ -20,3 +20,4 @@ psycopg[binary]
 -e ./packages/reviews
 -e ./packages/runtime
 -e ./packages/sessions
+-e ./packages/timeline

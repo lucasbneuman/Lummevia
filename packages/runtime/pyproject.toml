@@ -19,6 +19,7 @@ dependencies = [
     "lummevia-memory",
     "lummevia-reviews",
     "lummevia-sessions",
+    "lummevia-timeline",
 ]
 
 [tool.setuptools]
