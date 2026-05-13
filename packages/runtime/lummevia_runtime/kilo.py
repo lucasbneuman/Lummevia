@@ -26,6 +26,7 @@ from lummevia_runtime.planning import build_adaptive_planning_context, propose_a
 from lummevia_runtime.sessions import record_kilo_execution_for_session
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.queue import build_queue_metadata_for_kilo
+from lummevia_runtime.strategy import resolve_execution_strategy_for_kilo
 from lummevia_runtime.supervisor import (
     annotate_kilo_execution_result,
     heartbeat_queue_item_watchdog,
@@ -68,6 +69,14 @@ def execute_kilo_step(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     mode = resolve_kilo_mode(role)
+    strategy = resolve_execution_strategy_for_kilo(
+        state,
+        role=role.value,
+        step_name=step_name,
+        execution_mode=mode.value,
+        sandbox_real=client.settings.enabled and not client.settings.dry_run,
+        metadata={"task_id": task_package.task_id},
+    )
     session_id = state.metadata.get("current_session_id")
     allocation = request_step_allocation(
         state,
@@ -102,6 +111,14 @@ def execute_kilo_step(
             "task_id": task_package.task_id,
             "loop_count": state.loop_count,
             "run_id": state.run.run_id,
+            "strategy_id": strategy.strategy_id,
+            "strategy_type": strategy.strategy_type.value,
+            "risk_level": strategy.risk_level.value,
+            "qa_level": strategy.qa_level.value,
+            "sandbox_level": strategy.sandbox_level.value,
+            "selected_model": strategy.selected_model,
+            "selected_provider": strategy.selected_provider,
+            "execution_mode": strategy.execution_mode,
             **build_queue_metadata_for_kilo(state, task_package=task_package),
             **build_allocation_metadata_for_kilo(state),
             **(metadata or {}),
@@ -158,6 +175,14 @@ def execute_kilo_step(
             "retry_count": result.retry_count,
             "final_status": result.final_status.value,
             "status": result.status.value,
+            "strategy_id": result.metadata.get("strategy_id"),
+            "strategy_type": result.metadata.get("strategy_type"),
+            "risk_level": result.metadata.get("risk_level"),
+            "qa_level": result.metadata.get("qa_level"),
+            "sandbox_level": result.metadata.get("sandbox_level"),
+            "selected_model": result.metadata.get("selected_model"),
+            "selected_provider": result.metadata.get("selected_provider"),
+            "execution_mode": result.metadata.get("execution_mode"),
             "error": result.error,
             "real_execution": bool(result.metadata.get("real_execution", False)),
             "exit_code": result.metadata.get("exit_code"),

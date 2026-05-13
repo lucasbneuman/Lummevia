@@ -128,6 +128,19 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = bool(value)
+        for key in (
+            "strategy_id",
+            "strategy_type",
+            "risk_level",
+            "qa_level",
+            "sandbox_level",
+            "selected_model",
+            "selected_provider",
+            "execution_mode",
+        ):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = str(value)
         for key in ("iteration_count", "message_count"):
             value = state.metadata.get(key)
             if value is not None:
@@ -318,6 +331,18 @@ class PhoenixRuntimeObserver(RuntimeObserver):
                 attributes["lines_removed"] = int(kilo_step["lines_removed"])
             if kilo_step.get("artifact_count") is not None:
                 attributes["artifact_count"] = int(kilo_step["artifact_count"])
+            for key in (
+                "strategy_id",
+                "strategy_type",
+                "risk_level",
+                "qa_level",
+                "sandbox_level",
+                "selected_model",
+                "selected_provider",
+                "execution_mode",
+            ):
+                if kilo_step.get(key) is not None:
+                    attributes[key] = str(kilo_step[key])
         return attributes
 
     def _extract_review_metadata(

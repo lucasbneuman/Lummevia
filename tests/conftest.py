@@ -50,6 +50,7 @@ PERSISTENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "persistence"
 CODE_CHANGES_PACKAGE_DIR = ROOT_DIR / "packages" / "code-changes"
 INTELLIGENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "intelligence"
 PLANNING_PACKAGE_DIR = ROOT_DIR / "packages" / "planning"
+STRATEGY_PACKAGE_DIR = ROOT_DIR / "packages" / "strategy"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -77,6 +78,8 @@ if str(INTELLIGENCE_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(INTELLIGENCE_PACKAGE_DIR))
 if str(PLANNING_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(PLANNING_PACKAGE_DIR))
+if str(STRATEGY_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(STRATEGY_PACKAGE_DIR))
 
 
 @pytest.fixture(autouse=True)
@@ -92,6 +95,7 @@ def reset_default_registries():
     from lummevia_resources import ResourceRegistry
     from lummevia_reviews import HumanReviewRegistry
     from lummevia_sessions import SessionRegistry
+    from lummevia_strategy import StrategyRegistry
     from lummevia_supervisor import SupervisorRegistry
     from lummevia_timeline import TimelineRegistry
     from app.core.persistence import configure_operational_persistence
@@ -111,6 +115,7 @@ def reset_default_registries():
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()
+    StrategyRegistry.default().reset()
     SupervisorRegistry.default().reset()
     TimelineRegistry.default().reset()
     yield
@@ -128,5 +133,6 @@ def reset_default_registries():
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()
+    StrategyRegistry.default().reset()
     SupervisorRegistry.default().reset()
     TimelineRegistry.default().reset()

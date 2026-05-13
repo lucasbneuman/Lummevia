@@ -38,6 +38,20 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["metadata"]["queue_id"].startswith("queue-")
     assert body["metadata"]["queue_size"] == len(body["artifacts"]["task_packages"])
     assert body["metadata"]["current_queue_item_id"].startswith("queue-item-")
+    assert body["metadata"]["strategy_id"].startswith("strategy-")
+    assert body["metadata"]["strategy_type"] in {
+        "SAFE",
+        "BALANCED",
+        "VALIDATION_HEAVY",
+        "RECOVERY",
+        "COST_OPTIMIZED",
+        "AGGRESSIVE",
+    }
+    assert body["metadata"]["risk_level"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+    assert body["metadata"]["qa_level"] in {"BASIC", "STANDARD", "STRICT", "PARANOID"}
+    assert body["metadata"]["sandbox_level"] in {"NONE", "BASIC", "ISOLATED", "STRICT"}
+    assert body["metadata"]["selected_model"]
+    assert body["metadata"]["selected_provider"]
     assert body["artifacts"]["task_plan"]["issue_id"] == "OS-100"
     assert len(body["artifacts"]["task_packages"]) >= 2
     assert body["artifacts"]["current_task_package"]["task_id"].startswith("OS-100-T")

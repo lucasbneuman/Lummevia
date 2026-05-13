@@ -1375,6 +1375,63 @@ Roadmap posterior:
 - planner asistido por LLM con explicaciones y scoring
 - integracion mas profunda con requeue real y redistribucion futura
 
+## Execution Strategy Layer
+
+Lummevia OS ahora agrega una primera capa de `execution strategy` para seleccionar una estrategia operacional explicable antes de PM, PO, DEV, QA y Kilo.
+
+Esta capa vive en `packages/strategy/` y agrega:
+
+- `ExecutionStrategy` como contrato trazable
+- `StrategyType`, `RiskLevel`, `QALevel`, `SandboxLevel` y `AutonomyLevel`
+- `ExecutionStrategyContext` para evaluacion stateless
+- `StrategyRegistry` en memoria
+- un selector heuristico deterministico y policy-driven, sin planner LLM
+
+Que selecciona:
+
+- recomendacion de modelo y provider
+- modo de ejecucion
+- nivel de QA
+- profundidad de sandbox
+- politica de retry
+- nivel de autonomia recomendado
+- prioridad operacional implita via riesgo y modo
+
+Heuristicas actuales:
+
+- cambio pequeno propone `SAFE` con `BASIC QA`
+- diff alto propone `VALIDATION_HEAVY` con `STRICT QA`
+- retry alto propone `RECOVERY`
+- QA fallido repetido endurece QA y favorece `VALIDATION_HEAVY`
+- sandbox real fuerza `STRICT sandbox`
+- baja confianza vuelve a `SAFE`
+- riesgo de dead-letter escala a `CRITICAL`
+- proyecto nuevo arranca en `SAFE`
+- historial estable favorece `BALANCED`
+- presion de costo alta favorece `COST_OPTIMIZED`
+
+Integracion actual:
+
+- runtime resuelve estrategia antes de PM, PO, DEV, QA y antes de cada ejecucion Kilo
+- `RuntimeState.metadata` guarda `strategy_id`, `strategy_type`, `risk_level`, `qa_level`, `sandbox_level`, `selected_model` y `selected_provider`
+- queue items propagan `strategy_id`, `risk_level` y `execution_mode`
+- supervisor reutiliza strategy context para recomendaciones de recovery
+- timeline registra `STRATEGY_SELECTED`, `STRATEGY_ESCALATED`, `STRATEGY_DEGRADED` y `STRATEGY_OVERRIDDEN`
+- Phoenix recibe `strategy_id`, `strategy_type`, `risk_level`, `qa_level`, `sandbox_level`, `selected_model`, `selected_provider` y `execution_mode`
+
+API actual:
+
+- `GET /strategy`
+- `GET /strategy/{strategy_id}`
+- `POST /strategy/evaluate`
+
+Por que `SAFE` es el default:
+
+- prioriza trazabilidad y explicabilidad sobre velocidad agresiva
+- reduce riesgo en proyectos nuevos o con baja confianza
+- evita decisiones invisibles, auto-switching real y ejecucion peligrosa
+- mantiene la capa como recomendacion observable en lugar de automatizacion opaca
+
 ## Persistencia operacional
 
 Lummevia OS ahora incorpora una estrategia hibrida `in-memory cache + Postgres durable` para el estado operacional critico.

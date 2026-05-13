@@ -10,6 +10,7 @@ from lummevia_supervisor import ExecutionHealthStatus, SupervisorRegistry, Watch
 from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
 from lummevia_runtime.planning import build_adaptive_planning_context, propose_adaptive_plan
 from lummevia_runtime.state import RuntimeState
+from lummevia_runtime.strategy import resolve_execution_strategy_for_step, strategy_metadata
 from lummevia_runtime.timeline import sync_timeline_for_state
 
 
@@ -37,7 +38,10 @@ def record_supervisor_event(
         queue_item_id=queue_item_id or _current_queue_item_id(state),
         event_type=event_type,
         status=status,
-        metadata=metadata or {},
+        metadata={
+            **strategy_metadata(state),
+            **(metadata or {}),
+        },
     )
     registry._sync_runtime_metadata(state)
     sync_timeline_for_state(state)
@@ -51,6 +55,12 @@ def register_queue_item_watchdog(
     task_id: str,
     timeout_seconds: int = 300,
 ) -> str:
+    resolve_execution_strategy_for_step(
+        state,
+        role="DEV",
+        step_name="queue_watchdog",
+        metadata={"task_id": task_id},
+    )
     watchdog = SupervisorRegistry.default().register_watchdog(
         workflow_run_id=state.run.run_id,
         target_type="TaskQueueItem",
@@ -62,6 +72,7 @@ def register_queue_item_watchdog(
             "task_id": task_id,
             "retry_attempts": 0,
             "max_retries": 1,
+            **strategy_metadata(state),
         },
     )
     _sync_queue_item_health(
@@ -136,6 +147,7 @@ def register_session_watchdog(
             "task_id": task_id,
             "retry_attempts": 0,
             "max_retries": 1,
+            **strategy_metadata(state),
         },
     )
     session = SessionRegistry.default().get_session(session_id)
@@ -253,12 +265,15 @@ def register_kilo_execution_watchdog(
             "step_name": step_name,
             "retry_attempts": retry_attempts,
             "max_retries": 1,
+            **strategy_metadata(state),
         },
     )
     state.metadata.setdefault("kilo_execution_by_step", {}).setdefault(step_name, {})
     state.metadata["kilo_execution_by_step"][step_name]["watchdog_id"] = watchdog.watchdog_id
     state.metadata["kilo_execution_by_step"][step_name]["health_status"] = health_status.value
     state.metadata["kilo_execution_by_step"][step_name]["retry_attempts"] = retry_attempts
+    state.metadata["kilo_execution_by_step"][step_name]["strategy_id"] = state.metadata.get("strategy_id")
+    state.metadata["kilo_execution_by_step"][step_name]["risk_level"] = state.metadata.get("risk_level")
     record_supervisor_event(
         state,
         event_type="KILO_EXECUTION_RECORDED",
@@ -412,6 +427,7 @@ def _sync_queue_item_health(
             item.status,
             metadata={
                 **item.metadata,
+                **strategy_metadata(state),
                 "health_status": health_status.value,
                 "watchdog_id": watchdog_id,
                 "recovery_action_id": item.metadata.get("recovery_action_id"),

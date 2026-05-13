@@ -141,6 +141,21 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["capacity_used_slots"] >= 1
     assert workflow_span.attributes["capacity_max_slots"] >= 1
     assert workflow_span.attributes["allocated_resources_count"] >= 1
+    assert str(workflow_span.attributes["strategy_id"]).startswith("strategy-")
+    assert workflow_span.attributes["strategy_type"] in {
+        "SAFE",
+        "BALANCED",
+        "VALIDATION_HEAVY",
+        "RECOVERY",
+        "COST_OPTIMIZED",
+        "AGGRESSIVE",
+    }
+    assert workflow_span.attributes["risk_level"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+    assert workflow_span.attributes["qa_level"] in {"BASIC", "STANDARD", "STRICT", "PARANOID"}
+    assert workflow_span.attributes["sandbox_level"] in {"NONE", "BASIC", "ISOLATED", "STRICT"}
+    assert workflow_span.attributes["selected_model"]
+    assert workflow_span.attributes["selected_provider"]
+    assert workflow_span.attributes["execution_mode"]
 
     step_names = {span.name for span in exporter.spans}
     assert "step:dev_implementation" in step_names
@@ -188,6 +203,10 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert dev_span.attributes["safety_status"] == "DISABLED"
     assert str(dev_span.attributes["change_set_id"]).startswith("change-set-")
     assert dev_span.attributes["artifact_count"] >= 1
+    assert str(dev_span.attributes["strategy_id"]).startswith("strategy-")
+    assert dev_span.attributes["execution_mode"]
+    assert dev_span.attributes["selected_model"]
+    assert dev_span.attributes["selected_provider"]
 
     assert qa_span.attributes["kilo_mode"] == "DEBUG"
     assert qa_span.attributes["kilo_status"] == "SUCCESS"
@@ -209,6 +228,7 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert qa_span.attributes["safety_status"] == "DISABLED"
     assert qa_span.attributes["validation_status"] == "FAILED"
     assert str(qa_span.attributes["qa_checked_change_set_id"]).startswith("change-set-")
+    assert str(qa_span.attributes["strategy_id"]).startswith("strategy-")
 
     founder_review_span = next(
         span for span in exporter.spans if span.name == "step:founder_business_approval"

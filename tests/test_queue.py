@@ -175,6 +175,14 @@ def test_queue_endpoints_list_queue_and_ready_items() -> None:
         for item in get_response.json()["items"]
         if item["queue_item_id"] == runtime_response.json()["metadata"]["current_queue_item_id"]
     )
+    current_item = next(
+        item
+        for item in get_response.json()["items"]
+        if item["queue_item_id"] == runtime_response.json()["metadata"]["current_queue_item_id"]
+    )
+    assert current_item["metadata"]["strategy_id"].startswith("strategy-")
+    assert current_item["metadata"]["risk_level"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+    assert current_item["metadata"]["execution_mode"]
 
     ready_response = client.get(f"/queues/{queue_id}/ready")
     assert ready_response.status_code == 200

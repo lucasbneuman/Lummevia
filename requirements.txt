@@ -27,5 +27,6 @@ psycopg[binary]
 -e ./packages/resources
 -e ./packages/runtime
 -e ./packages/sessions
+-e ./packages/strategy
 -e ./packages/supervisor
 -e ./packages/timeline

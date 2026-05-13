@@ -46,6 +46,13 @@ def append_runtime_event(
 
 
 def start_step(state: RuntimeState, *, step_name: str, role: AgentRole) -> RuntimeState:
+    from lummevia_runtime.strategy import resolve_execution_strategy_for_step
+
+    resolve_execution_strategy_for_step(
+        state,
+        role=role.value,
+        step_name=step_name,
+    )
     state.run.status = WorkflowRunStatus.RUNNING
     state.run.current_step = step_name
     state.current_role = role

@@ -545,6 +545,37 @@ def _build_system_events(
                     },
                 )
             )
+    strategy_events = state.metadata.get("execution_strategies", [])
+    if isinstance(strategy_events, list):
+        for raw_strategy in strategy_events:
+            if not isinstance(raw_strategy, dict):
+                continue
+            metadata = raw_strategy.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            events.append(
+                TimelineEvent(
+                    event_id=str(raw_strategy.get("strategy_id", "")),
+                    workflow_run_id=workflow_run_id,
+                    event_type=str(metadata.get("strategy_event", "STRATEGY_SELECTED")),
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=str(raw_strategy.get("strategy_id", "execution_strategy")),
+                    title=f"Strategy {raw_strategy.get('strategy_type', 'UNKNOWN')}",
+                    description=str(raw_strategy.get("reasoning", "Execution strategy recorded.")),
+                    created_at=raw_strategy.get("created_at"),
+                    metadata={
+                        "strategy_id": raw_strategy.get("strategy_id"),
+                        "strategy_type": raw_strategy.get("strategy_type"),
+                        "risk_level": raw_strategy.get("risk_level"),
+                        "qa_level": raw_strategy.get("qa_level"),
+                        "sandbox_level": raw_strategy.get("sandbox_level"),
+                        "selected_model": raw_strategy.get("selected_model"),
+                        "selected_provider": raw_strategy.get("selected_provider"),
+                        "execution_mode": raw_strategy.get("execution_mode"),
+                        **metadata,
+                    },
+                )
+            )
     adaptive_plans = state.metadata.get("adaptive_plans", [])
     if not isinstance(adaptive_plans, list):
         return events

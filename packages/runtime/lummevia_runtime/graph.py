@@ -17,6 +17,7 @@ from lummevia_runtime.intelligence import initialize_intelligence_runtime_state
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
 from lummevia_runtime.planning import initialize_adaptive_planning_runtime_state
 from lummevia_runtime.persistence.repository import WorkflowRunRepository
+from lummevia_runtime.strategy import initialize_strategy_runtime_state
 from lummevia_runtime.supervisor import initialize_supervisor_runtime_state
 from lummevia_runtime.nodes import (
     dev_implementation_node,
@@ -116,6 +117,7 @@ class DevelopmentRuntime:
             },
         )
         initialize_supervisor_runtime_state(initial_state)
+        initialize_strategy_runtime_state(initial_state)
         initialize_intelligence_runtime_state(initial_state)
         initialize_adaptive_planning_runtime_state(initial_state)
         if self.persistence_metadata_resolver is not None:

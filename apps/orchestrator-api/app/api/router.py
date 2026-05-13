@@ -19,6 +19,7 @@ from app.api.routes.sessions import router as sessions_router
 from app.api.routes.supervisor import router as supervisor_router
 from app.api.routes.system import router as system_router
 from app.api.routes.timelines import router as timelines_router
+from app.api.routes.strategy import router as strategy_router
 from app.api.routes.workflow_runs import router as workflow_runs_router
 from app.api.routes.workflows import router as workflows_router
 
@@ -41,6 +42,7 @@ api_router.include_router(resources_router)
 api_router.include_router(reviews_router)
 api_router.include_router(runtime_router)
 api_router.include_router(sessions_router)
+api_router.include_router(strategy_router)
 api_router.include_router(supervisor_router)
 api_router.include_router(timelines_router)
 api_router.include_router(workflow_runs_router)

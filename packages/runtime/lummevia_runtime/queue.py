@@ -69,6 +69,9 @@ def initialize_task_queue(
                     "allocation_id": None,
                     "allocation_status": None,
                     "allocation_reason": None,
+                    "strategy_id": state.metadata.get("strategy_id"),
+                    "risk_level": state.metadata.get("risk_level"),
+                    "execution_mode": state.metadata.get("execution_mode"),
                 },
             ),
         )
@@ -328,6 +331,21 @@ def build_queue_metadata_for_kilo(
             queue_item.get("metadata", {}).get("allocated_resources", [])
             if isinstance(queue_item, dict)
             else state.metadata.get("allocated_resources", [])
+        ),
+        "strategy_id": (
+            queue_item.get("metadata", {}).get("strategy_id")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("strategy_id")
+        ),
+        "risk_level": (
+            queue_item.get("metadata", {}).get("risk_level")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("risk_level")
+        ),
+        "execution_mode": (
+            queue_item.get("metadata", {}).get("execution_mode")
+            if isinstance(queue_item, dict)
+            else state.metadata.get("execution_mode")
         ),
     }
 

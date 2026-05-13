@@ -119,6 +119,8 @@ def test_runtime_queue_session_and_kilo_include_supervisor_fields() -> None:
     assert "recovery_history" in session
     assert kilo_step["health_status"] == ExecutionHealthStatus.HEALTHY.value
     assert kilo_step["watchdog_id"].startswith("watchdog-")
+    assert kilo_step["strategy_id"].startswith("strategy-")
+    assert kilo_step["risk_level"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 
 def test_cancel_workflow_releases_locks_and_marks_runtime_cancelled() -> None:
@@ -248,3 +250,31 @@ def test_phoenix_observer_exports_supervisor_metadata() -> None:
     assert str(qa_span.attributes["watchdog_id"]).startswith("watchdog-")
     assert qa_span.attributes["retry_attempts"] >= 0
     assert state.metadata["watchdog_id"].startswith("watchdog-")
+
+
+def test_supervisor_recovery_actions_include_strategy_context() -> None:
+    runtime = DevelopmentRuntime()
+    state = runtime.start_run(project="lummevia-os", issue_id="OS-1009")
+    registry = SupervisorRegistry.default()
+    watchdog = next(
+        item
+        for item in registry.list_watchdogs()
+        if item.workflow_run_id == state.run.run_id and item.target_type == "TaskQueueItem"
+    )
+    registry._watchdogs[watchdog.watchdog_id] = watchdog.model_copy(
+        update={
+            "status": WatchdogStatus.ACTIVE,
+            "last_heartbeat_at": datetime.now(UTC) - timedelta(hours=1),
+        }
+    )
+
+    registry.detect_stuck(runtime_state=state)
+
+    action = next(
+        item
+        for item in registry.list_recovery_actions()
+        if item.workflow_run_id == state.run.run_id
+    )
+    assert action.metadata["strategy_id"].startswith("strategy-")
+    assert action.metadata["strategy_type"]
+    assert action.metadata["risk_level"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}

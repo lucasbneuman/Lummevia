@@ -25,6 +25,7 @@ COPY packages/queue /app/packages/queue
 COPY packages/resources /app/packages/resources
 COPY packages/runtime /app/packages/runtime
 COPY packages/sessions /app/packages/sessions
+COPY packages/strategy /app/packages/strategy
 COPY packages/supervisor /app/packages/supervisor
 COPY packages/timeline /app/packages/timeline
 RUN pip install --no-cache-dir -r /app/requirements.txt
