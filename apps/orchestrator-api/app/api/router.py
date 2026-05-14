@@ -7,6 +7,7 @@ from app.api.routes.evaluations import router as evaluations_router
 from app.api.routes.economics import router as economics_router
 from app.api.routes.intelligence import router as intelligence_router
 from app.api.routes.kilo import router as kilo_router
+from app.api.routes.learning import router as learning_router
 from app.api.routes.memory import router as memory_router
 from app.api.routes.model_execution import router as model_execution_router
 from app.api.routes.model_router import router as model_router_api_router
@@ -34,6 +35,7 @@ api_router.include_router(system_router)
 api_router.include_router(evaluations_router)
 api_router.include_router(intelligence_router)
 api_router.include_router(kilo_router)
+api_router.include_router(learning_router)
 api_router.include_router(memory_router)
 api_router.include_router(model_execution_router)
 api_router.include_router(model_router_api_router)

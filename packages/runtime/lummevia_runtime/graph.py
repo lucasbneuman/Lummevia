@@ -15,6 +15,10 @@ from lummevia_kilo import KiloExecutionClient
 from lummevia_runtime.exceptions import RuntimeNotFoundError
 from lummevia_runtime.economics import initialize_economics_runtime_state
 from lummevia_runtime.intelligence import initialize_intelligence_runtime_state
+from lummevia_runtime.learning import (
+    analyze_learning_for_runtime,
+    initialize_learning_runtime_state,
+)
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
 from lummevia_runtime.planning import initialize_adaptive_planning_runtime_state
 from lummevia_runtime.persistence.repository import WorkflowRunRepository
@@ -122,6 +126,7 @@ class DevelopmentRuntime:
         initialize_economics_runtime_state(initial_state)
         initialize_intelligence_runtime_state(initial_state)
         initialize_adaptive_planning_runtime_state(initial_state)
+        initialize_learning_runtime_state(initial_state)
         if self.persistence_metadata_resolver is not None:
             initial_state.metadata.update(self.persistence_metadata_resolver(initial_state))
         self.registry.create(initial_state)
@@ -146,6 +151,7 @@ class DevelopmentRuntime:
                         if current_item is not None and current_item.status != "COMPLETED":
                             TaskQueueRegistry.default().mark_completed(queue_id, queue_item_id)
             sync_task_queue_state(final_state)
+            analyze_learning_for_runtime(final_state)
             initial_state.run = final_state.run
             initial_state.current_role = final_state.current_role
             initial_state.artifacts = final_state.artifacts

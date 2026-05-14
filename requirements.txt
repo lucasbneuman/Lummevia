@@ -19,6 +19,7 @@ psycopg[binary]
 -e ./packages/intelligence
 -e ./packages/kilo-adapter
 -e ./packages/integrations
+-e ./packages/learning
 -e ./packages/memory
 -e ./packages/model-router
 -e ./packages/planning

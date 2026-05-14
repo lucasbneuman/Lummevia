@@ -1432,6 +1432,78 @@ Por que `SAFE` es el default:
 - evita decisiones invisibles, auto-switching real y ejecucion peligrosa
 - mantiene la capa como recomendacion observable en lugar de automatizacion opaca
 
+## Learning And Self-Optimization Layer
+
+Lummevia OS ahora agrega una primera capa de `learning and self-optimization` para detectar patrones operacionales, generar insights y proponer mejoras sin habilitar autonomia peligrosa.
+
+Esta capa vive en `packages/learning/` y agrega:
+
+- `LearningSignal` como contrato minimo de observacion operacional
+- `OperationalInsight` como insight deterministico y trazable
+- `OptimizationRecommendation` como propuesta no autoaplicada
+- `LearningRegistry` en memoria para signals, insights y recommendations
+- `LearningAnalyzer` con heuristicas deterministicas, sin LLM judge
+- recommendations con gates humanos explicitos
+
+Heuristicas actuales:
+
+- QA failures repetidos generan insight de calidad
+- retries altos generan insight de ejecucion inestable
+- costo alto genera insight economico
+- latency alta genera insight de performance
+- muchos `NEEDS_REVIEW` generan insight de governance
+- dead letters generan insight de resiliencia
+- prompt evaluations bajas generan insight de prompt quality
+- uso frecuente de estrategia `RECOVERY` genera insight de planning debil
+
+Recommendations actuales:
+
+- mejorar prompt
+- dividir `TaskPackage`
+- usar QA mas estricto
+- bajar autonomia
+- usar modelo lite
+- agregar contexto de memory
+- revisar estrategia
+- crear review gate
+
+Integracion actual:
+
+- el runtime genera `LearningSignals`, `OperationalInsights` y `OptimizationRecommendations` al final del workflow o via `POST /learning/analyze`
+- `RuntimeState.metadata` guarda ids, counts, severidad agregada y ultimo tipo de recomendacion
+- insights importantes crean `ProjectMemoryRecord` en categorias `PROMPT_LEARNING`, `TASK_LEARNING`, `QA_ISSUE` o `IMPLEMENTATION_NOTE`
+- recommendations con `requires_human_review=true` crean `HumanReview`
+- `Timeline` registra `LEARNING_SIGNAL_CREATED`, `OPERATIONAL_INSIGHT_CREATED`, `OPTIMIZATION_RECOMMENDATION_CREATED`, `RECOMMENDATION_ACCEPTED` y `RECOMMENDATION_REJECTED`
+- Phoenix recibe `learning_signal_count`, `insight_count`, `recommendation_count`, `learning_severity` y `recommendation_type`
+
+API actual:
+
+- `GET /learning/signals`
+- `GET /learning/insights`
+- `GET /learning/recommendations`
+- `POST /learning/analyze`
+- `POST /learning/recommendations/{recommendation_id}/accept`
+- `POST /learning/recommendations/{recommendation_id}/reject`
+
+Guardrails deliberados:
+
+- no auto-modificacion de codigo
+- no autoaplicacion de mejoras
+- no fine-tuning
+- no embeddings
+- no RAG
+- no LLM judge
+- no cambios automaticos en prompts
+- no cambios automaticos en strategy policies
+- no loops autonomos de optimizacion
+
+Roadmap natural despues de este MVP:
+
+- persistencia durable para registros de learning
+- mejores dashboards de comparacion por proyecto
+- optimization loops asistidos con revision humana mas rica
+- politicas de priorizacion de recomendaciones
+
 ## Persistencia operacional
 
 Lummevia OS ahora incorpora una estrategia hibrida `in-memory cache + Postgres durable` para el estado operacional critico.

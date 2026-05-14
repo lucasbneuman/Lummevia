@@ -17,6 +17,7 @@ COPY packages/evaluations /app/packages/evaluations
 COPY packages/intelligence /app/packages/intelligence
 COPY packages/kilo-adapter /app/packages/kilo-adapter
 COPY packages/integrations /app/packages/integrations
+COPY packages/learning /app/packages/learning
 COPY packages/memory /app/packages/memory
 COPY packages/model-router /app/packages/model-router
 COPY packages/planning /app/packages/planning

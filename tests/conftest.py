@@ -52,6 +52,7 @@ INTELLIGENCE_PACKAGE_DIR = ROOT_DIR / "packages" / "intelligence"
 PLANNING_PACKAGE_DIR = ROOT_DIR / "packages" / "planning"
 STRATEGY_PACKAGE_DIR = ROOT_DIR / "packages" / "strategy"
 ECONOMICS_PACKAGE_DIR = ROOT_DIR / "packages" / "economics"
+LEARNING_PACKAGE_DIR = ROOT_DIR / "packages" / "learning"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -83,14 +84,17 @@ if str(STRATEGY_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(STRATEGY_PACKAGE_DIR))
 if str(ECONOMICS_PACKAGE_DIR) not in sys.path:
     sys.path.insert(0, str(ECONOMICS_PACKAGE_DIR))
+if str(LEARNING_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEARNING_PACKAGE_DIR))
 
 
 @pytest.fixture(autouse=True)
 def reset_default_registries():
     from lummevia_conversations import ConversationRegistry
     from lummevia_evaluations import PromptBaselineRegistry
-    from lummevia_memory import ProjectMemoryRegistry
     from lummevia_intelligence import DecisionRegistry
+    from lummevia_learning import LearningRegistry
+    from lummevia_memory import ProjectMemoryRegistry
     from lummevia_planning import AdaptivePlanRegistry
     from lummevia_queue import TaskQueueRegistry
     from lummevia_capabilities import CapabilityRegistry
@@ -117,6 +121,7 @@ def reset_default_registries():
     CapabilityRegistry.default().reset()
     CodeChangeRegistry.default().reset()
     EconomicsRegistry.default().reset()
+    LearningRegistry.default().reset()
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()
@@ -136,6 +141,7 @@ def reset_default_registries():
     CapabilityRegistry.default().reset()
     CodeChangeRegistry.default().reset()
     EconomicsRegistry.default().reset()
+    LearningRegistry.default().reset()
     ResourceRegistry.default().reset()
     HumanReviewRegistry.default().reset()
     SessionRegistry.default().reset()

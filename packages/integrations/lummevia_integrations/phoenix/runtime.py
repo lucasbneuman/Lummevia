@@ -171,6 +171,10 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        for key in ("learning_signal_count", "insight_count", "recommendation_count"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         for key in ("change_set_id", "current_change_set_id", "validation_status", "validation_notes", "qa_checked_change_set_id"):
             value = state.metadata.get(key)
             if value is not None:
@@ -185,6 +189,8 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "adaptive_plan_status",
             "replanning_trigger",
             "adaptive_plan_review_id",
+            "learning_severity",
+            "recommendation_type",
         ):
             value = state.metadata.get(key)
             if value is not None:

@@ -36,6 +36,9 @@ class PromptEvaluationRegistry:
     def get(self, evaluation_id: str) -> PromptEvaluation | None:
         return self._evaluations.get(evaluation_id)
 
+    def list_evaluations(self) -> list[PromptEvaluation]:
+        return list(self._evaluations.values())
+
     def evaluate(
         self,
         *,

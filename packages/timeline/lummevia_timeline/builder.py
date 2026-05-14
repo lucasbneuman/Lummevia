@@ -577,59 +577,156 @@ def _build_system_events(
                 )
             )
     adaptive_plans = state.metadata.get("adaptive_plans", [])
-    if not isinstance(adaptive_plans, list):
-        return events
-    for raw_plan in adaptive_plans:
-        if not isinstance(raw_plan, dict):
-            continue
-        plan_metadata = raw_plan.get("metadata", {})
-        if not isinstance(plan_metadata, dict):
-            plan_metadata = {}
-        plan_id = str(raw_plan.get("adaptive_plan_id", "adaptive_plan"))
-        created_at = raw_plan.get("created_at")
-        events.append(
-            TimelineEvent(
-                event_id=f"{plan_id}-created",
-                workflow_run_id=workflow_run_id,
-                event_type="ADAPTIVE_PLAN_CREATED",
-                source_type=TimelineSourceType.SYSTEM,
-                source_id=plan_id,
-                title=f"Adaptive plan {plan_id} created",
-                description=str(raw_plan.get("trigger_reason", "Adaptive plan created.")),
-                created_at=created_at,
-                metadata={
-                    "adaptive_plan_id": plan_id,
-                    "adaptive_plan_status": raw_plan.get("status"),
-                    "source_task_id": raw_plan.get("source_task_id"),
-                    **plan_metadata,
-                },
-            )
-        )
-        mutation_event_type = _mutation_event_type(str(raw_plan.get("status", "PROPOSED")))
-        mutation_created_at = raw_plan.get("updated_at") or created_at
-        for raw_mutation in raw_plan.get("mutations", []):
-            if not isinstance(raw_mutation, dict):
+    if isinstance(adaptive_plans, list):
+        for raw_plan in adaptive_plans:
+            if not isinstance(raw_plan, dict):
                 continue
-            mutation_metadata = raw_mutation.get("metadata", {})
-            if not isinstance(mutation_metadata, dict):
-                mutation_metadata = {}
+            plan_metadata = raw_plan.get("metadata", {})
+            if not isinstance(plan_metadata, dict):
+                plan_metadata = {}
+            plan_id = str(raw_plan.get("adaptive_plan_id", "adaptive_plan"))
+            created_at = raw_plan.get("created_at")
             events.append(
                 TimelineEvent(
-                    event_id=str(raw_mutation.get("mutation_id", "")),
+                    event_id=f"{plan_id}-created",
                     workflow_run_id=workflow_run_id,
-                    event_type=mutation_event_type,
+                    event_type="ADAPTIVE_PLAN_CREATED",
                     source_type=TimelineSourceType.SYSTEM,
                     source_id=plan_id,
-                    title=f"Graph mutation {raw_mutation.get('mutation_type', 'UNKNOWN')}",
-                    description=str(raw_mutation.get("reason", "Graph mutation proposed.")),
-                    created_at=mutation_created_at,
+                    title=f"Adaptive plan {plan_id} created",
+                    description=str(raw_plan.get("trigger_reason", "Adaptive plan created.")),
+                    created_at=created_at,
                     metadata={
                         "adaptive_plan_id": plan_id,
                         "adaptive_plan_status": raw_plan.get("status"),
-                        "mutation_id": raw_mutation.get("mutation_id"),
-                        "mutation_type": raw_mutation.get("mutation_type"),
-                        "target": raw_mutation.get("target"),
-                        **mutation_metadata,
+                        "source_task_id": raw_plan.get("source_task_id"),
+                        **plan_metadata,
+                    },
+                )
+            )
+            mutation_event_type = _mutation_event_type(str(raw_plan.get("status", "PROPOSED")))
+            mutation_created_at = raw_plan.get("updated_at") or created_at
+            for raw_mutation in raw_plan.get("mutations", []):
+                if not isinstance(raw_mutation, dict):
+                    continue
+                mutation_metadata = raw_mutation.get("metadata", {})
+                if not isinstance(mutation_metadata, dict):
+                    mutation_metadata = {}
+                events.append(
+                    TimelineEvent(
+                        event_id=str(raw_mutation.get("mutation_id", "")),
+                        workflow_run_id=workflow_run_id,
+                        event_type=mutation_event_type,
+                        source_type=TimelineSourceType.SYSTEM,
+                        source_id=plan_id,
+                        title=f"Graph mutation {raw_mutation.get('mutation_type', 'UNKNOWN')}",
+                        description=str(raw_mutation.get("reason", "Graph mutation proposed.")),
+                        created_at=mutation_created_at,
+                        metadata={
+                            "adaptive_plan_id": plan_id,
+                            "adaptive_plan_status": raw_plan.get("status"),
+                            "mutation_id": raw_mutation.get("mutation_id"),
+                            "mutation_type": raw_mutation.get("mutation_type"),
+                            "target": raw_mutation.get("target"),
+                            **mutation_metadata,
+                        },
+                    )
+                )
+    learning_signals = state.metadata.get("learning_signals", [])
+    if isinstance(learning_signals, list):
+        for raw_signal in learning_signals:
+            if not isinstance(raw_signal, dict):
+                continue
+            signal_id = str(raw_signal.get("signal_id", "learning_signal"))
+            metadata = raw_signal.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            events.append(
+                TimelineEvent(
+                    event_id=signal_id,
+                    workflow_run_id=workflow_run_id,
+                    event_type="LEARNING_SIGNAL_CREATED",
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=signal_id,
+                    title=f"Learning signal {raw_signal.get('signal_type', 'UNKNOWN')}",
+                    description=str(raw_signal.get("summary", "Learning signal recorded.")),
+                    created_at=raw_signal.get("created_at"),
+                    metadata={
+                        "signal_id": signal_id,
+                        "signal_type": raw_signal.get("signal_type"),
+                        "severity": raw_signal.get("severity"),
+                        "confidence": raw_signal.get("confidence"),
+                        **metadata,
+                    },
+                )
+            )
+    insights = state.metadata.get("insights", [])
+    if isinstance(insights, list):
+        for raw_insight in insights:
+            if not isinstance(raw_insight, dict):
+                continue
+            insight_id = str(raw_insight.get("insight_id", "operational_insight"))
+            metadata = raw_insight.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            events.append(
+                TimelineEvent(
+                    event_id=insight_id,
+                    workflow_run_id=workflow_run_id,
+                    event_type="OPERATIONAL_INSIGHT_CREATED",
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=insight_id,
+                    title=str(raw_insight.get("title", "Operational insight")),
+                    description=str(raw_insight.get("description", "Operational insight recorded.")),
+                    created_at=raw_insight.get("created_at"),
+                    metadata={
+                        "insight_id": insight_id,
+                        "insight_type": raw_insight.get("insight_type"),
+                        "severity": raw_insight.get("severity"),
+                        "confidence": raw_insight.get("confidence"),
+                        **metadata,
+                    },
+                )
+            )
+    recommendations = state.metadata.get("recommendations", [])
+    if isinstance(recommendations, list):
+        for raw_recommendation in recommendations:
+            if not isinstance(raw_recommendation, dict):
+                continue
+            recommendation_id = str(
+                raw_recommendation.get("recommendation_id", "optimization_recommendation")
+            )
+            metadata = raw_recommendation.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            status = str(raw_recommendation.get("status", "PROPOSED"))
+            if status == "ACCEPTED":
+                event_type = "RECOMMENDATION_ACCEPTED"
+            elif status == "REJECTED":
+                event_type = "RECOMMENDATION_REJECTED"
+            else:
+                event_type = "OPTIMIZATION_RECOMMENDATION_CREATED"
+            events.append(
+                TimelineEvent(
+                    event_id=f"{recommendation_id}-{status.lower()}",
+                    workflow_run_id=workflow_run_id,
+                    event_type=event_type,
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=recommendation_id,
+                    title=str(raw_recommendation.get("title", "Optimization recommendation")),
+                    description=str(
+                        raw_recommendation.get(
+                            "description",
+                            "Optimization recommendation recorded.",
+                        )
+                    ),
+                    created_at=raw_recommendation.get("created_at"),
+                    metadata={
+                        "recommendation_id": recommendation_id,
+                        "recommendation_type": raw_recommendation.get("recommendation_type"),
+                        "recommendation_status": status,
+                        "requires_human_review": raw_recommendation.get("requires_human_review"),
+                        **metadata,
                     },
                 )
             )
