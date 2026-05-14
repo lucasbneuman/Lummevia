@@ -29,6 +29,16 @@ class ConversationStatus(StrEnum):
     CLOSED = "CLOSED"
 
 
+class ConversationPhase(StrEnum):
+    STARTED = "STARTED"
+    DISCOVERY = "DISCOVERY"
+    PM_QUESTIONS = "PM_QUESTIONS"
+    DRAFTING_BRIEF = "DRAFTING_BRIEF"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    CLOSED = "CLOSED"
+
+
 class AuthorType(StrEnum):
     FOUNDER = "FOUNDER"
     PM = "PM"
@@ -44,6 +54,21 @@ class ConversationMessage(ConversationBaseSchema):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class FounderPMConversationState(ConversationBaseSchema):
+    thread_id: str = Field(min_length=1)
+    telegram_chat_id: int | None = None
+    project: str = Field(min_length=1)
+    issue_id: str | None = None
+    phase: ConversationPhase = ConversationPhase.STARTED
+    iteration_count: int = Field(default=0, ge=0)
+    brief_version: int = Field(default=0, ge=0)
+    last_pm_message: str | None = None
+    pending_questions: list[str] = Field(default_factory=list)
+    approved: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class ConversationThread(ConversationBaseSchema):
     thread_id: str = Field(default_factory=_thread_id)
     topic: str = Field(min_length=1)
@@ -53,4 +78,5 @@ class ConversationThread(ConversationBaseSchema):
     messages: list[ConversationMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    founder_pm_state: FounderPMConversationState | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -287,7 +287,7 @@ def _build_conversation_events(
 ) -> Iterable[TimelineEvent]:
     for thread in conversations:
         for message in thread.messages:
-            event_type = _conversation_message_event_type(message.author_type)
+            event_type = _conversation_message_event_type(message)
             yield TimelineEvent(
                 event_id=message.message_id,
                 workflow_run_id=workflow_run_id,
@@ -316,6 +316,11 @@ def _build_conversation_events(
             metadata={
                 "thread_id": thread.thread_id,
                 "conversation_status": thread.status.value,
+                "conversation_phase": (
+                    thread.founder_pm_state.phase.value
+                    if thread.founder_pm_state is not None
+                    else None
+                ),
                 **thread.metadata,
             },
         )
@@ -407,7 +412,7 @@ def _build_review_events(
             yield TimelineEvent(
                 event_id=f"{review.review_id}-completed",
                 workflow_run_id=workflow_run_id,
-                event_type="REVIEW_COMPLETED",
+                event_type=_review_completed_event_type(review),
                 source_type=TimelineSourceType.REVIEW,
                 source_id=review.review_id,
                 title=f"Review {review.review_id} completed",
@@ -764,10 +769,13 @@ def _event_sort_priority(event_type: str) -> int:
     return 1
 
 
-def _conversation_message_event_type(author_type: AuthorType) -> str:
-    if author_type == AuthorType.FOUNDER:
+def _conversation_message_event_type(message) -> str:
+    explicit_event = message.metadata.get("conversation_event")
+    if isinstance(explicit_event, str) and explicit_event.strip():
+        return explicit_event.strip()
+    if message.author_type == AuthorType.FOUNDER:
         return "FOUNDER_CONVERSATION_MESSAGE"
-    if author_type == AuthorType.PM:
+    if message.author_type == AuthorType.PM:
         return "PM_CONVERSATION_MESSAGE"
     return "SYSTEM_CONVERSATION_MESSAGE"
 
@@ -776,6 +784,15 @@ def _review_created_event_type(review: HumanReview) -> str:
     if review.review_type == ReviewType.QA_VALIDATION:
         return "QA_REVIEW_PENDING"
     return "REVIEW_CREATED"
+
+
+def _review_completed_event_type(review: HumanReview) -> str:
+    if (
+        review.review_type == ReviewType.BUSINESS_BRIEF
+        and review.decision == ReviewDecision.APPROVED
+    ):
+        return "BRIEF_APPROVED"
+    return "REVIEW_COMPLETED"
 
 
 def _review_from_snapshot(

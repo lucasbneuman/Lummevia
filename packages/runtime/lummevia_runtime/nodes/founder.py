@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from lummevia_agents import PMAgent
 from lummevia_conversations import (
     AuthorType,
+    ConversationPhase,
     ConversationRegistry,
     ConversationStatus,
     ConversationThreadNotFoundError,
+    apply_founder_message_policy,
+    build_approval_state,
+    build_initial_founder_pm_state,
+    update_thread_with_policy_decision,
 )
 from lummevia_core import AgentRole
 from lummevia_memory import (
@@ -18,7 +22,6 @@ from lummevia_memory import (
 )
 from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 
-from lummevia_runtime.economics import register_model_execution_cost
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.state import RuntimeState
 
@@ -36,19 +39,21 @@ def founder_input_node(state: RuntimeState) -> RuntimeState:
     state.metadata["founder_intent_captured"] = True
     state.metadata["founder_approved"] = False
     state.metadata["business_brief_status"] = "draft"
+    state.metadata["conversation_phase"] = ConversationPhase.STARTED.value
+    state.metadata["brief_version"] = 0
+    state.metadata["pending_questions_count"] = 0
     return complete_step(state, step_name=step_name, role=AgentRole.FOUNDER)
 
 
 def founder_pm_conversation_node(
     state: RuntimeState,
     *,
-    agent: PMAgent | None = None,
+    agent=None,
     artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "founder_pm_conversation"
     state = start_step(state, step_name=step_name, role=AgentRole.PM)
     registry = ConversationRegistry.default()
-    pm_agent = agent or PMAgent()
     founder_input = state.run.metadata.get("founder_input", {})
     founder_message = founder_input.get(
         "summary",
@@ -62,86 +67,86 @@ def founder_pm_conversation_node(
         try:
             thread = registry.get_thread(thread_id)
         except ConversationThreadNotFoundError:
-            thread = registry.create_thread(
-                topic=f"Founder strategic iteration for {state.run.issue_id}",
-                project=state.run.project,
-                issue_id=state.run.issue_id,
-                metadata={
-                    "run_id": state.run.run_id,
-                    "workflow": state.run.workflow_name,
-                    "seed_thread_id": thread_id,
-                },
+            thread = _create_runtime_thread(
+                registry,
+                state=state,
+                seed_thread_id=thread_id,
             )
     else:
-        thread = registry.create_thread(
-            topic=f"Founder strategic iteration for {state.run.issue_id}",
-            project=state.run.project,
-            issue_id=state.run.issue_id,
-            metadata={
-                "run_id": state.run.run_id,
-                "workflow": state.run.workflow_name,
-            },
-        )
+        thread = _create_runtime_thread(registry, state=state)
+
     thread = registry.add_message(
         thread.thread_id,
         role="user",
         author_type=AuthorType.FOUNDER,
         content=founder_message,
-        metadata={"iteration": 1, "kind": "initial_intent"},
-    )
-    pm_response = pm_agent.execute_model(
-        (
-            "Founder intent:\n"
-            f"{founder_message}\n\n"
-            "Respond as PM with a short strategic alignment summary, "
-            "proposed scope, and one concise next-step recommendation."
-        ),
-        project=state.run.project,
         metadata={
-            "run_id": state.run.run_id,
-            "step_name": step_name,
-            "conversation_thread_id": thread.thread_id,
-            "conversation_mode": "founder_pm_iteration",
+            "iteration": 0,
+            "kind": "initial_intent",
+            "conversation_event": "FOUNDER_RESPONSE_RECEIVED",
         },
     )
-    register_model_execution_cost(
-        state,
-        step_name=step_name,
-        execution=pm_response,
-    )
-    thread = registry.add_message(
-        thread.thread_id,
-        role="assistant",
-        author_type=AuthorType.PM,
-        content=pm_response.output,
-        metadata={
-            "iteration": 1,
-            "provider": pm_response.provider,
-            "model": pm_response.model,
-            "effective_provider": pm_response.effective_provider,
-            "effective_model": pm_response.effective_model,
-            "fallback_used": pm_response.fallback_used,
-        },
-    )
-    founder_feedback = (
-        "Founder feedback: proceed with a narrowed first iteration and keep the "
-        "brief in draft until explicit approval."
-    )
-    thread = registry.add_message(
-        thread.thread_id,
-        role="user",
-        author_type=AuthorType.FOUNDER,
-        content=founder_feedback,
-        metadata={"iteration": 1, "kind": "feedback"},
-    )
+
+    decision = apply_founder_message_policy(thread, founder_message=founder_message)
+    thread = update_thread_with_policy_decision(thread, decision)
+    registry.save_thread(thread)
+
+    if decision.last_pm_message is not None:
+        thread = registry.add_message(
+            thread.thread_id,
+            role="assistant",
+            author_type=AuthorType.PM,
+            content=decision.last_pm_message,
+            metadata={
+                "iteration": decision.iteration_count,
+                "conversation_event": "PM_QUESTION_SENT",
+                "pending_questions_count": len(decision.pending_questions),
+            },
+        )
+
+    if decision.phase == ConversationPhase.PM_QUESTIONS:
+        founder_feedback = (
+            "Usuario principal: recepcionistas y pacientes.\n"
+            "Alcance MVP: crear reserva, confirmar turno y ver agenda diaria.\n"
+            "Restricciones: sin autoaprobacion, sin chatbot libre y sin multiples PM.\n"
+            "Exito esperado: validar que se pueda crear y confirmar una reserva end to end."
+        )
+        thread = registry.add_message(
+            thread.thread_id,
+            role="user",
+            author_type=AuthorType.FOUNDER,
+            content=founder_feedback,
+            metadata={
+                "iteration": decision.iteration_count,
+                "kind": "simulated_founder_reply",
+                "conversation_event": "FOUNDER_RESPONSE_RECEIVED",
+            },
+        )
+        decision = apply_founder_message_policy(thread, founder_message=founder_feedback)
+        thread = update_thread_with_policy_decision(thread, decision)
+        registry.save_thread(thread)
+        if decision.last_pm_message is not None:
+            thread = registry.add_message(
+                thread.thread_id,
+                role="assistant",
+                author_type=AuthorType.PM,
+                content=decision.last_pm_message,
+                metadata={
+                    "iteration": decision.iteration_count,
+                    "conversation_event": "BRIEF_DRAFT_CREATED",
+                    "brief_version": decision.brief_version,
+                },
+            )
+
     memory_record = ProjectMemoryRegistry.default().add_memory(
         project=state.run.project,
         category=MemoryCategory.BUSINESS_DECISION,
         title=f"Founder decision for {state.run.issue_id}",
         content=(
             f"Founder intent: {founder_message}\n\n"
-            f"PM alignment: {pm_response.output}\n\n"
-            f"Founder feedback: {founder_feedback}"
+            f"Conversation phase: {decision.phase.value}\n"
+            f"Pending questions: {len(decision.pending_questions)}\n"
+            f"Brief version: {decision.brief_version}"
         ),
         source_type=MemorySourceType.CONVERSATION,
         source_id=thread.thread_id,
@@ -150,6 +155,7 @@ def founder_pm_conversation_node(
             "run_id": state.run.run_id,
             "issue_id": state.run.issue_id,
             "conversation_status": thread.status.value,
+            "conversation_phase": decision.phase.value,
         },
     )
     memory_metadata = build_project_memory_metadata(
@@ -159,19 +165,15 @@ def founder_pm_conversation_node(
 
     state.run.metadata["founder_pm_conversation"] = {
         "status": "completed",
-        "summary": (
-            "Founder and PM completed one strategic iteration before drafting "
-            "the BusinessBrief."
-        ),
+        "summary": "Founder and PM iterated under the contractual conversation policy.",
         "thread_id": thread.thread_id,
         "conversation_status": thread.status.value,
-        "iteration_count": 1,
+        "conversation_phase": decision.phase.value,
+        "iteration_count": decision.iteration_count,
+        "pending_questions_count": len(decision.pending_questions),
+        "brief_version": decision.brief_version,
         "message_count": len(thread.messages),
-        "provider": pm_response.provider,
-        "model": pm_response.model,
-        "effective_provider": pm_response.effective_provider,
-        "effective_model": pm_response.effective_model,
-        "fallback_used": pm_response.fallback_used,
+        "brief_draft": decision.brief_draft,
         "memory_id": memory_record.memory_id,
         **memory_metadata,
     }
@@ -179,7 +181,10 @@ def founder_pm_conversation_node(
     state.run.metadata["conversation_thread_id"] = thread.thread_id
     state.metadata["thread_id"] = thread.thread_id
     state.metadata["conversation_status"] = thread.status.value
-    state.metadata["iteration_count"] = 1
+    state.metadata["conversation_phase"] = decision.phase.value
+    state.metadata["iteration_count"] = decision.iteration_count
+    state.metadata["brief_version"] = decision.brief_version
+    state.metadata["pending_questions_count"] = len(decision.pending_questions)
     state.metadata["message_count"] = len(thread.messages)
     state.metadata["conversation_thread"] = thread.model_dump(mode="json")
     state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
@@ -193,6 +198,8 @@ def founder_pm_conversation_node(
                 "thread_id": thread.thread_id,
                 "message_count": len(thread.messages),
                 "conversation_status": thread.status.value,
+                "conversation_phase": decision.phase.value,
+                "brief_version": decision.brief_version,
             },
         )
     return complete_step(
@@ -201,9 +208,12 @@ def founder_pm_conversation_node(
         role=AgentRole.PM,
         metadata={
             "conversation_loop": True,
-            "iterations": 1,
+            "iterations": decision.iteration_count,
             "thread_id": thread.thread_id,
             "message_count": len(thread.messages),
+            "conversation_phase": decision.phase.value,
+            "brief_version": decision.brief_version,
+            "pending_questions_count": len(decision.pending_questions),
             "memory_id": memory_record.memory_id,
         },
     )
@@ -223,14 +233,7 @@ def founder_business_approval_node(
     if not thread_id:
         raise ValueError("Conversation thread must exist before founder approval.")
     conversation_registry = ConversationRegistry.default()
-    thread = conversation_registry.update_thread_status(
-        thread_id,
-        ConversationStatus.APPROVED,
-        metadata={
-            "business_brief_issue_id": business_brief.issue_id,
-            "business_brief_status": "approved",
-        },
-    )
+    thread = conversation_registry.get_thread(thread_id)
     review_registry = HumanReviewRegistry.default()
     review = review_registry.create_review(
         review_type=ReviewType.BUSINESS_BRIEF,
@@ -243,6 +246,8 @@ def founder_business_approval_node(
             "issue_id": business_brief.issue_id,
             "project": business_brief.project,
             "business_brief_status": business_brief.business_brief_status,
+            "run_id": state.run.run_id,
+            "thread_id": thread.thread_id,
         },
     )
     review = review_registry.complete_review(
@@ -251,6 +256,23 @@ def founder_business_approval_node(
         notes="Auto-approved by the simulated founder flow.",
         assigned_to=AgentRole.FOUNDER.value,
     )
+
+    thread_state = thread.founder_pm_state
+    if thread_state is None:
+        raise ValueError("Conversation state must exist before founder approval.")
+    approved_state = build_approval_state(
+        thread_state,
+        approval_message="approve",
+        review_id=review.review_id,
+    )
+    thread = thread.model_copy(
+        update={
+            "status": ConversationStatus.APPROVED,
+            "founder_pm_state": approved_state,
+        }
+    )
+    conversation_registry.save_thread(thread)
+
     memory_record = ProjectMemoryRegistry.default().add_memory(
         project=state.run.project,
         category=MemoryCategory.REVIEW_DECISION,
@@ -285,6 +307,8 @@ def founder_business_approval_node(
         "approved_by": AgentRole.FOUNDER.value,
         "thread_id": thread.thread_id,
         "conversation_status": thread.status.value,
+        "conversation_phase": approved_state.phase.value,
+        "brief_version": approved_state.brief_version,
         "message_count": len(thread.messages),
         "review_id": review.review_id,
         "review_type": review.review_type.value,
@@ -299,6 +323,9 @@ def founder_business_approval_node(
     state.metadata["business_brief_thread_id"] = thread.thread_id
     state.metadata["thread_id"] = thread.thread_id
     state.metadata["conversation_status"] = thread.status.value
+    state.metadata["conversation_phase"] = approved_state.phase.value
+    state.metadata["brief_version"] = approved_state.brief_version
+    state.metadata["pending_questions_count"] = 0
     state.metadata["message_count"] = len(thread.messages)
     state.metadata["conversation_thread"] = thread.model_dump(mode="json")
     state.metadata.setdefault("review_by_step", {})[step_name] = state.run.metadata[
@@ -316,6 +343,8 @@ def founder_business_approval_node(
                 "review_id": review.review_id,
                 "review_decision": review.decision.value if review.decision is not None else None,
                 "conversation_status": thread.status.value,
+                "conversation_phase": approved_state.phase.value,
+                "brief_version": approved_state.brief_version,
             },
         )
     return complete_step(
@@ -326,6 +355,8 @@ def founder_business_approval_node(
             "artifact": "BusinessBriefApproved",
             "founder_approved": True,
             "business_brief_status": "approved",
+            "conversation_phase": approved_state.phase.value,
+            "brief_version": approved_state.brief_version,
             "review_id": review.review_id,
             "review_type": review.review_type.value,
             "review_status": review.status.value,
@@ -333,3 +364,41 @@ def founder_business_approval_node(
             "memory_id": memory_record.memory_id,
         },
     )
+
+
+def _create_runtime_thread(
+    registry: ConversationRegistry,
+    *,
+    state: RuntimeState,
+    seed_thread_id: str | None = None,
+):
+    founder_pm_state = build_initial_founder_pm_state(
+        thread_id=seed_thread_id or "seed-thread-id",
+        project=state.run.project,
+        issue_id=state.run.issue_id,
+        telegram_chat_id=None,
+        metadata={
+            "run_id": state.run.run_id,
+            "workflow": state.run.workflow_name,
+        },
+    )
+    thread = registry.create_thread(
+        topic=f"Founder strategic iteration for {state.run.issue_id}",
+        project=state.run.project,
+        issue_id=state.run.issue_id,
+        founder_pm_state=founder_pm_state,
+        metadata={
+            "run_id": state.run.run_id,
+            "workflow": state.run.workflow_name,
+            **({"seed_thread_id": seed_thread_id} if seed_thread_id else {}),
+        },
+    )
+    thread = thread.model_copy(
+        update={
+            "founder_pm_state": founder_pm_state.model_copy(
+                update={"thread_id": thread.thread_id}
+            )
+        }
+    )
+    registry.save_thread(thread)
+    return thread

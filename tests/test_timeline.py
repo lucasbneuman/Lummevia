@@ -139,8 +139,10 @@ def test_runtime_registers_timeline_metadata_and_registry_snapshot() -> None:
     assert state.metadata["timeline_event_count"] == len(timeline.events)
     assert state.metadata["replay_available"] is True
     assert "WORKFLOW" in state.metadata["timeline_sources"]
-    assert any(event.event_type == "FOUNDER_CONVERSATION_MESSAGE" for event in timeline.events)
-    assert any(event.event_type == "REVIEW_COMPLETED" for event in timeline.events)
+    assert any(event.event_type == "FOUNDER_RESPONSE_RECEIVED" for event in timeline.events)
+    assert any(event.event_type == "PM_QUESTION_SENT" for event in timeline.events)
+    assert any(event.event_type == "BRIEF_DRAFT_CREATED" for event in timeline.events)
+    assert any(event.event_type == "BRIEF_APPROVED" for event in timeline.events)
     assert any(event.event_type == "QUEUE_CREATED" for event in timeline.events)
     assert any(event.event_type == "TASK_QUEUED" for event in timeline.events)
     assert any(event.event_type == "TASK_READY" for event in timeline.events)
@@ -171,3 +173,4 @@ def test_timeline_endpoints_list_and_get_reconstructed_timeline() -> None:
     assert body["metadata"]["replay_available"] is True
     assert body["metadata"]["timeline_event_count"] == len(body["events"])
     assert any(event["event_type"] == "QA_REVIEW_PENDING" for event in body["events"])
+    assert any(event["event_type"] == "BRIEF_DRAFT_CREATED" for event in body["events"])

@@ -1,23 +1,36 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
-from app.core.youtrack import ensure_youtrack_available
+from app.core.youtrack import (
+    ensure_youtrack_available,
+    load_agent_context_bundle,
+    summarize_artifact_for_youtrack,
+)
 from lummevia_conversations import (
     AuthorType,
+    ConversationPhase,
     ConversationRegistry,
     ConversationStatus,
     ConversationThread,
+    ConversationThreadNotFoundError,
+    apply_founder_message_policy,
+    build_approval_state,
+    build_initial_founder_pm_state,
+    is_explicit_approval,
+    update_thread_with_policy_decision,
 )
 from lummevia_integrations import (
     YouTrackCommentPayload,
     YouTrackConfigurationError,
     YouTrackIssueCreatePayload,
 )
+from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
@@ -56,6 +69,12 @@ class TelegramWebhookResponse(BaseModel):
     thread_id: str | None = None
     youtrack_comment_added: bool = False
     conversation_status: str | None = None
+    conversation_phase: str | None = None
+    brief_version: int = 0
+    approved: bool = False
+    pending_questions: list[str] = Field(default_factory=list)
+    pending_questions_count: int = 0
+    review_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -133,13 +152,169 @@ def _resolve_or_create_issue(
 def _find_existing_thread(*, project: str, issue_id: str, chat_id: int) -> ConversationThread | None:
     registry = ConversationRegistry.default()
     for thread in registry.list_threads():
+        state = thread.founder_pm_state
         if (
             thread.project == project
             and thread.issue_id == issue_id
-            and thread.metadata.get("telegram_chat_id") == chat_id
+            and (
+                (state is not None and state.telegram_chat_id == chat_id)
+                or thread.metadata.get("telegram_chat_id") == chat_id
+            )
         ):
             return thread
     return None
+
+
+def _telegram_threads() -> list[ConversationThread]:
+    return [
+        thread
+        for thread in ConversationRegistry.default().list_threads()
+        if thread.founder_pm_state is not None
+        and thread.founder_pm_state.telegram_chat_id is not None
+    ]
+
+
+def _build_thread_metadata(message: TelegramMessage, update: TelegramUpdate) -> dict[str, Any]:
+    return {
+        "telegram_chat_id": message.chat.id if message.chat is not None else None,
+        "telegram_user_id": message.from_user.id if message.from_user is not None else None,
+        "telegram_username": message.from_user.username if message.from_user is not None else None,
+        "telegram_message_id": message.message_id,
+        "telegram_update_id": update.update_id,
+    }
+
+
+def _build_youtrack_context(project: str, issue_id: str) -> dict[str, Any]:
+    bundle = load_agent_context_bundle(project=project, role="PM", issue_id=issue_id)
+    return bundle.model_dump(mode="json") if bundle is not None else {}
+
+
+def _sync_founder_message(issue_id: str, founder_message: str, message_id: int | None) -> None:
+    _client().add_comment(
+        issue_id,
+        YouTrackCommentPayload(
+            body=(
+                "Founder response received from Telegram.\n"
+                f"message_id: {message_id}\n\n"
+                f"{founder_message}"
+            ).strip()
+        ),
+    )
+
+
+def _sync_pm_questions(issue_id: str, pm_message: str) -> None:
+    _client().add_comment(
+        issue_id,
+        YouTrackCommentPayload(
+            body=f"PM needs clarification before drafting.\n\n{pm_message}"
+        ),
+    )
+
+
+def _sync_brief_draft(issue_id: str, brief_draft: dict[str, Any]) -> None:
+    payload = dict(brief_draft)
+    payload.pop("created_at", None)
+    _client().add_comment(
+        issue_id,
+        YouTrackCommentPayload(
+            body=summarize_artifact_for_youtrack(
+                artifact_type="BusinessBriefDraft",
+                payload=payload,
+            )
+        ),
+    )
+
+
+def _sync_approval(issue_id: str, thread_id: str, message_id: int | None, review_id: str) -> None:
+    _client().add_comment(
+        issue_id,
+        YouTrackCommentPayload(
+            body=(
+                "Founder approved the Business Brief from Telegram.\n"
+                f"thread_id: {thread_id}\n"
+                f"review_id: {review_id}\n"
+                f"message_id: {message_id}"
+            )
+        ),
+    )
+
+
+def _create_review_for_approval(thread: ConversationThread) -> str:
+    state = thread.founder_pm_state
+    if state is None:
+        raise ValueError("Founder PM state is required before creating a review.")
+    review = HumanReviewRegistry.default().create_review(
+        review_type=ReviewType.BUSINESS_BRIEF,
+        target_id=thread.issue_id,
+        target_type="BusinessBrief",
+        requested_by="PM",
+        assigned_to="FOUNDER",
+        notes="Founder explicit approval from Telegram.",
+        metadata={
+            "project": thread.project,
+            "issue_id": thread.issue_id,
+            "thread_id": thread.thread_id,
+            "brief_version": state.brief_version,
+            "conversation_phase": state.phase.value,
+        },
+    )
+    review = HumanReviewRegistry.default().complete_review(
+        review.review_id,
+        decision=ReviewDecision.APPROVED,
+        notes="Founder approved explicitly from Telegram.",
+        assigned_to="FOUNDER",
+    )
+    return review.review_id
+
+
+def _response_for_thread(
+    *,
+    action: str,
+    project: str,
+    issue_id: str,
+    thread: ConversationThread,
+    youtrack_comment_added: bool,
+    review_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> TelegramWebhookResponse:
+    state = thread.founder_pm_state
+    return TelegramWebhookResponse(
+        action=action,
+        project=project,
+        issue_id=issue_id,
+        thread_id=thread.thread_id,
+        youtrack_comment_added=youtrack_comment_added,
+        conversation_status=thread.status.value,
+        conversation_phase=state.phase.value if state is not None else None,
+        brief_version=state.brief_version if state is not None else 0,
+        approved=state.approved if state is not None else False,
+        pending_questions=state.pending_questions if state is not None else [],
+        pending_questions_count=len(state.pending_questions) if state is not None else 0,
+        review_id=review_id,
+        metadata=metadata or {},
+    )
+
+
+@router.get("/conversations", response_model=list[ConversationThread])
+def list_telegram_conversations() -> list[ConversationThread]:
+    return _telegram_threads()
+
+
+@router.get("/conversations/{thread_id}", response_model=ConversationThread)
+def get_telegram_conversation(thread_id: str) -> ConversationThread:
+    try:
+        thread = ConversationRegistry.default().get_thread(thread_id)
+    except ConversationThreadNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.args[0],
+        ) from exc
+    if thread.founder_pm_state is None or thread.founder_pm_state.telegram_chat_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Telegram conversation '{thread_id}' not found.",
+        )
+    return thread
 
 
 @router.post("/webhook", response_model=TelegramWebhookResponse)
@@ -188,69 +363,159 @@ def telegram_webhook(
         issue_id=issue_id,
         chat_id=message.chat.id,
     )
-    thread = existing_thread or registry.create_thread(
-        topic=f"Telegram founder conversation for {issue_id}",
-        project=project,
-        issue_id=issue_id,
-        metadata={
-            "telegram_chat_id": message.chat.id,
-            "telegram_user_id": message.from_user.id,
-            "telegram_username": message.from_user.username,
-        },
-    )
+
+    if existing_thread is None:
+        founder_pm_state = build_initial_founder_pm_state(
+            thread_id="seed-thread-id",
+            project=project,
+            issue_id=issue_id,
+            telegram_chat_id=message.chat.id,
+            metadata={"source": "telegram"},
+        )
+        thread = registry.create_thread(
+            topic=f"Telegram founder conversation for {issue_id}",
+            project=project,
+            issue_id=issue_id,
+            founder_pm_state=founder_pm_state,
+            metadata={
+                "telegram_chat_id": message.chat.id,
+                "telegram_user_id": message.from_user.id,
+                "telegram_username": message.from_user.username,
+            },
+        )
+        thread = thread.model_copy(
+            update={
+                "founder_pm_state": founder_pm_state.model_copy(
+                    update={"thread_id": thread.thread_id}
+                )
+            }
+        )
+        registry.save_thread(thread)
+    else:
+        thread = existing_thread
 
     founder_message = (
         body
         if body
-        else "Founder requested approval from Telegram."
+        else "approve"
         if command == "/approve"
         else "Founder intent received from Telegram."
     )
-    registry.add_message(
+    thread = registry.add_message(
         thread.thread_id,
         role="user",
         author_type=AuthorType.FOUNDER,
         content=founder_message,
         metadata={
+            **_build_thread_metadata(message, update),
             "source": "telegram",
-            "telegram_message_id": message.message_id,
-            "telegram_update_id": update.update_id,
             "command": command,
+            "conversation_event": "FOUNDER_RESPONSE_RECEIVED",
         },
     )
 
-    if command == "/approve":
-        thread = registry.update_thread_status(
-            thread.thread_id,
-            ConversationStatus.APPROVED,
-            metadata={"approved_via": "telegram"},
-        )
-        comment_body = (
-            "Founder approved the Business Brief gate from Telegram.\n"
-            f"message_id: {message.message_id}"
-        )
-        action = "approved"
-    else:
-        comment_body = (
-            "Founder intent received from Telegram.\n"
-            f"message_id: {message.message_id}\n\n"
-            f"{founder_message}"
-        )
-        action = "captured"
-
-    _client().add_comment(issue_id, YouTrackCommentPayload(body=comment_body))
-    current_thread = registry.get_thread(thread.thread_id)
-    return TelegramWebhookResponse(
-        action=action,
+    state = thread.founder_pm_state or build_initial_founder_pm_state(
+        thread_id=thread.thread_id,
         project=project,
         issue_id=issue_id,
-        thread_id=current_thread.thread_id,
+        telegram_chat_id=message.chat.id,
+    )
+    has_pending_draft = bool(state.metadata.get("brief_draft")) or state.phase == ConversationPhase.PENDING_APPROVAL
+    if has_pending_draft and (
+        command == "/approve" or is_explicit_approval(founder_message)
+    ):
+        review_id = _create_review_for_approval(thread)
+        approved_state = build_approval_state(
+            state,
+            approval_message=founder_message,
+            review_id=review_id,
+            now=datetime.now(UTC),
+        )
+        thread = thread.model_copy(
+            update={
+                "status": ConversationStatus.APPROVED,
+                "founder_pm_state": approved_state,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        registry.save_thread(thread)
+        _sync_approval(issue_id, thread.thread_id, message.message_id, review_id)
+        return _response_for_thread(
+            action="approved",
+            project=project,
+            issue_id=issue_id,
+            thread=thread,
+            youtrack_comment_added=True,
+            review_id=review_id,
+            metadata=_build_thread_metadata(message, update),
+        )
+
+    _sync_founder_message(issue_id, founder_message, message.message_id)
+    youtrack_context = _build_youtrack_context(project, issue_id)
+    decision = apply_founder_message_policy(
+        thread,
+        founder_message=founder_message,
+        youtrack_context=youtrack_context,
+    )
+    thread = update_thread_with_policy_decision(thread, decision)
+    registry.save_thread(thread)
+
+    if decision.last_pm_message is not None:
+        pm_event_type = (
+            "PM_QUESTION_SENT"
+            if decision.phase == ConversationPhase.PM_QUESTIONS
+            else "BRIEF_DRAFT_CREATED"
+        )
+        thread = registry.add_message(
+            thread.thread_id,
+            role="assistant",
+            author_type=AuthorType.PM,
+            content=decision.last_pm_message,
+            metadata={
+                "source": "telegram",
+                "conversation_event": pm_event_type,
+                "brief_version": decision.brief_version,
+                "pending_questions_count": len(decision.pending_questions),
+            },
+        )
+
+    if decision.phase == ConversationPhase.PM_QUESTIONS:
+        _sync_pm_questions(issue_id, decision.last_pm_message or "")
+        return _response_for_thread(
+            action="pm_questions",
+            project=project,
+            issue_id=issue_id,
+            thread=thread,
+            youtrack_comment_added=True,
+            metadata={
+                **_build_thread_metadata(message, update),
+                "youtrack_context_loaded": bool(youtrack_context),
+            },
+        )
+
+    if decision.brief_draft is not None:
+        _sync_brief_draft(issue_id, decision.brief_draft)
+        return _response_for_thread(
+            action="pending_approval",
+            project=project,
+            issue_id=issue_id,
+            thread=thread,
+            youtrack_comment_added=True,
+            metadata={
+                **_build_thread_metadata(message, update),
+                "youtrack_context_loaded": bool(youtrack_context),
+                "brief_draft_created_at": decision.metadata.get("draft_created_at"),
+            },
+        )
+
+    return _response_for_thread(
+        action="captured",
+        project=project,
+        issue_id=issue_id,
+        thread=thread,
         youtrack_comment_added=True,
-        conversation_status=current_thread.status.value,
         metadata={
-            "telegram_chat_id": message.chat.id,
-            "telegram_user_id": message.from_user.id,
-            "telegram_message_id": message.message_id,
-            "telegram_update_id": update.update_id,
+            **_build_thread_metadata(message, update),
+            "youtrack_context_loaded": bool(youtrack_context),
         },
     )

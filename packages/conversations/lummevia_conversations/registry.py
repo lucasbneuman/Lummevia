@@ -6,6 +6,7 @@ from typing import Any, ClassVar
 from lummevia_conversations.schemas import (
     AuthorType,
     ConversationMessage,
+    FounderPMConversationState,
     ConversationStatus,
     ConversationThread,
 )
@@ -43,12 +44,14 @@ class ConversationRegistry:
         topic: str,
         project: str,
         issue_id: str,
+        founder_pm_state: FounderPMConversationState | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> ConversationThread:
         thread = ConversationThread(
             topic=topic,
             project=project,
             issue_id=issue_id,
+            founder_pm_state=founder_pm_state,
             metadata=metadata or {},
         )
         self._threads[thread.thread_id] = thread
@@ -83,6 +86,11 @@ class ConversationRegistry:
         self._persist_thread(updated)
         return updated
 
+    def save_thread(self, thread: ConversationThread) -> ConversationThread:
+        self._threads[thread.thread_id] = thread
+        self._persist_thread(thread)
+        return thread
+
     def update_thread_status(
         self,
         thread_id: str,
@@ -101,6 +109,7 @@ class ConversationRegistry:
             }
         )
         self._threads[thread_id] = updated
+        self._persist_thread(updated)
         return updated
 
     def get_thread(self, thread_id: str) -> ConversationThread:

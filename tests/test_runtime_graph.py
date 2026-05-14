@@ -36,7 +36,10 @@ def test_runtime_executes_complete_workflow() -> None:
     assert state.artifacts.business_brief.founder_approved is True
     assert state.metadata["thread_id"].startswith("thread-")
     assert state.metadata["conversation_status"] == "APPROVED"
+    assert state.metadata["conversation_phase"] == "APPROVED"
     assert state.metadata["iteration_count"] == 1
+    assert state.metadata["brief_version"] == 1
+    assert state.metadata["pending_questions_count"] == 0
     assert state.artifacts.execution_package is not None
     assert state.artifacts.task_plan is not None
     assert state.artifacts.task_packages
@@ -86,6 +89,8 @@ def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
     assert state.metadata["prompt_pipeline"]["qa_validation"]["provider_adapter"] == "fake"
     assert state.metadata["business_brief_status"] == "approved"
     assert state.metadata["founder_approved"] is True
+    assert state.metadata["conversation_phase"] == "APPROVED"
+    assert state.metadata["brief_version"] == 1
 
 
 def test_dev_qa_loop_occurs_exactly_once() -> None:
@@ -220,8 +225,11 @@ def test_runtime_registers_founder_conversation_and_approval_events() -> None:
     assert approval_events[-1].metadata["founder_approved"] is True
     assert state.run.metadata["founder_pm_conversation"]["thread_id"].startswith("thread-")
     assert state.run.metadata["founder_pm_conversation"]["iteration_count"] == 1
-    assert state.run.metadata["founder_pm_conversation"]["message_count"] >= 2
+    assert state.run.metadata["founder_pm_conversation"]["message_count"] >= 4
+    assert state.run.metadata["founder_pm_conversation"]["conversation_phase"] == "PENDING_APPROVAL"
+    assert state.run.metadata["founder_pm_conversation"]["brief_version"] == 1
     assert state.run.metadata["founder_business_approval"]["thread_id"].startswith("thread-")
+    assert state.run.metadata["founder_business_approval"]["conversation_phase"] == "APPROVED"
 
 
 def test_runtime_founder_conversation_creates_pm_response_and_thread_metadata() -> None:
@@ -232,7 +240,9 @@ def test_runtime_founder_conversation_creates_pm_response_and_thread_metadata() 
 
     assert thread["thread_id"] == state.metadata["thread_id"]
     assert thread["status"] == "APPROVED"
-    assert len(thread["messages"]) >= 2
+    assert thread["founder_pm_state"]["phase"] == "APPROVED"
+    assert thread["founder_pm_state"]["brief_version"] == 1
+    assert len(thread["messages"]) >= 4
     assert thread["messages"][0]["author_type"] == "FOUNDER"
     assert any(message["author_type"] == "PM" for message in thread["messages"])
 

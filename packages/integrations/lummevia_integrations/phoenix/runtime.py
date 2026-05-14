@@ -103,7 +103,7 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "status": state.run.status.value,
             "loop_count": state.loop_count,
         }
-        for key in ("thread_id", "conversation_status"):
+        for key in ("thread_id", "conversation_status", "conversation_phase"):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = value
@@ -151,7 +151,7 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
-        for key in ("iteration_count", "message_count"):
+        for key in ("iteration_count", "message_count", "pending_questions_count", "brief_version"):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)

@@ -62,11 +62,26 @@ def pm_business_brief_node(
         )
     state.metadata["business_brief_status"] = state.artifacts.business_brief.business_brief_status
     state.metadata["founder_approved"] = state.artifacts.business_brief.founder_approved
+    state.metadata["conversation_phase"] = state.metadata.get("conversation_phase", "PENDING_APPROVAL")
+    state.metadata["brief_version"] = int(state.metadata.get("brief_version", 0) or 0)
+    state.run.metadata.setdefault("business_brief_context", {}).update(
+        {
+            "conversation_thread_id": state.metadata.get("thread_id"),
+            "brief_version": state.metadata.get("brief_version", 0),
+            "conversation_phase": state.metadata.get("conversation_phase"),
+            "pending_questions_count": state.metadata.get("pending_questions_count", 0),
+            "iteration_count": state.metadata.get("iteration_count", 0),
+        }
+    )
     if artifact_publisher is not None:
         artifact_publisher(
             state.run.issue_id,
             "BusinessBrief",
-            state.artifacts.business_brief.model_dump(mode="json"),
+            {
+                **state.artifacts.business_brief.model_dump(mode="json"),
+                "conversation_thread_id": state.metadata.get("thread_id"),
+                "brief_version": state.metadata.get("brief_version", 0),
+            },
         )
     return complete_step(
         state,
@@ -76,5 +91,7 @@ def pm_business_brief_node(
             "artifact": "BusinessBrief",
             "business_brief_status": state.artifacts.business_brief.business_brief_status,
             "founder_approved": state.artifacts.business_brief.founder_approved,
+            "conversation_phase": state.metadata.get("conversation_phase"),
+            "brief_version": state.metadata.get("brief_version", 0),
         },
     )

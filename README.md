@@ -260,18 +260,24 @@ En esta etapa:
 
 Alcance actual:
 
-- define contratos para `ConversationMessage`, `ConversationThread`, `ConversationStatus` y `AuthorType`
+- define contratos para `ConversationMessage`, `ConversationThread`, `ConversationStatus`, `ConversationPhase`, `FounderPMConversationState` y `AuthorType`
+- agrega una `PM Conversation Policy` deterministica, sin planner LLM, para detectar faltantes contractuales de objetivo, restricciones, usuario, alcance y exito esperado
+- limita la iteracion a `3` preguntas por vuelta y `5` iteraciones maximas para evitar loops infinitos
 - mantiene un `ConversationRegistry` en memoria con `create_thread`, `add_message`, `get_thread`, `list_threads` y `close_thread`
-- permite un ciclo simple `Founder -> PM -> Founder feedback` dentro del runtime
+- permite un loop contractual real `Founder ↔ Telegram ↔ PM ↔ YouTrack` antes del handoff tecnico
+- genera `BusinessBrief` draft con `conversation_thread_id` y `brief_version`
+- requiere aprobacion explicita via `approve`, `approved`, `ok aprobar`, `confirmo` o variantes simples
 - asocia el `BusinessBrief` aprobado con `thread_id` via metadata runtime
 - expone endpoints `GET /conversations`, `GET /conversations/{thread_id}` y `POST /conversations/{thread_id}/message`
+- expone endpoints Telegram `GET /telegram/conversations`, `GET /telegram/conversations/{thread_id}` y `POST /telegram/webhook`
 - guarda solo `thread_id` en persistence runtime cuando esta habilitada
-- agrega metadata de conversacion a Phoenix: `thread_id`, `conversation_status`, `iteration_count`, `message_count`
+- agrega metadata de conversacion a Phoenix: `thread_id`, `conversation_status`, `conversation_phase`, `brief_version`, `pending_questions_count`, `iteration_count`, `message_count`
+- agrega eventos de timeline `PM_QUESTION_SENT`, `FOUNDER_RESPONSE_RECEIVED`, `BRIEF_DRAFT_CREATED` y `BRIEF_APPROVED`
 
 Lifecycle actual del thread:
 
 ```text
-ACTIVE -> APPROVED -> CLOSED
+STARTED -> DISCOVERY -> PM_QUESTIONS -> DRAFTING_BRIEF -> PENDING_APPROVAL -> APPROVED -> CLOSED
 ```
 
 Roadmap deliberadamente fuera de alcance en esta etapa:

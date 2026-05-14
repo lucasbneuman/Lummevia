@@ -112,8 +112,11 @@ def test_phoenix_runtime_observer_exports_run_metadata() -> None:
     assert workflow_span.attributes["status"] == "COMPLETED"
     assert str(workflow_span.attributes["thread_id"]).startswith("thread-")
     assert workflow_span.attributes["conversation_status"] == "APPROVED"
+    assert workflow_span.attributes["conversation_phase"] == "APPROVED"
     assert workflow_span.attributes["iteration_count"] == 1
-    assert workflow_span.attributes["message_count"] >= 2
+    assert workflow_span.attributes["brief_version"] == 1
+    assert workflow_span.attributes["pending_questions_count"] == 0
+    assert workflow_span.attributes["message_count"] >= 4
     assert str(workflow_span.attributes["session_id"]).startswith("session-")
     assert workflow_span.attributes["session_status"] == "COMPLETED"
     assert workflow_span.attributes["session_role"] == "QA"
@@ -233,6 +236,8 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     founder_review_span = next(
         span for span in exporter.spans if span.name == "step:founder_business_approval"
     )
+    assert founder_review_span.attributes["conversation_phase"] == "APPROVED"
+    assert founder_review_span.attributes["brief_version"] == 1
     assert founder_review_span.attributes["review_type"] == "BUSINESS_BRIEF"
     assert founder_review_span.attributes["review_status"] == "COMPLETED"
     assert founder_review_span.attributes["review_decision"] == "APPROVED"
