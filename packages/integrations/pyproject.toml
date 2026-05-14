@@ -9,6 +9,7 @@ description = "Integration skeletons for Lummevia OS."
 requires-python = ">=3.12"
 dependencies = [
     "pydantic==2.11.4",
+    "httpx==0.28.1",
     "opentelemetry-sdk==1.38.0",
     "opentelemetry-exporter-otlp-proto-http==1.38.0",
     "lummevia-runtime",

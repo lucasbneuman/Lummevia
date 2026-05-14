@@ -120,6 +120,14 @@ class GitHubSettings:
 
 
 @dataclass(frozen=True)
+class TelegramSettings:
+    enabled: bool
+    bot_token: str | None
+    webhook_secret: str | None
+    bot_username: str | None
+
+
+@dataclass(frozen=True)
 class DeepSeekSettings:
     enabled: bool
     api_key: str | None
@@ -152,6 +160,7 @@ class Settings:
     phoenix: PhoenixSettings
     youtrack: YouTrackSettings
     github: GitHubSettings
+    telegram: TelegramSettings
     deepseek: DeepSeekSettings
     runtime_persistence: RuntimePersistenceSettings
     kilo: KiloSettings
@@ -241,6 +250,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         github=GitHubSettings(
             token=_read_optional_string(environment, "GITHUB_TOKEN"),
             org=_read_optional_string(environment, "GITHUB_ORG"),
+        ),
+        telegram=TelegramSettings(
+            enabled=_read_bool(environment, "TELEGRAM_ENABLED", False),
+            bot_token=_read_optional_string(environment, "TELEGRAM_BOT_TOKEN"),
+            webhook_secret=_read_optional_string(environment, "TELEGRAM_WEBHOOK_SECRET"),
+            bot_username=_read_optional_string(environment, "TELEGRAM_BOT_USERNAME"),
         ),
         deepseek=DeepSeekSettings(
             enabled=_read_bool(environment, "DEEPSEEK_ENABLED", False),

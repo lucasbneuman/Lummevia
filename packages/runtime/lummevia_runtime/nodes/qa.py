@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from lummevia_code_changes import CodeChangeRegistry, CodeChangeStatus
 from lummevia_core import AgentRole, ValidationStatus
 from lummevia_agents import QAAgent
@@ -31,6 +33,7 @@ def qa_validation_node(
     *,
     agent: QAAgent | None = None,
     kilo_client: KiloExecutionClient | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "qa_validation"
     task_package = state.artifacts.current_task_package
@@ -305,6 +308,12 @@ def qa_validation_node(
         )
     if state.artifacts.validation_package.status == ValidationStatus.FAILED:
         sync_task_queue_state(state)
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "ValidationPackage",
+            state.artifacts.validation_package.model_dump(mode="json"),
+        )
     return complete_step(
         state,
         step_name=step_name,

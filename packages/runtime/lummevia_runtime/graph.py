@@ -86,6 +86,8 @@ class DevelopmentRuntime:
         kilo_client: KiloExecutionClient | None = None,
         founder_pm_agent: PMAgent | None = None,
         persistence_metadata_resolver: Callable[[RuntimeState], dict[str, object]] | None = None,
+        context_loader: Callable[..., dict | None] | None = None,
+        artifact_publisher: Callable[[str, str, dict], None] | None = None,
     ) -> None:
         self.registry = registry or RuntimeRegistry()
         self.repository = repository
@@ -101,11 +103,25 @@ class DevelopmentRuntime:
             dev_agent=DevAgent(),
             qa_agent=QAAgent(),
             qc_agent=QCAgent(),
+            context_loader=context_loader,
+            artifact_publisher=artifact_publisher,
         )
 
-    def start_run(self, project: str, issue_id: str) -> RuntimeState:
+    def start_run(
+        self,
+        project: str,
+        issue_id: str,
+        *,
+        initial_metadata: dict[str, object] | None = None,
+    ) -> RuntimeState:
         from lummevia_runtime.queue import sync_task_queue_state
 
+        runtime_metadata = {
+            "workflow": "development_loop",
+            "repo_path": DEFAULT_REPO_PATH,
+        }
+        if initial_metadata is not None:
+            runtime_metadata.update(initial_metadata)
         initial_state = RuntimeState(
             run=WorkflowRun(
                 workflow_name="development_loop",
@@ -114,12 +130,9 @@ class DevelopmentRuntime:
                 status=WorkflowRunStatus.CREATED,
                 current_step=None,
                 events=[],
-                metadata={},
+                metadata=initial_metadata or {},
             ),
-            metadata={
-                "workflow": "development_loop",
-                "repo_path": DEFAULT_REPO_PATH,
-            },
+            metadata=runtime_metadata,
         )
         initialize_supervisor_runtime_state(initial_state)
         initialize_strategy_runtime_state(initial_state)
@@ -187,6 +200,8 @@ def build_development_graph(
     qa_agent: QAAgent | None = None,
     qc_agent: QCAgent | None = None,
     kilo_client: KiloExecutionClient | None = None,
+    context_loader: Callable[..., dict | None] | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ):
     runtime_observer = observer or NoopRuntimeObserver()
     founder_pm_agent = founder_pm_agent or PMAgent()
@@ -206,7 +221,12 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "pm_business_brief",
-            partial(pm_business_brief_node, agent=pm_agent),
+            partial(
+                pm_business_brief_node,
+                agent=pm_agent,
+                context_loader=context_loader,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -214,7 +234,11 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "founder_pm_conversation",
-            partial(founder_pm_conversation_node, agent=founder_pm_agent),
+            partial(
+                founder_pm_conversation_node,
+                agent=founder_pm_agent,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -222,7 +246,10 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "founder_business_approval",
-            founder_business_approval_node,
+            partial(
+                founder_business_approval_node,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -230,7 +257,12 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "po_execution_package",
-            partial(po_execution_package_node, agent=po_agent),
+            partial(
+                po_execution_package_node,
+                agent=po_agent,
+                context_loader=context_loader,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -238,7 +270,12 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "po_task_plan",
-            partial(po_task_plan_node, agent=po_agent, kilo_client=kilo_client),
+            partial(
+                po_task_plan_node,
+                agent=po_agent,
+                kilo_client=kilo_client,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -246,7 +283,13 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "po_task_packages",
-            partial(po_task_packages_node, agent=po_agent, kilo_client=kilo_client),
+            partial(
+                po_task_packages_node,
+                agent=po_agent,
+                kilo_client=kilo_client,
+                context_loader=context_loader,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -254,7 +297,12 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "dev_implementation",
-            partial(dev_implementation_node, agent=dev_agent, kilo_client=kilo_client),
+            partial(
+                dev_implementation_node,
+                agent=dev_agent,
+                kilo_client=kilo_client,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -262,7 +310,12 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "qa_validation",
-            partial(qa_validation_node, agent=qa_agent, kilo_client=kilo_client),
+            partial(
+                qa_validation_node,
+                agent=qa_agent,
+                kilo_client=kilo_client,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -271,14 +324,22 @@ def build_development_graph(
     )
     graph.add_node(
         "github_pr",
-        _instrument_node(runtime_observer, "github_pr", github_pr_node),
+        _instrument_node(
+            runtime_observer,
+            "github_pr",
+            partial(github_pr_node, artifact_publisher=artifact_publisher),
+        ),
     )
     graph.add_node(
         "qc_quality_approval",
         _instrument_node(
             runtime_observer,
             "qc_quality_approval",
-            partial(qc_quality_approval_node, agent=qc_agent),
+            partial(
+                qc_quality_approval_node,
+                agent=qc_agent,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
     graph.add_node(
@@ -286,7 +347,10 @@ def build_development_graph(
         _instrument_node(
             runtime_observer,
             "po_final_validation",
-            po_final_validation_node,
+            partial(
+                po_final_validation_node,
+                artifact_publisher=artifact_publisher,
+            ),
         ),
     )
 

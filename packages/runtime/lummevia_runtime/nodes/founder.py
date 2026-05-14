@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from lummevia_agents import PMAgent
 from lummevia_conversations import (
     AuthorType,
     ConversationRegistry,
     ConversationStatus,
+    ConversationThreadNotFoundError,
 )
 from lummevia_core import AgentRole
 from lummevia_memory import (
@@ -23,10 +26,13 @@ from lummevia_runtime.state import RuntimeState
 def founder_input_node(state: RuntimeState) -> RuntimeState:
     step_name = "founder_input"
     state = start_step(state, step_name=step_name, role=AgentRole.FOUNDER)
-    state.run.metadata["founder_input"] = {
-        "summary": f"Initial founder intent captured for issue {state.run.issue_id}.",
-        "project": state.run.project,
-    }
+    state.run.metadata.setdefault(
+        "founder_input",
+        {
+            "summary": f"Initial founder intent captured for issue {state.run.issue_id}.",
+            "project": state.run.project,
+        },
+    )
     state.metadata["founder_intent_captured"] = True
     state.metadata["founder_approved"] = False
     state.metadata["business_brief_status"] = "draft"
@@ -37,6 +43,7 @@ def founder_pm_conversation_node(
     state: RuntimeState,
     *,
     agent: PMAgent | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "founder_pm_conversation"
     state = start_step(state, step_name=step_name, role=AgentRole.PM)
@@ -47,15 +54,34 @@ def founder_pm_conversation_node(
         "summary",
         f"Initial founder intent captured for issue {state.run.issue_id}.",
     )
-    thread = registry.create_thread(
-        topic=f"Founder strategic iteration for {state.run.issue_id}",
-        project=state.run.project,
-        issue_id=state.run.issue_id,
-        metadata={
-            "run_id": state.run.run_id,
-            "workflow": state.run.workflow_name,
-        },
+    thread_id = (
+        str(state.run.metadata.get("conversation_thread_id", "")).strip()
+        or str(state.metadata.get("thread_id", "")).strip()
     )
+    if thread_id:
+        try:
+            thread = registry.get_thread(thread_id)
+        except ConversationThreadNotFoundError:
+            thread = registry.create_thread(
+                topic=f"Founder strategic iteration for {state.run.issue_id}",
+                project=state.run.project,
+                issue_id=state.run.issue_id,
+                metadata={
+                    "run_id": state.run.run_id,
+                    "workflow": state.run.workflow_name,
+                    "seed_thread_id": thread_id,
+                },
+            )
+    else:
+        thread = registry.create_thread(
+            topic=f"Founder strategic iteration for {state.run.issue_id}",
+            project=state.run.project,
+            issue_id=state.run.issue_id,
+            metadata={
+                "run_id": state.run.run_id,
+                "workflow": state.run.workflow_name,
+            },
+        )
     thread = registry.add_message(
         thread.thread_id,
         role="user",
@@ -150,6 +176,7 @@ def founder_pm_conversation_node(
         **memory_metadata,
     }
     state.run.metadata.setdefault("persistence", {})["thread_id"] = thread.thread_id
+    state.run.metadata["conversation_thread_id"] = thread.thread_id
     state.metadata["thread_id"] = thread.thread_id
     state.metadata["conversation_status"] = thread.status.value
     state.metadata["iteration_count"] = 1
@@ -158,6 +185,16 @@ def founder_pm_conversation_node(
     state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
     state.metadata.update(memory_metadata)
     state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "FounderPmConversation",
+            {
+                "thread_id": thread.thread_id,
+                "message_count": len(thread.messages),
+                "conversation_status": thread.status.value,
+            },
+        )
     return complete_step(
         state,
         step_name=step_name,
@@ -172,7 +209,11 @@ def founder_pm_conversation_node(
     )
 
 
-def founder_business_approval_node(state: RuntimeState) -> RuntimeState:
+def founder_business_approval_node(
+    state: RuntimeState,
+    *,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
+) -> RuntimeState:
     step_name = "founder_business_approval"
     state = start_step(state, step_name=step_name, role=AgentRole.FOUNDER)
     business_brief = state.artifacts.business_brief
@@ -266,6 +307,17 @@ def founder_business_approval_node(state: RuntimeState) -> RuntimeState:
     state.metadata.setdefault("memory_record_ids", []).append(memory_record.memory_id)
     state.metadata.update(memory_metadata)
     state.metadata["memory_records_created"] = len(state.metadata["memory_record_ids"])
+    if artifact_publisher is not None:
+        artifact_publisher(
+            business_brief.issue_id,
+            "BusinessBriefApproved",
+            {
+                "thread_id": thread.thread_id,
+                "review_id": review.review_id,
+                "review_decision": review.decision.value if review.decision is not None else None,
+                "conversation_status": thread.status.value,
+            },
+        )
     return complete_step(
         state,
         step_name=step_name,

@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from app.core.youtrack import set_youtrack_client_override
+from lummevia_integrations import YouTrackClient
 from main import app
 
 
@@ -136,6 +138,80 @@ def test_runtime_post_generates_unique_run_ids() -> None:
     assert first.status_code == 200
     assert second.status_code == 200
     assert first.json()["run"]["run_id"] != second.json()["run"]["run_id"]
+
+
+def test_runtime_post_loads_youtrack_operational_context_and_accepts_telegram_seed() -> None:
+    import httpx
+
+    requests_seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append(f"{request.method} {request.url.path}")
+        if request.url.path == "/api/issues/OS-900":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "2-900",
+                    "idReadable": "OS-900",
+                    "summary": "Telegram-seeded issue",
+                    "description": "Founder intent from Telegram.",
+                    "project": {"shortName": "lummevia-os"},
+                    "customFields": [{"name": "State", "value": {"name": "Open"}}],
+                    "tags": [{"name": "telegram"}],
+                },
+            )
+        if request.url.path == "/api/articles":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": "10-1",
+                        "idReadable": "OS-A-1",
+                        "summary": "PM workflow guide",
+                        "content": "PM workflow and approval gate.",
+                        "project": {"shortName": "lummevia-os"},
+                        "tags": [{"name": "pm"}],
+                    },
+                    {
+                        "id": "10-2",
+                        "idReadable": "OS-A-2",
+                        "summary": "PO workflow guide",
+                        "content": "PO task packages and execution package rules.",
+                        "project": {"shortName": "lummevia-os"},
+                        "tags": [{"name": "po"}],
+                    },
+                ],
+            )
+        if request.url.path == "/api/issues/OS-900/comments":
+            return httpx.Response(200, json={"id": "4-900", "text": "Synced artifact"})
+        if request.url.path == "/api/issues":
+            return httpx.Response(200, json=[])
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    set_youtrack_client_override(
+        YouTrackClient(
+            base_url="https://youtrack.example.com",
+            token="token-123",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+
+    response = client.post(
+        "/runtime/development/run",
+        json={
+            "project": "lummevia-os",
+            "issue_id": "OS-900",
+            "founder_input_summary": "Founder intent from Telegram.",
+            "conversation_thread_id": "thread-telegram-seed",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["run"]["metadata"]["founder_input"]["summary"] == "Founder intent from Telegram."
+    assert body["metadata"]["operational_context"]["pm_business_brief"]["issue"]["issue_id"] == "OS-900"
+    assert body["metadata"]["operational_context"]["po_execution_package"]["issue"]["issue_id"] == "OS-900"
+    assert "POST /api/issues/OS-900/comments" in requests_seen
 
 
 def test_runtime_get_returns_existing_run() -> None:

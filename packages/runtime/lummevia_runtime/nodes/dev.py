@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from lummevia_core import AgentRole
 from lummevia_agents import DevAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
@@ -17,6 +19,7 @@ def dev_implementation_node(
     *,
     agent: DevAgent | None = None,
     kilo_client: KiloExecutionClient | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "dev_implementation"
     task_package = state.artifacts.current_task_package
@@ -88,6 +91,12 @@ def dev_implementation_node(
             "implementation_revision": state.loop_count + 1,
         },
     )
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "ImplementationPackage",
+            state.artifacts.implementation_package.model_dump(mode="json"),
+        )
     return complete_step(
         state,
         step_name=step_name,

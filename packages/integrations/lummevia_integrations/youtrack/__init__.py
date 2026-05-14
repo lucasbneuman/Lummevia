@@ -1,21 +1,47 @@
 from lummevia_integrations.youtrack.client import YouTrackClient
 from lummevia_integrations.youtrack.exceptions import (
+    YouTrackConfigurationError,
     YouTrackIntegrationError,
     YouTrackIntegrationNotImplementedError,
 )
 from lummevia_integrations.youtrack.schemas import (
+    AgentContextBundle,
+    KnowledgeDocumentRef,
+    OperationalIssueRef,
+    ProjectContextSource,
+    ProjectContextSourceType,
     YouTrackArtifactLink,
     YouTrackBugPayload,
+    YouTrackComment,
     YouTrackCommentPayload,
+    YouTrackIssue,
+    YouTrackIssueCreatePayload,
+    YouTrackIssueCustomField,
     YouTrackIssueRef,
+    YouTrackIssueUpdatePayload,
+    YouTrackKnowledgeDocument,
+    YouTrackKnowledgeDocumentUpsertPayload,
 )
 
 __all__ = [
+    "AgentContextBundle",
+    "KnowledgeDocumentRef",
+    "OperationalIssueRef",
+    "ProjectContextSource",
+    "ProjectContextSourceType",
     "YouTrackArtifactLink",
     "YouTrackBugPayload",
     "YouTrackClient",
+    "YouTrackComment",
     "YouTrackCommentPayload",
+    "YouTrackConfigurationError",
     "YouTrackIntegrationError",
     "YouTrackIntegrationNotImplementedError",
+    "YouTrackIssue",
+    "YouTrackIssueCreatePayload",
+    "YouTrackIssueCustomField",
     "YouTrackIssueRef",
+    "YouTrackIssueUpdatePayload",
+    "YouTrackKnowledgeDocument",
+    "YouTrackKnowledgeDocumentUpsertPayload",
 ]

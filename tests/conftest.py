@@ -107,9 +107,11 @@ def reset_default_registries():
     from lummevia_supervisor import SupervisorRegistry
     from lummevia_timeline import TimelineRegistry
     from app.core.persistence import configure_operational_persistence
+    from app.core.youtrack import set_youtrack_client_override
     from app.api.routes import runtime as runtime_routes
 
     configure_operational_persistence(None)
+    set_youtrack_client_override(None)
     runtime_routes.runtime_service = runtime_routes._build_runtime_service()
     runtime_routes.runtime_repository = None
     ConversationRegistry.default().reset()
@@ -130,6 +132,7 @@ def reset_default_registries():
     TimelineRegistry.default().reset()
     yield
     configure_operational_persistence(None)
+    set_youtrack_client_override(None)
     runtime_routes.runtime_service = runtime_routes._build_runtime_service()
     runtime_routes.runtime_repository = None
     ConversationRegistry.default().reset()

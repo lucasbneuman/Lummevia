@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.persistence import annotate_runtime_state, resolve_runtime_persistence_metadata
 from app.core.model_execution import build_pm_conversation_model_executor
+from app.core.youtrack import load_agent_context_bundle, summarize_artifact_for_youtrack, sync_issue_comment
 from lummevia_agents import PMAgent
 from lummevia_integrations import PhoenixClient, PhoenixRuntimeObserver
 from lummevia_kilo import KiloExecutionClient, KiloRuntimeSettings
@@ -17,6 +18,13 @@ from lummevia_runtime.persistence.repository import WorkflowRunRepository
 
 
 router = APIRouter(prefix="/runtime", tags=["runtime"])
+
+
+def _publish_runtime_artifact(issue_id: str, artifact_type: str, payload: dict) -> None:
+    sync_issue_comment(
+        issue_id,
+        summarize_artifact_for_youtrack(artifact_type=artifact_type, payload=payload),
+    )
 
 
 def _build_runtime_service() -> DevelopmentRuntime:
@@ -43,6 +51,8 @@ def _build_runtime_service() -> DevelopmentRuntime:
         kilo_client=KiloExecutionClient(settings=_build_kilo_runtime_settings()),
         founder_pm_agent=founder_pm_agent,
         persistence_metadata_resolver=resolve_runtime_persistence_metadata,
+        context_loader=load_agent_context_bundle,
+        artifact_publisher=_publish_runtime_artifact,
     )
 
 
@@ -65,13 +75,24 @@ runtime_repository: WorkflowRunRepository | None = None
 class DevelopmentRunRequest(BaseModel):
     project: str
     issue_id: str
+    founder_input_summary: str | None = None
+    conversation_thread_id: str | None = None
 
 
 @router.post("/development/run", response_model=RuntimeState)
 def create_development_run(request: DevelopmentRunRequest) -> RuntimeState:
+    initial_metadata: dict[str, object] = {}
+    if request.founder_input_summary is not None:
+        initial_metadata["founder_input"] = {
+            "summary": request.founder_input_summary,
+            "project": request.project,
+        }
+    if request.conversation_thread_id is not None:
+        initial_metadata["conversation_thread_id"] = request.conversation_thread_id
     state = runtime_service.start_run(
         project=request.project,
         issue_id=request.issue_id,
+        initial_metadata=initial_metadata or None,
     )
     annotate_runtime_state(state)
 

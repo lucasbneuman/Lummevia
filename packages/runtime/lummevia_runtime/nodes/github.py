@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from lummevia_core import AgentRole
 
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.state import RuntimeState
 
 
-def github_pr_node(state: RuntimeState) -> RuntimeState:
+def github_pr_node(
+    state: RuntimeState,
+    *,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
+) -> RuntimeState:
     step_name = "github_pr"
     state = start_step(state, step_name=step_name, role=AgentRole.DEV)
 
@@ -24,6 +30,12 @@ def github_pr_node(state: RuntimeState) -> RuntimeState:
         "status": "OPEN",
     }
     state.metadata["pull_request_created"] = True
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "PullRequest",
+            state.artifacts.pull_request,
+        )
     return complete_step(
         state,
         step_name=step_name,

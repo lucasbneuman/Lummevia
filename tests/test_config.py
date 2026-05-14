@@ -24,6 +24,10 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.youtrack.token is None
     assert settings.github.token is None
     assert settings.github.org is None
+    assert settings.telegram.enabled is False
+    assert settings.telegram.bot_token is None
+    assert settings.telegram.webhook_secret is None
+    assert settings.telegram.bot_username is None
     assert settings.deepseek.enabled is False
     assert settings.deepseek.api_key is None
     assert settings.deepseek.base_url == "https://api.deepseek.com"
@@ -65,6 +69,10 @@ def test_settings_load_safe_values_from_env() -> None:
             "YOUTRACK_TOKEN": "yt-token",
             "GITHUB_TOKEN": "gh-token",
             "GITHUB_ORG": "lummevia",
+            "TELEGRAM_ENABLED": "true",
+            "TELEGRAM_BOT_TOKEN": "telegram-token",
+            "TELEGRAM_WEBHOOK_SECRET": "telegram-secret",
+            "TELEGRAM_BOT_USERNAME": "lummevia_pm_bot",
             "DEEPSEEK_ENABLED": "true",
             "DEEPSEEK_API_KEY": "ds-key",
             "DEEPSEEK_BASE_URL": "https://deepseek.example.com",
@@ -100,6 +108,10 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.youtrack.token == "yt-token"
     assert settings.github.token == "gh-token"
     assert settings.github.org == "lummevia"
+    assert settings.telegram.enabled is True
+    assert settings.telegram.bot_token == "telegram-token"
+    assert settings.telegram.webhook_secret == "telegram-secret"
+    assert settings.telegram.bot_username == "lummevia_pm_bot"
     assert settings.deepseek.enabled is True
     assert settings.deepseek.api_key == "ds-key"
     assert settings.deepseek.base_url == "https://deepseek.example.com"
@@ -211,6 +223,10 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "YOUTRACK_TOKEN=",
         "GITHUB_TOKEN=",
         "GITHUB_ORG=",
+        "TELEGRAM_ENABLED=",
+        "TELEGRAM_BOT_TOKEN=",
+        "TELEGRAM_WEBHOOK_SECRET=",
+        "TELEGRAM_BOT_USERNAME=",
         "DEEPSEEK_API_KEY=",
         "DEEPSEEK_BASE_URL=",
         "DEEPSEEK_ENABLED=",
@@ -246,6 +262,12 @@ def test_compose_passes_deepseek_and_model_router_variables_without_hardcoded_se
     ).read_text(encoding="utf-8")
 
     expected_entries = [
+        "YOUTRACK_BASE_URL: ${YOUTRACK_BASE_URL:-}",
+        "YOUTRACK_TOKEN: ${YOUTRACK_TOKEN:-}",
+        "TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}",
+        "TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}",
+        "TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}",
+        "TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}",
         "DEEPSEEK_ENABLED: ${DEEPSEEK_ENABLED:-false}",
         "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}",
         "DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}",

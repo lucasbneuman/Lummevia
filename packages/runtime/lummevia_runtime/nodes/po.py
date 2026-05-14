@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from lummevia_core import AgentRole, WorkflowRunStatus
 from lummevia_agents import POAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
@@ -16,6 +18,8 @@ def po_execution_package_node(
     state: RuntimeState,
     *,
     agent: POAgent | None = None,
+    context_loader: Callable[..., dict | None] | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "po_execution_package"
     business_brief = state.artifacts.business_brief
@@ -26,12 +30,22 @@ def po_execution_package_node(
 
     state = start_step(state, step_name=step_name, role=AgentRole.PO)
     po_agent = agent or POAgent()
+    external_context = None
+    if context_loader is not None:
+        external_context = context_loader(
+            project=state.run.project,
+            role=AgentRole.PO,
+            issue_id=state.run.issue_id,
+        )
     pipeline_result = po_agent.execute_prompt_pipeline(
         project=state.run.project,
         issue_id=state.run.issue_id,
         target_artifact="ExecutionPackage",
         available_artifacts={
             "business_brief": business_brief,
+            "operational_context": external_context.model_dump(mode="json")
+            if external_context is not None
+            else None,
         },
         metadata={
             "run_id": state.run.run_id,
@@ -39,6 +53,7 @@ def po_execution_package_node(
             "loop_count": state.loop_count,
             "founder_approved": business_brief.founder_approved,
             "business_brief_status": business_brief.business_brief_status,
+            "has_operational_context": external_context is not None,
         },
     )
     state.artifacts.execution_package = pipeline_result.structured_output
@@ -47,6 +62,16 @@ def po_execution_package_node(
         "prompt_pipeline"
     )
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
+    if external_context is not None:
+        state.metadata.setdefault("operational_context", {})[step_name] = external_context.model_dump(
+            mode="json"
+        )
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "ExecutionPackage",
+            state.artifacts.execution_package.model_dump(mode="json"),
+        )
     return complete_step(
         state,
         step_name=step_name,
@@ -64,6 +89,7 @@ def po_task_plan_node(
     *,
     agent: POAgent | None = None,
     kilo_client: KiloExecutionClient | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "po_task_plan"
     execution_package = state.artifacts.execution_package
@@ -110,6 +136,12 @@ def po_task_plan_node(
     state.metadata.setdefault("artifact_sources", {})["task_plan"] = "prompt_pipeline"
     state.metadata.setdefault("kilo", {})[step_name] = kilo_execution
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "TaskPlan",
+            state.artifacts.task_plan.model_dump(mode="json"),
+        )
     return complete_step(
         state,
         step_name=step_name,
@@ -126,6 +158,8 @@ def po_task_packages_node(
     *,
     agent: POAgent | None = None,
     kilo_client: KiloExecutionClient | None = None,
+    context_loader: Callable[..., dict | None] | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "po_task_packages"
     task_plan = state.artifacts.task_plan
@@ -134,6 +168,13 @@ def po_task_packages_node(
 
     state = start_step(state, step_name=step_name, role=AgentRole.PO)
     po_agent = agent or POAgent()
+    external_context = None
+    if context_loader is not None:
+        external_context = context_loader(
+            project=state.run.project,
+            role=AgentRole.PO,
+            issue_id=state.run.issue_id,
+        )
     task_packages = []
     for task_index, task_id in enumerate(task_plan.task_packages):
         pipeline_result = po_agent.execute_prompt_pipeline(
@@ -143,6 +184,9 @@ def po_task_packages_node(
             available_artifacts={
                 "execution_package": state.artifacts.execution_package,
                 "task_plan": task_plan,
+                "operational_context": external_context.model_dump(mode="json")
+                if external_context is not None
+                else None,
             },
             metadata={
                 "run_id": state.run.run_id,
@@ -154,6 +198,11 @@ def po_task_packages_node(
         )
         task_packages.append(pipeline_result.structured_output)
         register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
+    if external_context is not None:
+        for task_package in task_packages:
+            task_package.metadata["operational_context"] = external_context.model_dump(
+                mode="json"
+            )
     state.artifacts.task_packages = task_packages
     initialize_task_queue(state, task_packages=task_packages)
     current_task_id = state.metadata.get("current_queue_task_id")
@@ -201,6 +250,24 @@ def po_task_packages_node(
         "task_ids": [task_package.task_id for task_package in task_packages],
         "provider_adapter": "fake",
     }
+    if external_context is not None:
+        state.metadata.setdefault("operational_context", {})[step_name] = external_context.model_dump(
+            mode="json"
+        )
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "TaskPackageCollection",
+            {
+                "task_ids": [task_package.task_id for task_package in task_packages],
+                "task_package_count": len(task_packages),
+                "current_task_package": (
+                    state.artifacts.current_task_package.task_id
+                    if state.artifacts.current_task_package is not None
+                    else None
+                ),
+            },
+        )
     return complete_step(
         state,
         step_name=step_name,
@@ -219,7 +286,11 @@ def po_task_packages_node(
     )
 
 
-def po_final_validation_node(state: RuntimeState) -> RuntimeState:
+def po_final_validation_node(
+    state: RuntimeState,
+    *,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
+) -> RuntimeState:
     step_name = "po_final_validation"
     state = start_step(state, step_name=step_name, role=AgentRole.PO)
     state.artifacts.final_validation = {
@@ -232,6 +303,12 @@ def po_final_validation_node(state: RuntimeState) -> RuntimeState:
         ),
     }
     state.run.status = WorkflowRunStatus.COMPLETED
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "FinalValidation",
+            state.artifacts.final_validation,
+        )
     return complete_step(
         state,
         step_name=step_name,

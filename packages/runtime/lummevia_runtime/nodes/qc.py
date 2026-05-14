@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from lummevia_core import AgentRole
 from lummevia_agents import QCAgent
 
@@ -12,6 +14,7 @@ def qc_quality_approval_node(
     state: RuntimeState,
     *,
     agent: QCAgent | None = None,
+    artifact_publisher: Callable[[str, str, dict], None] | None = None,
 ) -> RuntimeState:
     step_name = "qc_quality_approval"
     state = start_step(state, step_name=step_name, role=AgentRole.QC)
@@ -38,6 +41,12 @@ def qc_quality_approval_node(
         "prompt_pipeline"
     )
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
+    if artifact_publisher is not None:
+        artifact_publisher(
+            state.run.issue_id,
+            "QualityApproval",
+            state.artifacts.quality_approval.model_dump(mode="json"),
+        )
     return complete_step(
         state,
         step_name=step_name,

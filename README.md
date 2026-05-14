@@ -232,7 +232,7 @@ $env:MODEL_DEV_MAX_TOKENS="4096"
 
 Tambien expone enums comunes para prioridad, estados de validacion y roles usados por estos contratos.
 
-En esta etapa el paquete solo modela y valida datos con Pydantic. Todavia no incluye integracion real con YouTrack, endpoints FastAPI, base de datos ni workflows ejecutables.
+En esta etapa el paquete solo modela y valida datos con Pydantic. El paquete en si no incluye integracion con YouTrack, endpoints FastAPI, base de datos ni workflows ejecutables; esas capacidades viven en otras capas del repositorio.
 
 Tambien incluye un workflow skeleton contractual en `workflow.py` y `workflow_steps.py` para representar el flujo principal del desarrollo sin ejecutar pasos reales.
 Tambien incluye un skeleton contractual de `WorkflowRun` y `WorkflowRunEvent` para modelar futuras ejecuciones sin ejecutarlas ni persistirlas.
@@ -783,7 +783,8 @@ En esta etapa:
 - los outputs estructurados son mocks validos contra Pydantic
 - no existe parsing real de respuesta LLM
 - no hay prompts productivos definitivos
-- no hay integracion real con DeepSeek fuera del dry-run controlado del `PM`, YouTrack, GitHub o Phoenix desde esta capa
+- no hay integracion real con DeepSeek fuera del dry-run controlado del `PM`
+- desde esta capa los agentes siguen sin hablar directamente con YouTrack, GitHub o Phoenix; ese wiring ocurre en runtime/API
 
 ### Model Execution Abstraction
 
@@ -882,7 +883,7 @@ Limitaciones actuales:
 - se sigue usando `FakeModelProvider`
 - no hay providers reales conectados fuera del dry-run controlado de DeepSeek para `PM`
 - no hay ejecucion real de Kilo CLI
-- no hay integracion real con YouTrack
+- la integracion real con YouTrack vive en `packages/integrations` y `apps/orchestrator-api`, no en esta capa de runtime puro
 - no hay integracion real con GitHub
 - no hay prompts reales instrumentados
 - no hay tokens ni costos reales instrumentados
@@ -904,7 +905,8 @@ Hoy expone:
 - schemas de contrato
 - excepciones propias
 - un adaptador real minimo para Phoenix
-- clientes placeholder para YouTrack y GitHub
+- un adaptador real inicial para YouTrack con issues, comments, articulos KB y bundles de contexto
+- clientes placeholder para GitHub
 
 La integracion de `phoenix` define contratos para trazas, spans y evaluaciones, y agrega un adaptador real minimo basado en OpenTelemetry para exportar trazas del runtime simulado a `PHOENIX_BASE_URL`.
 
@@ -925,7 +927,7 @@ La instrumentacion actual de Phoenix:
 - agrega eventos runtime por step y refleja el loop `DEV ↔ QA`
 - registra errores de runtime e instrumentacion sin romper el workflow
 
-Todavia no hace llamadas reales a YouTrack o GitHub, no envia prompts reales, no instrumenta tokens ni costos reales y no conecta providers LLM.
+Hoy Phoenix y YouTrack ya tienen integracion real inicial. GitHub sigue en placeholder, el pipeline todavia no envia prompts reales y los tokens/costos siguen siendo mayormente estimados salvo el dry-run controlado del `PM`.
 
 ## Configuracion
 
@@ -1007,9 +1009,11 @@ Comportamiento actual de DeepSeek:
 - si DeepSeek esta enabled pero falta la API key, el dry-run falla de forma explicita
 - `deepseek-chat` es el modelo validado y recomendado hoy para el dry-run controlado de `PM`
 - `deepseek-v4-strong-placeholder`, `deepseek-v4-lite-placeholder` y `deepseek-v4-qc-placeholder` siguen siendo placeholders de naming hasta confirmacion oficial
-- `PO`, `DEV`, `QA`, `QC`, Kilo, GitHub y YouTrack siguen fuera de alcance real
+- `PO`, `DEV`, `QA`, `QC` y Kilo siguen fuera de alcance real a nivel LLM/provider productivo
+- GitHub sigue fuera de alcance real
+- YouTrack ya puede operar como capa real de contexto operativo y comentarios desde la API
 
-YouTrack y GitHub todavia no son obligatorios para levantar `orchestrator-api`. Sus tokens y URLs pueden quedar vacios mientras las integraciones sigan siendo skeletons contractuales.
+YouTrack y GitHub no son obligatorios para levantar `orchestrator-api`. Si `YOUTRACK_BASE_URL` y `YOUTRACK_TOKEN` estan vacios, la API sigue levantando y el runtime simplemente omite el sync/contexto operativo real.
 
 3. Levantar el stack local de desarrollo:
 
@@ -1188,7 +1192,8 @@ Los endpoints de `runtime` ejecutan un workflow de desarrollo simulado con LangG
 Estos endpoints:
 
 - no llaman LLMs reales
-- no conectan YouTrack ni GitHub reales
+- pueden cargar contexto operativo real desde YouTrack y sincronizar comentarios/artefactos cuando `YOUTRACK_BASE_URL` y `YOUTRACK_TOKEN` estan configurados
+- no conectan GitHub real todavia
 - si conectan Phoenix para observabilidad del runtime cuando `PHOENIX_ENABLED=true`
 - no persisten datos
 - si registran estado, artefactos y eventos del runtime simulado
