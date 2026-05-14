@@ -12,6 +12,7 @@ COPY packages/code-changes /app/packages/code-changes
 COPY packages/conversations /app/packages/conversations
 COPY packages/core /app/packages/core
 COPY packages/datasets /app/packages/datasets
+COPY packages/economics /app/packages/economics
 COPY packages/evaluations /app/packages/evaluations
 COPY packages/intelligence /app/packages/intelligence
 COPY packages/kilo-adapter /app/packages/kilo-adapter

@@ -25,6 +25,7 @@ def evaluate_execution_strategy(context: ExecutionStrategyContext) -> ExecutionS
     autonomy_level = AutonomyLevel.ASSISTED
     retry_policy = "standard_retry"
     reasons: list[str] = []
+    cost_control_status = str(context.metadata.get("cost_control_status", "")).upper()
 
     if context.project_is_new:
         strategy_type = StrategyType.SAFE
@@ -98,6 +99,30 @@ def evaluate_execution_strategy(context: ExecutionStrategyContext) -> ExecutionS
         retry_policy = "cost_optimized_retry"
         reasons.append("High cost pressure prefers a cost-optimized recommendation.")
 
+    if cost_control_status == "WARN" and not context.dead_letter_risk:
+        strategy_type = StrategyType.COST_OPTIMIZED
+        qa_level = min_qa_level(qa_level, QALevel.STANDARD)
+        risk_level = min_risk_level(risk_level, RiskLevel.MEDIUM)
+        autonomy_level = AutonomyLevel.ASSISTED
+        retry_policy = "cost_warning_retry"
+        reasons.append("Budget warning pressure recommends COST_OPTIMIZED execution.")
+
+    if cost_control_status == "DEGRADE" and not context.dead_letter_risk:
+        strategy_type = StrategyType.COST_OPTIMIZED
+        qa_level = min_qa_level(qa_level, QALevel.STANDARD)
+        risk_level = min_risk_level(risk_level, RiskLevel.MEDIUM)
+        autonomy_level = AutonomyLevel.ASSISTED
+        retry_policy = "cost_degrade_retry"
+        reasons.append("Cost degradation pressure recommends lite or fake model profiles.")
+
+    if cost_control_status == "BLOCK":
+        strategy_type = StrategyType.COST_OPTIMIZED
+        qa_level = min_qa_level(qa_level, QALevel.STANDARD)
+        risk_level = max_risk_level(risk_level, RiskLevel.MEDIUM)
+        autonomy_level = AutonomyLevel.MANUAL
+        retry_policy = "cost_block_retry"
+        reasons.append("Budget block recommends avoiding real-provider execution.")
+
     if (
         context.history_is_stable
         and not context.project_is_new
@@ -164,6 +189,8 @@ def evaluate_execution_strategy(context: ExecutionStrategyContext) -> ExecutionS
             "sandbox_real": context.sandbox_real,
             "sandbox_target": "real" if context.sandbox_real else "fake",
             "cost_pressure_high": context.cost_pressure_high,
+            "cost_control_status": cost_control_status or None,
+            "cost_recommendation": context.metadata.get("cost_recommendation"),
             "dead_letter_risk": context.dead_letter_risk,
             "strategy_event": strategy_event,
             "previous_strategy_type": (
@@ -206,6 +233,13 @@ def _resolve_model_recommendation(
     context: ExecutionStrategyContext,
     strategy_type: StrategyType,
 ) -> tuple[str, str]:
+    cost_control_status = str(context.metadata.get("cost_control_status", "")).upper()
+    if cost_control_status == "BLOCK":
+        return "FAKE", "fake-provider"
+    if cost_control_status == "DEGRADE":
+        if context.role in {"PM", "PO", "QC"}:
+            return "DEEPSEEK", "deepseek-lite"
+        return "FAKE", "fake-provider"
     if context.execution_layer == "KILO" and not context.sandbox_real:
         return "FAKE", "fake-sandbox"
     if bool(context.metadata.get("simulation_only", False)):

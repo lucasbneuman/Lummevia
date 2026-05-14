@@ -54,6 +54,10 @@ def test_pm_dry_run_endpoint_uses_fake_provider_when_deepseek_is_disabled(
     assert body["effective_provider"] == "FAKE"
     assert body["effective_model"] == "fake:pm"
     assert body["fallback_used"] is True
+    assert body["estimated_input_tokens"] > 0
+    assert body["estimated_output_tokens"] > 0
+    assert body["estimated_cost"] >= 0
+    assert body["cost_control_status"] == "ALLOW"
     assert body["template_id"] == "pm_business_brief"
     assert body["template_version"] == "v1"
     assert len(body["prompt_hash"]) == 64
@@ -66,6 +70,11 @@ def test_pm_dry_run_endpoint_uses_fake_provider_when_deepseek_is_disabled(
     assert body["metadata"]["template_id"] == "pm_business_brief"
     assert body["metadata"]["evaluation_status"] == EvaluationStatus.PASSED
     assert body["metadata"]["model_raw_output"]["provider_adapter"] == "fake"
+    assert body["metadata"]["estimated_cost_total"] >= body["estimated_cost"]
+    assert body["metadata"]["model_calls_count"] >= 1
+    assert body["metadata"]["tokens_estimated_total"] >= (
+        body["estimated_input_tokens"] + body["estimated_output_tokens"]
+    )
 
 
 def test_pm_dry_run_endpoint_fails_clearly_without_api_key_when_enabled(
@@ -166,5 +175,11 @@ def test_pm_dry_run_emits_phoenix_metadata_without_sensitive_prompt_or_keys(
     assert len(span.attributes["prompt_hash"]) == 64
     assert span.attributes["evaluation_status"] == EvaluationStatus.PASSED
     assert span.attributes["evaluation_score"] > 0
+    assert span.attributes["estimated_cost"] >= 0
+    assert span.attributes["estimated_cost_total"] >= span.attributes["estimated_cost"]
+    assert span.attributes["model_calls_count"] >= 1
+    assert span.attributes["tokens_estimated_total"] >= 1
+    assert span.attributes["cost_control_status"] == "ALLOW"
+    assert span.attributes["cost_recommendation"]
     assert "prompt" not in span.attributes
     assert "ds-secret-key" not in caplog.text

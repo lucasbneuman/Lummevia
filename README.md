@@ -1478,6 +1478,50 @@ Roadmap distribuido posterior:
 - scheduling externo y recovery autonomo
 - politicas de replay y recovery mas finas sobre snapshots
 
+## Economics Layer
+
+Lummevia OS ahora incorpora una primera capa de economia operacional para controlar consumo estimado antes de expandir uso real de providers.
+
+Incluye:
+
+- `packages/economics` con contratos, estimator deterministico, policies y budget registry en memoria
+- presupuestos por proyecto y opcionalmente por `workflow_run_id`
+- tracking de `estimated_cost`, `estimated_input_tokens`, `estimated_output_tokens` y cantidad de llamadas a modelo
+- decisiones de control de costo con estados `ALLOW`, `WARN`, `DEGRADE` y `BLOCK`
+- integracion con `ModelExecutionResult`, `RuntimeState.metadata`, strategy layer y Phoenix
+
+Politica actual:
+
+- menos de 70% del budget: `ALLOW`
+- 70% a 90%: `WARN`
+- mas de 90%: `DEGRADE`
+- mas de 100%: `BLOCK`
+- sin budget configurado: `ALLOW` con metadata `no_budget=true`
+
+Comportamiento importante:
+
+- todo el costo es estimado y deterministico; no hay billing real
+- no se consulta pricing externo ni costos reales de DeepSeek
+- no se integra ningun proveedor de pagos
+- no hay autoscaling ni optimizacion destructiva automatica
+- strategy puede recomendar perfiles `lite` o `fake`, pero no cambia silenciosamente el provider real
+- `POST /economics/evaluate` simula la decision de costo sin mutar workflows ni registrar consumo real
+
+Endpoints:
+
+- `GET /economics/budgets`
+- `GET /economics/budgets/{budget_id}`
+- `POST /economics/budgets`
+- `GET /economics/usage`
+- `POST /economics/evaluate`
+
+Roadmap posterior:
+
+- persistencia durable de budgets y usage snapshots si hace falta
+- catalogos de pricing configurables por entorno/proyecto
+- policy enforcement mas fino por rol, workflow y tipo de operacion
+- integracion con mas providers reales cuando la policy de costo este consolidada
+
 ## Comandos basicos
 
 ```powershell

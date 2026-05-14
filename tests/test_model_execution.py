@@ -38,6 +38,10 @@ def test_fake_model_provider_returns_deterministic_output() -> None:
     assert first.metadata["resolved_provider"] == "DEEPSEEK"
     assert first.metadata["resolved_model"] == "deepseek-chat"
     assert first.effective_model == "fake:pm"
+    assert first.estimated_input_tokens > 0
+    assert first.estimated_output_tokens > 0
+    assert first.estimated_cost >= 0
+    assert first.cost_control_status == "ALLOW"
 
 
 def test_model_executor_resolves_pm_model() -> None:
@@ -100,6 +104,11 @@ def test_model_executor_propagates_metadata() -> None:
     assert result.metadata["provider"] == "FAKE"
     assert result.metadata["latency_ms"] >= 0
     assert result.metadata["fallback_used"] is False
+    assert result.metadata["estimated_cost_total"] >= result.estimated_cost
+    assert result.metadata["model_calls_count"] >= 1
+    assert result.metadata["tokens_estimated_total"] >= (
+        result.estimated_input_tokens + result.estimated_output_tokens
+    )
 
 
 def test_model_executor_handles_provider_error() -> None:

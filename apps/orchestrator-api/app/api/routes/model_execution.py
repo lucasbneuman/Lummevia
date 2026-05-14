@@ -38,6 +38,11 @@ class PMDryRunResponse(BaseModel):
     raw_output: Any = None
     latency_ms: int = Field(ge=0)
     fallback_used: bool = False
+    estimated_input_tokens: int = Field(ge=0)
+    estimated_output_tokens: int = Field(ge=0)
+    estimated_cost: float = Field(ge=0.0)
+    cost_control_status: str = Field(min_length=1)
+    budget_id: str | None = None
     structured_output: BusinessBrief
     evaluation_id: str | None = None
     evaluation_status: EvaluationStatus = EvaluationStatus.PENDING
@@ -70,6 +75,13 @@ def _observe_pm_dry_run(
     latency_ms: int,
     fallback_used: bool,
     status_value: str,
+    budget_id: str | None = None,
+    estimated_cost: float | None = None,
+    estimated_cost_total: float | None = None,
+    model_calls_count: int | None = None,
+    tokens_estimated_total: int | None = None,
+    cost_control_status: str | None = None,
+    cost_recommendation: str | None = None,
     error: str | None = None,
 ) -> None:
     attributes: dict[str, bool | int | str] = {
@@ -94,6 +106,20 @@ def _observe_pm_dry_run(
         attributes["evaluation_status"] = evaluation_status
     if evaluation_score is not None:
         attributes["evaluation_score"] = evaluation_score
+    if budget_id is not None:
+        attributes["budget_id"] = budget_id
+    if estimated_cost is not None:
+        attributes["estimated_cost"] = estimated_cost
+    if estimated_cost_total is not None:
+        attributes["estimated_cost_total"] = estimated_cost_total
+    if model_calls_count is not None:
+        attributes["model_calls_count"] = model_calls_count
+    if tokens_estimated_total is not None:
+        attributes["tokens_estimated_total"] = tokens_estimated_total
+    if cost_control_status is not None:
+        attributes["cost_control_status"] = cost_control_status
+    if cost_recommendation is not None:
+        attributes["cost_recommendation"] = cost_recommendation
     if error is not None:
         attributes["error"] = error
 
@@ -132,6 +158,13 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
             latency_ms=0,
             fallback_used=False,
             status_value="configuration_error",
+            budget_id=None,
+            estimated_cost=None,
+            estimated_cost_total=None,
+            model_calls_count=None,
+            tokens_estimated_total=None,
+            cost_control_status=None,
+            cost_recommendation=None,
             error=str(exc),
         )
         raise HTTPException(
@@ -157,6 +190,8 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
                 metadata={
                     "dry_run": True,
                     "requested_prompt": request.prompt,
+                    "operation_type": "pm_dry_run",
+                    "issue_id": request.issue_id,
                 },
             )
         )
@@ -177,6 +212,13 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
             latency_ms=latency_ms,
             fallback_used=False,
             status_value="failed",
+            budget_id=None,
+            estimated_cost=None,
+            estimated_cost_total=None,
+            model_calls_count=None,
+            tokens_estimated_total=None,
+            cost_control_status=None,
+            cost_recommendation=None,
             error=str(exc),
         )
         raise HTTPException(
@@ -210,6 +252,13 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
         latency_ms=result.model_execution.latency_ms,
         fallback_used=result.model_execution.fallback_used,
         status_value="completed",
+        budget_id=result.model_execution.budget_id,
+        estimated_cost=result.model_execution.estimated_cost,
+        estimated_cost_total=result.model_execution.metadata.get("estimated_cost_total"),
+        model_calls_count=result.model_execution.metadata.get("model_calls_count"),
+        tokens_estimated_total=result.model_execution.metadata.get("tokens_estimated_total"),
+        cost_control_status=result.model_execution.cost_control_status,
+        cost_recommendation=result.model_execution.metadata.get("cost_recommendation"),
     )
 
     return PMDryRunResponse(
@@ -226,6 +275,11 @@ def pm_dry_run(request: PMDryRunRequest) -> PMDryRunResponse:
         raw_output=result.model_execution.raw_output,
         latency_ms=result.model_execution.latency_ms,
         fallback_used=result.model_execution.fallback_used,
+        estimated_input_tokens=result.model_execution.estimated_input_tokens,
+        estimated_output_tokens=result.model_execution.estimated_output_tokens,
+        estimated_cost=result.model_execution.estimated_cost,
+        cost_control_status=result.model_execution.cost_control_status,
+        budget_id=result.model_execution.budget_id,
         structured_output=result.structured_output,
         evaluation_id=evaluation.evaluation_id,
         evaluation_status=evaluation.status,

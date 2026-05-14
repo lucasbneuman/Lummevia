@@ -11,6 +11,7 @@ dependencies = [
     "httpx==0.28.1",
     "pydantic==2.11.4",
     "lummevia-core",
+    "lummevia-economics",
     "lummevia-evaluations",
     "lummevia-model-router",
 ]

@@ -15,6 +15,7 @@ from lummevia_memory import (
 )
 from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 
+from lummevia_runtime.economics import register_model_execution_cost
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.state import RuntimeState
 
@@ -76,6 +77,11 @@ def founder_pm_conversation_node(
             "conversation_thread_id": thread.thread_id,
             "conversation_mode": "founder_pm_iteration",
         },
+    )
+    register_model_execution_cost(
+        state,
+        step_name=step_name,
+        execution=pm_response,
     )
     thread = registry.add_message(
         thread.thread_id,

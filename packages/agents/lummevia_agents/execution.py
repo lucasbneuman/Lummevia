@@ -7,6 +7,7 @@ from typing import Any, Protocol
 import httpx
 from pydantic import Field
 
+from lummevia_economics import CostEstimator, EconomicsRegistry
 from lummevia_core import AgentRole
 from model_router import AgentRole as RouterAgentRole
 from model_router import RoutingRequest, RoutingResolution, resolve_model
@@ -35,6 +36,11 @@ class ModelExecutionResult(AgentBaseSchema):
     raw_output: Any = None
     latency_ms: int = Field(ge=0)
     fallback_used: bool = False
+    estimated_input_tokens: int = Field(default=0, ge=0)
+    estimated_output_tokens: int = Field(default=0, ge=0)
+    estimated_cost: float = Field(default=0.0, ge=0.0)
+    cost_control_status: str = Field(default="ALLOW", min_length=1)
+    budget_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -278,8 +284,16 @@ class DeepSeekModelProvider:
 
 
 class ModelExecutor:
-    def __init__(self, provider: ModelProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: ModelProvider | None = None,
+        *,
+        estimator: CostEstimator | None = None,
+        economics_registry: EconomicsRegistry | None = None,
+    ) -> None:
         self.provider = provider or FakeModelProvider()
+        self.estimator = estimator or CostEstimator.default()
+        self.economics_registry = economics_registry or EconomicsRegistry.default()
 
     def execute(self, request: ModelExecutionRequest) -> ModelExecutionResult:
         resolution = resolve_model(
@@ -309,6 +323,41 @@ class ModelExecutor:
         latency_ms = int((perf_counter() - started_at) * 1000)
         effective_provider = payload.provider or resolution.provider.value
         effective_model = payload.model or resolution.model
+        workflow_run_id = _workflow_run_id(request)
+        operation_type = _operation_type(request)
+        project = request.project or "unscoped-project"
+        prompt_length = len(request.prompt) + len(request.system_prompt or "")
+        resolved_budget = self.economics_registry.active_budget_for_project(project)
+        budget_id = _budget_id_from_request(request) or (
+            resolved_budget.budget_id if resolved_budget is not None else None
+        )
+        usage_estimate = self.estimator.estimate_usage(
+            project=project,
+            workflow_run_id=workflow_run_id,
+            provider=effective_provider,
+            model=effective_model,
+            role=request.role.value,
+            operation_type=operation_type,
+            prompt_length=prompt_length,
+            output_length=len(payload.output),
+            metadata={
+                "budget_id": budget_id,
+                "environment": request.environment,
+                "resolved_provider": resolution.provider.value,
+                "resolved_model": resolution.model,
+            },
+        )
+        updated_budget = self.economics_registry.record_usage(usage_estimate)
+        decision = self.economics_registry.evaluate_budget(
+            project=project,
+            budget_id=budget_id or (updated_budget.budget_id if updated_budget is not None else None),
+            workflow_run_id=workflow_run_id,
+        )
+        budget_totals = updated_budget or (
+            self.economics_registry.get_budget(decision.budget_id)
+            if decision.budget_id is not None
+            else None
+        )
         metadata = dict(request.metadata)
         metadata.update(payload.metadata)
         metadata.update(
@@ -324,6 +373,32 @@ class ModelExecutor:
                 "effective_model": effective_model,
                 "latency_ms": latency_ms,
                 "fallback_used": payload.fallback_used,
+                "estimated_input_tokens": usage_estimate.estimated_input_tokens,
+                "estimated_output_tokens": usage_estimate.estimated_output_tokens,
+                "estimated_cost": usage_estimate.estimated_cost,
+                "cost_control_status": decision.status,
+                "budget_id": decision.budget_id,
+                "cost_recommendation": decision.recommended_action,
+                "cost_decision_id": decision.decision_id,
+                "estimated_cost_total": (
+                    budget_totals.used_estimated_cost if budget_totals is not None else usage_estimate.estimated_cost
+                ),
+                "model_calls_count": (
+                    budget_totals.used_model_calls if budget_totals is not None else 1
+                ),
+                "tokens_estimated_total": (
+                    budget_totals.used_tokens_estimated
+                    if budget_totals is not None
+                    else usage_estimate.estimated_input_tokens + usage_estimate.estimated_output_tokens
+                ),
+                "operation_type": operation_type,
+            }
+        )
+        metadata.update(
+            {
+                key: value
+                for key, value in decision.metadata.items()
+                if key not in metadata
             }
         )
 
@@ -338,5 +413,33 @@ class ModelExecutor:
             raw_output=payload.raw_output,
             latency_ms=latency_ms,
             fallback_used=payload.fallback_used,
+            estimated_input_tokens=usage_estimate.estimated_input_tokens,
+            estimated_output_tokens=usage_estimate.estimated_output_tokens,
+            estimated_cost=usage_estimate.estimated_cost,
+            cost_control_status=decision.status,
+            budget_id=decision.budget_id,
             metadata=metadata,
         )
+
+
+def _workflow_run_id(request: ModelExecutionRequest) -> str | None:
+    for key in ("workflow_run_id", "run_id"):
+        value = request.metadata.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _operation_type(request: ModelExecutionRequest) -> str:
+    for key in ("operation_type", "step_name"):
+        value = request.metadata.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return "model_execution"
+
+
+def _budget_id_from_request(request: ModelExecutionRequest) -> str | None:
+    value = request.metadata.get("budget_id")
+    if isinstance(value, str) and value:
+        return value
+    return None

@@ -4,6 +4,7 @@ from lummevia_core import AgentRole
 from lummevia_agents import PMAgent
 from lummevia_memory import get_project_context
 
+from lummevia_runtime.economics import register_prompt_pipeline_cost
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.state import RuntimeState
 
@@ -36,6 +37,7 @@ def pm_business_brief_node(
         },
     )
     state.artifacts.business_brief = pipeline_result.structured_output
+    register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     state.metadata.setdefault("artifact_sources", {})["business_brief"] = "prompt_pipeline"
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = pipeline_result.metadata
     state.metadata.setdefault("project_context", {})[step_name] = project_context

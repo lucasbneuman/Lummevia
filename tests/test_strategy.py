@@ -96,6 +96,38 @@ def test_cost_pressure_selects_cost_optimized_strategy() -> None:
     assert strategy.strategy_type == StrategyType.COST_OPTIMIZED
 
 
+def test_degrade_status_recommends_lite_or_fake_model() -> None:
+    strategy = evaluate_execution_strategy(
+        ExecutionStrategyContext(
+            workflow_run_id="run-strategy-005b",
+            project="lummevia-os",
+            issue_id="OS-STRAT-005B",
+            role="DEV",
+            step_name="dev_implementation",
+            metadata={"cost_control_status": "DEGRADE"},
+        )
+    )
+
+    assert strategy.strategy_type == StrategyType.COST_OPTIMIZED
+    assert strategy.selected_model in {"deepseek-lite", "fake-provider"}
+
+
+def test_block_status_recommends_fake_provider() -> None:
+    strategy = evaluate_execution_strategy(
+        ExecutionStrategyContext(
+            workflow_run_id="run-strategy-005c",
+            project="lummevia-os",
+            issue_id="OS-STRAT-005C",
+            role="PM",
+            step_name="pm_business_brief",
+            metadata={"cost_control_status": "BLOCK"},
+        )
+    )
+
+    assert strategy.strategy_type == StrategyType.COST_OPTIMIZED
+    assert strategy.selected_provider == "FAKE"
+
+
 def test_real_sandbox_requires_strict_sandbox_level() -> None:
     strategy = evaluate_execution_strategy(
         ExecutionStrategyContext(

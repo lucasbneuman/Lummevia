@@ -13,6 +13,7 @@ from lummevia_agents import DevAgent, PMAgent, POAgent, QAAgent, QCAgent
 from lummevia_kilo import KiloExecutionClient
 
 from lummevia_runtime.exceptions import RuntimeNotFoundError
+from lummevia_runtime.economics import initialize_economics_runtime_state
 from lummevia_runtime.intelligence import initialize_intelligence_runtime_state
 from lummevia_runtime.observability import NoopRuntimeObserver, RuntimeObserver
 from lummevia_runtime.planning import initialize_adaptive_planning_runtime_state
@@ -118,6 +119,7 @@ class DevelopmentRuntime:
         )
         initialize_supervisor_runtime_state(initial_state)
         initialize_strategy_runtime_state(initial_state)
+        initialize_economics_runtime_state(initial_state)
         initialize_intelligence_runtime_state(initial_state)
         initialize_adaptive_planning_runtime_state(initial_state)
         if self.persistence_metadata_resolver is not None:

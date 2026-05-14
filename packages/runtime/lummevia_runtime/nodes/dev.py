@@ -5,6 +5,7 @@ from lummevia_agents import DevAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
 from lummevia_sessions import SessionStatus
 
+from lummevia_runtime.economics import register_prompt_pipeline_cost
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.kilo import execute_kilo_step
 from lummevia_runtime.sessions import add_session_output, update_task_execution_session
@@ -70,6 +71,7 @@ def dev_implementation_node(
         },
     )
     state.artifacts.implementation_package = pipeline_result.structured_output
+    register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     state.metadata.setdefault("artifact_sources", {})["implementation_package"] = (
         "prompt_pipeline"
     )

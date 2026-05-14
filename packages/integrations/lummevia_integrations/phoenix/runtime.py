@@ -137,10 +137,20 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "selected_model",
             "selected_provider",
             "execution_mode",
+            "budget_id",
+            "cost_control_status",
+            "cost_recommendation",
         ):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = str(value)
+        estimated_cost_total = state.metadata.get("estimated_cost_total")
+        if estimated_cost_total is not None:
+            attributes["estimated_cost_total"] = float(estimated_cost_total)
+        for key in ("model_calls_count", "tokens_estimated_total"):
+            value = state.metadata.get(key)
+            if value is not None:
+                attributes[key] = int(value)
         for key in ("iteration_count", "message_count"):
             value = state.metadata.get(key)
             if value is not None:

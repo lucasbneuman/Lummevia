@@ -4,6 +4,7 @@ from lummevia_core import AgentRole, WorkflowRunStatus
 from lummevia_agents import POAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
 
+from lummevia_runtime.economics import register_prompt_pipeline_cost
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.kilo import build_runtime_planning_task_package, execute_kilo_step
 from lummevia_runtime.queue import initialize_task_queue
@@ -41,6 +42,7 @@ def po_execution_package_node(
         },
     )
     state.artifacts.execution_package = pipeline_result.structured_output
+    register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     state.metadata.setdefault("artifact_sources", {})["execution_package"] = (
         "prompt_pipeline"
     )
@@ -84,6 +86,7 @@ def po_task_plan_node(
         },
     )
     state.artifacts.task_plan = pipeline_result.structured_output
+    register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     planning_task_package = build_runtime_planning_task_package(
         state=state,
         task_id=f"{state.run.issue_id}-PLAN",
@@ -150,6 +153,7 @@ def po_task_packages_node(
             },
         )
         task_packages.append(pipeline_result.structured_output)
+        register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     state.artifacts.task_packages = task_packages
     initialize_task_queue(state, task_packages=task_packages)
     current_task_id = state.metadata.get("current_queue_task_id")

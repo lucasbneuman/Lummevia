@@ -100,6 +100,7 @@ def build_strategy_context(
 ) -> ExecutionStrategyContext:
     project = state.run.project
     latest_strategy = _latest_strategy(state)
+    cost_control_status = str(state.metadata.get("cost_control_status", "")).upper()
     memory_registry = ProjectMemoryRegistry.default()
     qa_issues = memory_registry.search_by_category(project, MemoryCategory.QA_ISSUE)
     reviews = memory_registry.search_by_category(project, MemoryCategory.REVIEW_DECISION)
@@ -126,7 +127,10 @@ def build_strategy_context(
         project_is_new=len(business_decisions) <= 1,
         history_is_stable=len(qa_issues) == 0 and len(reviews) > 0,
         sandbox_real=sandbox_real,
-        cost_pressure_high=bool(state.metadata.get("cost_pressure_high", False)),
+        cost_pressure_high=(
+            bool(state.metadata.get("cost_pressure_high", False))
+            or cost_control_status in {"WARN", "DEGRADE", "BLOCK"}
+        ),
         dead_letter_risk=int(state.metadata.get("dead_letter_count", 0)) > 0,
         previous_strategy_type=(
             StrategyType(latest_strategy["strategy_type"])
@@ -140,6 +144,9 @@ def build_strategy_context(
         ),
         metadata={
             "simulation_only": execution_layer != "WORKFLOW" or not sandbox_real,
+            "budget_id": state.metadata.get("budget_id"),
+            "cost_control_status": cost_control_status or None,
+            "cost_recommendation": state.metadata.get("cost_recommendation"),
             "previous_qa_level": latest_strategy.get("qa_level") if latest_strategy is not None else None,
             "previous_sandbox_level": latest_strategy.get("sandbox_level") if latest_strategy is not None else None,
             **(metadata or {}),

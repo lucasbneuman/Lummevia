@@ -13,6 +13,7 @@ from lummevia_memory import (
 from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 from lummevia_sessions import SessionStatus
 
+from lummevia_runtime.economics import register_prompt_pipeline_cost
 from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
 from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
 from lummevia_runtime.kilo import execute_kilo_step
@@ -64,6 +65,7 @@ def qa_validation_node(
         },
     )
     state.artifacts.validation_package = pipeline_result.structured_output
+    register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     updated_task_status = (
         "validated"
         if state.artifacts.validation_package.status == ValidationStatus.PASSED

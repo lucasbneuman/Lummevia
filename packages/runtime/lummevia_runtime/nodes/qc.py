@@ -3,6 +3,7 @@ from __future__ import annotations
 from lummevia_core import AgentRole
 from lummevia_agents import QCAgent
 
+from lummevia_runtime.economics import register_prompt_pipeline_cost
 from lummevia_runtime.events import complete_step, start_step
 from lummevia_runtime.state import RuntimeState
 
@@ -32,6 +33,7 @@ def qc_quality_approval_node(
         },
     )
     state.artifacts.quality_approval = pipeline_result.structured_output
+    register_prompt_pipeline_cost(state, step_name=step_name, pipeline_result=pipeline_result)
     state.metadata.setdefault("artifact_sources", {})["quality_approval"] = (
         "prompt_pipeline"
     )
