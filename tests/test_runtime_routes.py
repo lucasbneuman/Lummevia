@@ -24,8 +24,8 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["run"]["project"] == "lummevia-os"
     assert body["run"]["issue_id"] == "OS-100"
     assert body["run"]["status"] == "COMPLETED"
-    assert body["run"]["current_step"] == "po_final_validation"
-    assert body["current_role"] == "PO"
+    assert body["run"]["current_step"] == "workflow_completed"
+    assert body["current_role"] == "QA"
     assert body["loop_count"] == 1
     assert body["max_loop_count"] == 1
     assert body["artifacts"]["business_brief"]["issue_id"] == "OS-100"
@@ -40,6 +40,9 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["metadata"]["queue_id"].startswith("queue-")
     assert body["metadata"]["queue_size"] == len(body["artifacts"]["task_packages"])
     assert body["metadata"]["current_queue_item_id"].startswith("queue-item-")
+    assert body["metadata"]["task_count"] == len(body["artifacts"]["task_packages"])
+    assert body["metadata"]["completed_tasks"] == len(body["artifacts"]["task_packages"])
+    assert body["metadata"]["workflow_progress"] == 1.0
     assert body["metadata"]["strategy_id"].startswith("strategy-")
     assert body["metadata"]["strategy_type"] in {
         "SAFE",
@@ -56,12 +59,14 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["metadata"]["selected_provider"]
     assert body["artifacts"]["task_plan"]["issue_id"] == "OS-100"
     assert len(body["artifacts"]["task_packages"]) >= 2
-    assert body["artifacts"]["current_task_package"]["task_id"].startswith("OS-100-T")
+    assert body["artifacts"]["current_task_package"]["task_id"].startswith("OS-100-")
     assert body["artifacts"]["validation_package"]["status"] == "PASSED"
-    assert body["artifacts"]["pull_request"]["status"] == "OPEN"
-    assert body["artifacts"]["pull_request"]["url"].endswith("/pull/1002")
-    assert body["artifacts"]["quality_approval"]["pr_ok"] is True
-    assert body["artifacts"]["final_validation"]["approved"] is True
+    assert body["artifacts"]["validation_package"]["recommendation"] == (
+        "Advance the next unlocked task package."
+    )
+    assert body["artifacts"]["pull_request"] is None
+    assert body["artifacts"]["quality_approval"] is None
+    assert body["artifacts"]["final_validation"] is None
     assert body["run"]["events"]
     assert body["run"]["metadata"]["founder_pm_conversation"]["thread_id"].startswith("thread-")
     assert body["run"]["metadata"]["founder_pm_conversation"]["message_count"] >= 2
@@ -71,11 +76,6 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
     assert body["run"]["metadata"]["founder_business_approval"]["review_decision"] == "APPROVED"
     assert body["run"]["metadata"]["founder_business_approval"]["thread_id"].startswith("thread-")
 
-    github_pr_started_index = next(
-        index
-        for index, event in enumerate(body["run"]["events"])
-        if event["step_name"] == "github_pr" and event["metadata"]["type"] == "STEP_STARTED"
-    )
     qa_pass_completed_index = max(
         index
         for index, event in enumerate(body["run"]["events"])
@@ -83,10 +83,10 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
         and event["metadata"]["type"] == "STEP_COMPLETED"
         and event["metadata"].get("validation_status") == "PASSED"
     )
-    qc_started_index = next(
+    workflow_completed_index = next(
         index
         for index, event in enumerate(body["run"]["events"])
-        if event["step_name"] == "qc_quality_approval"
+        if event["step_name"] == "workflow_completed"
         and event["metadata"]["type"] == "STEP_STARTED"
     )
     founder_approval_completed_index = next(
@@ -121,7 +121,7 @@ def test_runtime_post_executes_workflow_and_returns_final_state() -> None:
         and event["metadata"]["type"] == "STEP_STARTED"
     )
 
-    assert qa_pass_completed_index < github_pr_started_index < qc_started_index
+    assert qa_pass_completed_index < workflow_completed_index
     assert founder_approval_completed_index < po_started_index
     assert po_started_index < task_plan_started_index < task_packages_started_index < dev_started_index
 
@@ -228,7 +228,7 @@ def test_runtime_get_returns_existing_run() -> None:
 
     assert response.status_code == 200
     assert response.json()["run"]["run_id"] == run_id
-    assert response.json()["artifacts"]["pull_request"]["status"] == "OPEN"
+    assert response.json()["run"]["current_step"] == "workflow_completed"
 
 
 def test_runtime_get_returns_404_for_missing_run() -> None:

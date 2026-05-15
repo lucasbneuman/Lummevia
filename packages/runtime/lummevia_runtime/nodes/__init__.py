@@ -14,6 +14,7 @@ from lummevia_runtime.nodes.po import (
 )
 from lummevia_runtime.nodes.qa import dev_qa_iteration_node, qa_validation_node
 from lummevia_runtime.nodes.qc import qc_quality_approval_node
+from lummevia_runtime.nodes.workflow_completed import workflow_completed_node
 
 __all__ = [
     "dev_implementation_node",
@@ -29,4 +30,5 @@ __all__ = [
     "po_task_plan_node",
     "qa_validation_node",
     "qc_quality_approval_node",
+    "workflow_completed_node",
 ]

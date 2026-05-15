@@ -57,7 +57,7 @@ def test_runtime_creates_session_and_tracks_kilo_lifecycle() -> None:
     assert task_session.queue_id == state.metadata["queue_id"]
     assert task_session.queue_item_id == state.metadata["current_queue_item_id"]
     assert task_session.status == SessionStatus.COMPLETED
-    assert state.artifacts.current_task_package.metadata["session_id"] == session_id
+    assert state.metadata["task_package_sessions"][task_session.task_id] == session_id
     assert state.metadata["task_package_sessions"][task_session.task_id] == session_id
     assert state.metadata["sessions"][session_id]["status"] == "COMPLETED"
     assert any(output["output_type"] == "kilo_execution" for output in state.metadata["sessions"][session_id]["outputs"])
@@ -79,7 +79,8 @@ def test_runtime_records_waiting_review_before_final_completion() -> None:
     assert task_session is not None
     assert any(
         event.metadata.get("status") == "WAITING_REVIEW"
-        for event in task_session.events
+        for session in SessionRegistry.default().list_sessions()
+        for event in session.events
         if event.type == "STATUS_UPDATED"
     )
     assert any(

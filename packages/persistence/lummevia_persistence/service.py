@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import sessionmaker
 
+from lummevia_persistence.repositories.handoffs import ApprovedProjectHandoffSnapshotRepository
 from lummevia_persistence.repositories.capabilities import CapabilitySnapshotRepository
 from lummevia_persistence.repositories.conversations import ConversationSnapshotRepository
 from lummevia_persistence.repositories.memory import MemorySnapshotRepository
@@ -25,6 +26,10 @@ class OperationalPersistenceService:
         self.planning = AdaptivePlanSnapshotRepository(session_factory, repository_name="planning")
         self.reviews = ReviewSnapshotRepository(session_factory, repository_name="reviews")
         self.conversations = ConversationSnapshotRepository(session_factory, repository_name="conversations")
+        self.handoffs = ApprovedProjectHandoffSnapshotRepository(
+            session_factory,
+            repository_name="handoffs",
+        )
         self.resources = ResourceSnapshotRepository(session_factory, repository_name="resources")
         self.capabilities = CapabilitySnapshotRepository(session_factory, repository_name="capabilities")
 
@@ -37,6 +42,7 @@ class OperationalPersistenceService:
             self.planning,
             self.reviews,
             self.conversations,
+            self.handoffs,
             self.resources,
             self.capabilities,
         ]
@@ -62,6 +68,7 @@ class OperationalPersistenceService:
             "adaptive_plan": self.planning,
             "review": self.reviews,
             "conversation": self.conversations,
+            "handoff": self.handoffs,
             "resource_lock": self.resources,
             "workspace": self.resources,
             "dead_letter": self.supervisor,

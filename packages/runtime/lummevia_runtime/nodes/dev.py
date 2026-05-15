@@ -8,9 +8,13 @@ from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
 from lummevia_sessions import SessionStatus
 
 from lummevia_runtime.economics import register_prompt_pipeline_cost
-from lummevia_runtime.events import complete_step, start_step
+from lummevia_runtime.events import complete_step, record_lifecycle_event, start_step
 from lummevia_runtime.kilo import execute_kilo_step
-from lummevia_runtime.sessions import add_session_output, update_task_execution_session
+from lummevia_runtime.sessions import (
+    add_session_output,
+    create_task_execution_session,
+    update_task_execution_session,
+)
 from lummevia_runtime.state import RuntimeState
 
 
@@ -27,6 +31,16 @@ def dev_implementation_node(
         raise ValueError("TaskPackage must exist before DEV implementation.")
 
     state = start_step(state, step_name=step_name, role=AgentRole.DEV)
+    current_session = state.metadata.get("current_session_id")
+    active_session_task = state.metadata.get("session_task_id")
+    if not current_session or active_session_task != task_package.task_id:
+        create_task_execution_session(
+            state,
+            task_package=task_package,
+            step_name=step_name,
+            role=AgentRole.DEV,
+            mode=resolve_kilo_mode(AgentRole.DEV),
+        )
     update_task_execution_session(
         state,
         status=SessionStatus.RUNNING,
@@ -97,6 +111,17 @@ def dev_implementation_node(
             "ImplementationPackage",
             state.artifacts.implementation_package.model_dump(mode="json"),
         )
+    record_lifecycle_event(
+        state,
+        event_type="IMPLEMENTATION_COMPLETED",
+        title="Implementation completed",
+        description=f"DEV completed implementation for task {task_package.task_id}.",
+        metadata={
+            "issue_id": state.run.issue_id,
+            "task_id": task_package.task_id,
+            "files_changed": state.artifacts.implementation_package.files_changed,
+        },
+    )
     return complete_step(
         state,
         step_name=step_name,

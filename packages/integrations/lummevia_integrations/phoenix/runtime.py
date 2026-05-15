@@ -103,7 +103,7 @@ class PhoenixRuntimeObserver(RuntimeObserver):
             "status": state.run.status.value,
             "loop_count": state.loop_count,
         }
-        for key in ("thread_id", "conversation_status", "conversation_phase"):
+        for key in ("thread_id", "conversation_status", "conversation_phase", "handoff_id"):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = value
@@ -231,10 +231,13 @@ class PhoenixRuntimeObserver(RuntimeObserver):
         if current_queue_item_id is not None:
             attributes["current_queue_item_id"] = str(current_queue_item_id)
             attributes["queue_item_id"] = str(current_queue_item_id)
-        for key in ("queue_size", "ready_count", "blocked_count", "completed_count"):
+        for key in ("queue_size", "ready_count", "blocked_count", "completed_count", "task_count", "completed_tasks"):
             value = state.metadata.get(key)
             if value is not None:
                 attributes[key] = int(value)
+        workflow_progress = state.metadata.get("workflow_progress")
+        if workflow_progress is not None:
+            attributes["workflow_progress"] = float(workflow_progress)
         session_id = state.metadata.get("current_session_id")
         if session_id is not None:
             attributes["session_id"] = str(session_id)

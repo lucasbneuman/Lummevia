@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -111,4 +112,29 @@ def log_loop_reentered(state: RuntimeState, *, step_name: str, role: AgentRole) 
         status=WorkflowRunStatus.RUNNING,
         message="DEV-QA loop reentered for implementation rework.",
         role=role,
+    )
+
+
+def record_lifecycle_event(
+    state: RuntimeState,
+    *,
+    event_type: str,
+    title: str,
+    description: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    state.metadata.setdefault("lifecycle_events", []).append(
+        {
+            "event_id": f"lifecycle-event-{uuid4()}",
+            "workflow_run_id": state.run.run_id,
+            "event_type": event_type,
+            "title": title,
+            "description": description,
+            "created_at": (
+                state.run.events[-1].created_at.isoformat()
+                if state.run.events
+                else datetime.now(UTC).isoformat()
+            ),
+            "metadata": metadata or {},
+        }
     )

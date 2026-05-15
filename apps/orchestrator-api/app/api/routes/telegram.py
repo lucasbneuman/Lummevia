@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.handoffs import create_or_get_handoff_and_run
 from app.core.youtrack import (
     ensure_youtrack_available,
     load_agent_context_bundle,
@@ -440,6 +441,7 @@ def telegram_webhook(
         )
         registry.save_thread(thread)
         _sync_approval(issue_id, thread.thread_id, message.message_id, review_id)
+        handoff, runtime_state = create_or_get_handoff_and_run(thread_id=thread.thread_id)
         return _response_for_thread(
             action="approved",
             project=project,
@@ -447,7 +449,11 @@ def telegram_webhook(
             thread=thread,
             youtrack_comment_added=True,
             review_id=review_id,
-            metadata=_build_thread_metadata(message, update),
+            metadata={
+                **_build_thread_metadata(message, update),
+                "handoff_id": handoff.handoff_id,
+                "workflow_run_id": runtime_state.run.run_id,
+            },
         )
 
     _sync_founder_message(issue_id, founder_message, message.message_id)

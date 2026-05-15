@@ -67,6 +67,9 @@ def create_task_execution_session(
             "run_id": state.run.run_id,
             "workflow": state.run.workflow_name,
             "step_name": step_name,
+            "thread_id": state.metadata.get("thread_id"),
+            "task_id": task_package.task_id,
+            "issue_id": state.run.issue_id,
             "health_status": ExecutionHealthStatus.WAITING.value,
             "queue_id": state.metadata.get("queue_id"),
             "queue_item_id": state.metadata.get("current_queue_item_id"),
@@ -131,6 +134,7 @@ def create_task_execution_session(
         session_id=session.session_id,
     )
     sync_session_to_runtime_metadata(state, session)
+    state.metadata.setdefault("primary_session_id", session.session_id)
     return session
 
 
@@ -344,6 +348,7 @@ def sync_session_to_runtime_metadata(
 ) -> None:
     state.metadata.setdefault("sessions", {})[session.session_id] = session.model_dump(mode="json")
     state.metadata["current_session_id"] = session.session_id
+    state.metadata["session_task_id"] = session.task_id
     state.metadata["session_status"] = session.status.value
     state.metadata["session_role"] = session.role.value
     state.metadata["session_attempts"] = session.attempts

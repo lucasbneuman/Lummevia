@@ -118,29 +118,13 @@ class DevelopmentWorkflowDefinition(WorkflowDefinition):
                 ),
             ),
             WorkflowStep(
-                name="github_pr",
-                responsible_role=AgentRole.DEV,
-                consumes=["ImplementationPackage"],
-                produces=["PullRequest"],
-                description="Publish the implementation evidence as a GitHub pull request.",
-            ),
-            WorkflowStep(
-                name="qc_quality_approval",
-                responsible_role=AgentRole.QC,
-                consumes=["PullRequest", "ValidationPackage", "ExecutionPackage"],
-                produces=["QualityApproval"],
+                name="workflow_completed",
+                responsible_role=AgentRole.QA,
+                consumes=["ValidationPackage", "TaskPackageCollection"],
+                produces=["WorkflowCompleted"],
                 description=(
-                    "Review the pull request for architectural and technical "
-                    "quality before final validation."
-                ),
-            ),
-            WorkflowStep(
-                name="po_final_validation",
-                responsible_role=AgentRole.PO,
-                consumes=["PullRequest", "ValidationPackage", "QualityApproval"],
-                produces=["final_validation"],
-                description=(
-                    "Perform the final functional validation before merge or closure."
+                    "Close the contractual lifecycle after QA validates all "
+                    "TaskPackages without triggering PR, QC, or deployment automation."
                 ),
             ),
         ]

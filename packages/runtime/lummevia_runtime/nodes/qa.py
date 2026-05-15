@@ -16,11 +16,20 @@ from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 from lummevia_sessions import SessionStatus
 
 from lummevia_runtime.economics import register_prompt_pipeline_cost
-from lummevia_runtime.events import complete_step, log_loop_reentered, start_step
+from lummevia_runtime.events import (
+    complete_step,
+    log_loop_reentered,
+    record_lifecycle_event,
+    start_step,
+)
 from lummevia_runtime.intelligence import build_execution_context, propose_execution_decision
 from lummevia_runtime.kilo import execute_kilo_step
 from lummevia_runtime.planning import build_adaptive_planning_context, propose_adaptive_plan
-from lummevia_runtime.queue import mark_current_queue_item_completed, sync_task_queue_state
+from lummevia_runtime.queue import (
+    mark_current_queue_item_completed,
+    start_next_ready_task,
+    sync_task_queue_state,
+)
 from lummevia_runtime.resources import refresh_current_workspace, release_current_workspace
 from lummevia_runtime.sessions import add_session_output, update_task_execution_session
 from lummevia_runtime.state import RuntimeState
@@ -244,6 +253,17 @@ def qa_validation_node(
             },
         )
         mark_current_queue_item_completed(state)
+        record_lifecycle_event(
+            state,
+            event_type="QA_VALIDATED",
+            title="QA validated task",
+            description=f"QA validated task {task_package.task_id}.",
+            metadata={
+                "issue_id": state.run.issue_id,
+                "task_id": task_package.task_id,
+                "status": state.artifacts.validation_package.status.value,
+            },
+        )
         existing_review_id = (
             state.run.metadata.get(step_name, {}).get("review_id")
             or state.metadata.get("review_by_step", {}).get(step_name, {}).get("review_id")
@@ -306,9 +326,32 @@ def qa_validation_node(
                 "qa_checked_change_set_id": checked_change_set_id,
             },
         )
+        next_item = start_next_ready_task(state, task_packages=state.artifacts.task_packages)
+        if next_item is not None:
+            next_task = next(
+                (
+                    item
+                    for item in state.artifacts.task_packages
+                    if item.task_id == next_item.task_id
+                ),
+                None,
+            )
+            state.artifacts.current_task_package = next_task
+        state.metadata["workflow_completed"] = next_item is None
     if state.artifacts.validation_package.status == ValidationStatus.FAILED:
         sync_task_queue_state(state)
     if artifact_publisher is not None:
+        if state.artifacts.validation_package.status == ValidationStatus.PASSED:
+            artifact_publisher(
+                state.run.issue_id,
+                "TaskCompleted",
+                {
+                    "task_id": task_package.task_id,
+                    "status": "completed",
+                    "completed_tasks": state.metadata.get("completed_tasks", 0),
+                    "task_count": state.metadata.get("task_count", 0),
+                },
+            )
         artifact_publisher(
             state.run.issue_id,
             "ValidationPackage",

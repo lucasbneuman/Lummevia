@@ -99,6 +99,7 @@ def reset_default_registries():
     from lummevia_queue import TaskQueueRegistry
     from lummevia_capabilities import CapabilityRegistry
     from lummevia_code_changes import CodeChangeRegistry
+    from lummevia_core import ApprovedProjectHandoffRegistry
     from lummevia_economics import EconomicsRegistry
     from lummevia_resources import ResourceRegistry
     from lummevia_reviews import HumanReviewRegistry
@@ -114,7 +115,9 @@ def reset_default_registries():
     set_youtrack_client_override(None)
     runtime_routes.runtime_service = runtime_routes._build_runtime_service()
     runtime_routes.runtime_repository = None
+    runtime_routes._published_runtime_updates.clear()
     ConversationRegistry.default().reset()
+    ApprovedProjectHandoffRegistry.default().reset()
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     DecisionRegistry.default().reset()
@@ -135,7 +138,9 @@ def reset_default_registries():
     set_youtrack_client_override(None)
     runtime_routes.runtime_service = runtime_routes._build_runtime_service()
     runtime_routes.runtime_repository = None
+    runtime_routes._published_runtime_updates.clear()
     ConversationRegistry.default().reset()
+    ApprovedProjectHandoffRegistry.default().reset()
     PromptBaselineRegistry.default().reset()
     ProjectMemoryRegistry.default().reset()
     DecisionRegistry.default().reset()

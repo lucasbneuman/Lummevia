@@ -17,9 +17,7 @@ def test_development_workflow_contains_expected_steps_in_order() -> None:
         "dev_implementation",
         "qa_validation",
         "dev_qa_iteration",
-        "github_pr",
-        "qc_quality_approval",
-        "po_final_validation",
+        "workflow_completed",
     ]
 
 
@@ -55,6 +53,16 @@ def test_dev_qa_iteration_step_exists_explicitly() -> None:
     assert iteration_step.responsible_role == AgentRole.QA
     assert "ImplementationPackage" in iteration_step.consumes
     assert "ValidationPackage" in iteration_step.produces
+
+
+def test_workflow_completed_step_closes_the_contractual_lifecycle() -> None:
+    workflow = DevelopmentWorkflowDefinition()
+
+    completion_step = next(step for step in workflow.steps if step.name == "workflow_completed")
+
+    assert completion_step.responsible_role == AgentRole.QA
+    assert "ValidationPackage" in completion_step.consumes
+    assert completion_step.produces == ["WorkflowCompleted"]
 
 
 def test_founder_approval_step_happens_before_po_execution_package() -> None:

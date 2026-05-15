@@ -18,9 +18,25 @@ from lummevia_runtime.persistence.repository import WorkflowRunRepository
 
 
 router = APIRouter(prefix="/runtime", tags=["runtime"])
+_published_runtime_updates: set[tuple[str, str, str | None]] = set()
 
 
 def _publish_runtime_artifact(issue_id: str, artifact_type: str, payload: dict) -> None:
+    task_id = str(payload.get("task_id")) if payload.get("task_id") is not None else None
+    milestone_type = {
+        "TaskPackageCollection": "DECOMPOSITION_CREATED",
+        "TaskCompleted": "TASK_COMPLETED",
+        "ValidationPackage": "QA_STATUS",
+        "WorkflowCompleted": "WORKFLOW_COMPLETED",
+    }.get(artifact_type)
+    if milestone_type is None:
+        return
+    if artifact_type == "ValidationPackage" and payload.get("status") != "PASSED":
+        milestone_type = "QA_STATUS"
+    dedupe_key = (issue_id, milestone_type, task_id)
+    if dedupe_key in _published_runtime_updates:
+        return
+    _published_runtime_updates.add(dedupe_key)
     sync_issue_comment(
         issue_id,
         summarize_artifact_for_youtrack(artifact_type=artifact_type, payload=payload),
@@ -77,6 +93,10 @@ class DevelopmentRunRequest(BaseModel):
     issue_id: str
     founder_input_summary: str | None = None
     conversation_thread_id: str | None = None
+    handoff_id: str | None = None
+    thread_id: str | None = None
+    brief_version: int | None = None
+    approved_brief: dict[str, object] | None = None
 
 
 @router.post("/development/run", response_model=RuntimeState)
@@ -89,6 +109,14 @@ def create_development_run(request: DevelopmentRunRequest) -> RuntimeState:
         }
     if request.conversation_thread_id is not None:
         initial_metadata["conversation_thread_id"] = request.conversation_thread_id
+    if request.thread_id is not None:
+        initial_metadata["thread_id"] = request.thread_id
+    if request.handoff_id is not None:
+        initial_metadata["handoff_id"] = request.handoff_id
+    if request.brief_version is not None:
+        initial_metadata["brief_version"] = request.brief_version
+    if request.approved_brief is not None:
+        initial_metadata["approved_brief"] = request.approved_brief
     state = runtime_service.start_run(
         project=request.project,
         issue_id=request.issue_id,

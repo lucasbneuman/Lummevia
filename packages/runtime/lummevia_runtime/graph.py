@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
-from lummevia_core import WorkflowRun, WorkflowRunStatus
+from lummevia_core import BusinessBrief, WorkflowRun, WorkflowRunStatus
 from lummevia_agents import DevAgent, PMAgent, POAgent, QAAgent, QCAgent
 from lummevia_kilo import KiloExecutionClient
 
@@ -30,14 +31,12 @@ from lummevia_runtime.nodes import (
     founder_business_approval_node,
     founder_input_node,
     founder_pm_conversation_node,
-    github_pr_node,
     pm_business_brief_node,
     po_execution_package_node,
-    po_final_validation_node,
     po_task_packages_node,
     po_task_plan_node,
     qa_validation_node,
-    qc_quality_approval_node,
+    workflow_completed_node,
 )
 from lummevia_runtime.state import RuntimeState
 from lummevia_runtime.transitions import get_next_step_after_qa
@@ -95,6 +94,20 @@ class DevelopmentRuntime:
         self.kilo_client = kilo_client or KiloExecutionClient()
         self.persistence_metadata_resolver = persistence_metadata_resolver
         self.graph = build_development_graph(
+            start_from_approved_handoff=False,
+            observer=self.observer,
+            kilo_client=self.kilo_client,
+            founder_pm_agent=founder_pm_agent,
+            pm_agent=PMAgent(),
+            po_agent=POAgent(),
+            dev_agent=DevAgent(),
+            qa_agent=QAAgent(),
+            qc_agent=QCAgent(),
+            context_loader=context_loader,
+            artifact_publisher=artifact_publisher,
+        )
+        self.approved_handoff_graph = build_development_graph(
+            start_from_approved_handoff=True,
             observer=self.observer,
             kilo_client=self.kilo_client,
             founder_pm_agent=founder_pm_agent,
@@ -134,6 +147,38 @@ class DevelopmentRuntime:
             ),
             metadata=runtime_metadata,
         )
+        approved_brief = runtime_metadata.get("approved_brief")
+        if approved_brief is not None:
+            initial_state.artifacts.business_brief = BusinessBrief.model_validate(approved_brief)
+            initial_state.metadata["thread_id"] = runtime_metadata.get("thread_id") or runtime_metadata.get(
+                "conversation_thread_id"
+            )
+            initial_state.metadata["handoff_id"] = runtime_metadata.get("handoff_id")
+            initial_state.metadata["brief_version"] = int(runtime_metadata.get("brief_version", 0) or 0)
+            initial_state.metadata["founder_approved"] = True
+            initial_state.metadata["business_brief_status"] = "approved"
+            initial_state.metadata["conversation_status"] = "APPROVED"
+            initial_state.metadata["conversation_phase"] = "APPROVED"
+            initial_state.run.metadata["handoff_id"] = runtime_metadata.get("handoff_id")
+            initial_state.run.metadata["thread_id"] = initial_state.metadata.get("thread_id")
+            initial_state.metadata["lifecycle_events"] = [
+                {
+                    "event_id": f"handoff-{runtime_metadata.get('handoff_id', 'missing')}",
+                    "workflow_run_id": initial_state.run.run_id,
+                    "event_type": "PROJECT_HANDOFF_CREATED",
+                    "title": "Approved project handoff created",
+                    "description": (
+                        f"Handoff {runtime_metadata.get('handoff_id')} initialized the workflow run."
+                    ),
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "metadata": {
+                        "handoff_id": runtime_metadata.get("handoff_id"),
+                        "thread_id": initial_state.metadata.get("thread_id"),
+                        "issue_id": issue_id,
+                        "project": project,
+                    },
+                }
+            ]
         initialize_supervisor_runtime_state(initial_state)
         initialize_strategy_runtime_state(initial_state)
         initialize_economics_runtime_state(initial_state)
@@ -143,8 +188,9 @@ class DevelopmentRuntime:
         if self.persistence_metadata_resolver is not None:
             initial_state.metadata.update(self.persistence_metadata_resolver(initial_state))
         self.registry.create(initial_state)
+        selected_graph = self.approved_handoff_graph if approved_brief is not None else self.graph
         with _observe_workflow_run(self.observer, initial_state):
-            final_state = RuntimeState.model_validate(self.graph.invoke(initial_state))
+            final_state = RuntimeState.model_validate(selected_graph.invoke(initial_state))
             if final_state.run.status == WorkflowRunStatus.COMPLETED:
                 queue_id = str(final_state.metadata.get("queue_id", "")).strip()
                 queue_item_id = str(final_state.metadata.get("current_queue_item_id", "")).strip()
@@ -191,6 +237,7 @@ class DevelopmentRuntime:
 
 
 def build_development_graph(
+    start_from_approved_handoff: bool = False,
     observer: RuntimeObserver | None = None,
     *,
     founder_pm_agent: PMAgent | None = None,
@@ -323,42 +370,25 @@ def build_development_graph(
         _instrument_node(runtime_observer, "dev_qa_iteration", dev_qa_iteration_node),
     )
     graph.add_node(
-        "github_pr",
+        "workflow_completed",
         _instrument_node(
             runtime_observer,
-            "github_pr",
-            partial(github_pr_node, artifact_publisher=artifact_publisher),
-        ),
-    )
-    graph.add_node(
-        "qc_quality_approval",
-        _instrument_node(
-            runtime_observer,
-            "qc_quality_approval",
+            "workflow_completed",
             partial(
-                qc_quality_approval_node,
-                agent=qc_agent,
-                artifact_publisher=artifact_publisher,
-            ),
-        ),
-    )
-    graph.add_node(
-        "po_final_validation",
-        _instrument_node(
-            runtime_observer,
-            "po_final_validation",
-            partial(
-                po_final_validation_node,
+                workflow_completed_node,
                 artifact_publisher=artifact_publisher,
             ),
         ),
     )
 
-    graph.add_edge(START, "founder_input")
-    graph.add_edge("founder_input", "founder_pm_conversation")
-    graph.add_edge("founder_pm_conversation", "pm_business_brief")
-    graph.add_edge("pm_business_brief", "founder_business_approval")
-    graph.add_edge("founder_business_approval", "po_execution_package")
+    if start_from_approved_handoff:
+        graph.add_edge(START, "po_execution_package")
+    else:
+        graph.add_edge(START, "founder_input")
+        graph.add_edge("founder_input", "founder_pm_conversation")
+        graph.add_edge("founder_pm_conversation", "pm_business_brief")
+        graph.add_edge("pm_business_brief", "founder_business_approval")
+        graph.add_edge("founder_business_approval", "po_execution_package")
     graph.add_edge("po_execution_package", "po_task_plan")
     graph.add_edge("po_task_plan", "po_task_packages")
     graph.add_edge("po_task_packages", "dev_implementation")
@@ -368,13 +398,12 @@ def build_development_graph(
         get_next_step_after_qa,
         {
             "dev_qa_iteration": "dev_qa_iteration",
-            "github_pr": "github_pr",
+            "dev_implementation": "dev_implementation",
+            "workflow_completed": "workflow_completed",
         },
     )
     graph.add_edge("dev_qa_iteration", "dev_implementation")
-    graph.add_edge("github_pr", "qc_quality_approval")
-    graph.add_edge("qc_quality_approval", "po_final_validation")
-    graph.add_edge("po_final_validation", END)
+    graph.add_edge("workflow_completed", END)
     return graph.compile()
 
 

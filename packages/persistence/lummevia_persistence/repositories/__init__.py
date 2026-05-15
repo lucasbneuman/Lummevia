@@ -1,5 +1,6 @@
 from lummevia_persistence.repositories.capabilities import CapabilitySnapshotRepository
 from lummevia_persistence.repositories.conversations import ConversationSnapshotRepository
+from lummevia_persistence.repositories.handoffs import ApprovedProjectHandoffSnapshotRepository
 from lummevia_persistence.repositories.memory import MemorySnapshotRepository
 from lummevia_persistence.repositories.planning import AdaptivePlanSnapshotRepository
 from lummevia_persistence.repositories.queues import QueueSnapshotRepository
@@ -11,6 +12,7 @@ from lummevia_persistence.repositories.supervisor import SupervisorSnapshotRepos
 __all__ = [
     "CapabilitySnapshotRepository",
     "ConversationSnapshotRepository",
+    "ApprovedProjectHandoffSnapshotRepository",
     "MemorySnapshotRepository",
     "AdaptivePlanSnapshotRepository",
     "QueueSnapshotRepository",

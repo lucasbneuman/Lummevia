@@ -21,4 +21,7 @@ def get_next_step_after_qa(state: RuntimeState) -> str:
     if should_reenter_dev_loop(state):
         return "dev_qa_iteration"
 
-    return "github_pr"
+    if state.metadata.get("workflow_completed"):
+        return "workflow_completed"
+
+    return "dev_implementation"

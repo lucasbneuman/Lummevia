@@ -102,53 +102,7 @@ def initialize_task_queue(
                     "task_id": queue_item.task_id,
                 },
             )
-    started_item = TaskQueueScheduler(registry).start_next_item(queue.queue_id)
-    if started_item is not None:
-        task_package = next(
-            (
-                item
-                for item in task_packages
-                if item.task_id == started_item.task_id
-            ),
-            None,
-        )
-        if task_package is not None:
-            allocate_workspace_for_queue_item(
-                state,
-                queue_item=started_item,
-                task_package=task_package,
-            )
-        watchdog_id = register_queue_item_watchdog(
-            state,
-            queue_id=queue.queue_id,
-            queue_item_id=started_item.queue_item_id,
-            task_id=started_item.task_id,
-        )
-        heartbeat_queue_item_watchdog(state, queue_item_id=started_item.queue_item_id)
-        _record_queue_event(
-            state,
-            event_type="TASK_STARTED",
-            title=f"Task {started_item.task_id} started",
-            description=f"Task {started_item.task_id} became the active runtime item.",
-            metadata={
-                "queue_id": queue.queue_id,
-                "queue_item_id": started_item.queue_item_id,
-                "task_id": started_item.task_id,
-                "watchdog_id": watchdog_id,
-            },
-        )
-        record_supervisor_event(
-            state,
-            event_type="QUEUE_ITEM_ACTIVATED",
-            status=ExecutionHealthStatus.RUNNING,
-            metadata={
-                "queue_id": queue.queue_id,
-                "queue_item_id": started_item.queue_item_id,
-                "task_id": started_item.task_id,
-                "watchdog_id": watchdog_id,
-            },
-            queue_item_id=started_item.queue_item_id,
-        )
+    start_next_ready_task(state, task_packages=task_packages, queue_id=queue.queue_id)
     sync_task_queue_state(state, queue_id=queue.queue_id)
 
 
@@ -232,6 +186,78 @@ def sync_task_queue_state(state: RuntimeState, *, queue_id: str | None = None) -
     state.metadata["completed_count"] = len(completed_items)
     state.metadata["current_queue_item_id"] = current_item.queue_item_id if current_item else None
     state.metadata["current_queue_task_id"] = current_item.task_id if current_item else None
+    state.metadata["task_count"] = len(queue.items)
+    state.metadata["completed_tasks"] = len(completed_items)
+    state.metadata["workflow_progress"] = (
+        1.0 if not queue.items else round(len(completed_items) / len(queue.items), 4)
+    )
+
+
+def start_next_ready_task(
+    state: RuntimeState,
+    *,
+    task_packages: list[TaskPackage],
+    queue_id: str | None = None,
+) -> TaskQueueItem | None:
+    resolved_queue_id = queue_id or _get_queue_id(state)
+    if resolved_queue_id is None:
+        return None
+    registry = TaskQueueRegistry.default()
+    queue = registry.get_queue(resolved_queue_id)
+    if queue is None:
+        return None
+    started_item = TaskQueueScheduler(registry).start_next_item(queue.queue_id)
+    if started_item is None:
+        sync_task_queue_state(state, queue_id=queue.queue_id)
+        return None
+    task_package = next(
+        (
+            item
+            for item in task_packages
+            if item.task_id == started_item.task_id
+        ),
+        None,
+    )
+    if task_package is not None:
+        allocate_workspace_for_queue_item(
+            state,
+            queue_item=started_item,
+            task_package=task_package,
+        )
+    watchdog_id = register_queue_item_watchdog(
+        state,
+        queue_id=queue.queue_id,
+        queue_item_id=started_item.queue_item_id,
+        task_id=started_item.task_id,
+    )
+    heartbeat_queue_item_watchdog(state, queue_item_id=started_item.queue_item_id)
+    _record_queue_event(
+        state,
+        event_type="TASK_STARTED",
+        title=f"Task {started_item.task_id} started",
+        description=f"Task {started_item.task_id} became the active runtime item.",
+        metadata={
+            "queue_id": queue.queue_id,
+            "queue_item_id": started_item.queue_item_id,
+            "task_id": started_item.task_id,
+            "watchdog_id": watchdog_id,
+        },
+    )
+    record_supervisor_event(
+        state,
+        event_type="QUEUE_ITEM_ACTIVATED",
+        status=ExecutionHealthStatus.RUNNING,
+        metadata={
+            "queue_id": queue.queue_id,
+            "queue_item_id": started_item.queue_item_id,
+            "task_id": started_item.task_id,
+            "watchdog_id": watchdog_id,
+        },
+        queue_item_id=started_item.queue_item_id,
+    )
+    sync_task_queue_state(state, queue_id=queue.queue_id)
+    state.metadata.setdefault("primary_queue_item_id", started_item.queue_item_id)
+    return started_item
 
 
 def build_queue_metadata_for_kilo(

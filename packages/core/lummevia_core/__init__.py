@@ -7,6 +7,10 @@ from lummevia_core.artifacts import (
     TaskPlan,
     ValidationPackage,
 )
+from lummevia_core.handoffs import (
+    ApprovedProjectHandoff,
+    ApprovedProjectHandoffRegistry,
+)
 from lummevia_core.enums import (
     AgentRole,
     ArtifactStatus,
@@ -20,6 +24,8 @@ from lummevia_core.workflow_steps import WorkflowStep
 
 __all__ = [
     "AgentRole",
+    "ApprovedProjectHandoff",
+    "ApprovedProjectHandoffRegistry",
     "ArtifactStatus",
     "BusinessBrief",
     "DevelopmentWorkflowDefinition",

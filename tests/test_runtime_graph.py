@@ -3,7 +3,6 @@ from lummevia_core import (
     BusinessBrief,
     ExecutionPackage,
     ImplementationPackage,
-    QualityApproval,
     TaskPackage,
     TaskPlan,
     ValidationPackage,
@@ -29,8 +28,8 @@ def test_runtime_executes_complete_workflow() -> None:
     assert isinstance(state, RuntimeState)
     assert state.run.workflow_name == "development_loop"
     assert state.run.status == WorkflowRunStatus.COMPLETED
-    assert state.run.current_step == "po_final_validation"
-    assert state.current_role == AgentRole.PO
+    assert state.run.current_step == "workflow_completed"
+    assert state.current_role == AgentRole.QA
     assert state.artifacts.business_brief is not None
     assert state.artifacts.business_brief.business_brief_status == "approved"
     assert state.artifacts.business_brief.founder_approved is True
@@ -43,13 +42,16 @@ def test_runtime_executes_complete_workflow() -> None:
     assert state.artifacts.execution_package is not None
     assert state.artifacts.task_plan is not None
     assert state.artifacts.task_packages
+    assert state.metadata["task_count"] == len(state.artifacts.task_packages)
+    assert state.metadata["completed_tasks"] == len(state.artifacts.task_packages)
+    assert state.metadata["workflow_progress"] == 1.0
     assert state.metadata["queue_id"].startswith("queue-")
     assert state.metadata["current_queue_item_id"].startswith("queue-item-")
     assert state.artifacts.implementation_package is not None
     assert state.artifacts.validation_package is not None
-    assert state.artifacts.pull_request is not None
-    assert state.artifacts.quality_approval is not None
-    assert state.artifacts.final_validation is not None
+    assert state.artifacts.pull_request is None
+    assert state.artifacts.quality_approval is None
+    assert state.artifacts.final_validation is None
 
 
 def test_runtime_artifacts_reuse_core_contract_types() -> None:
@@ -63,8 +65,8 @@ def test_runtime_artifacts_reuse_core_contract_types() -> None:
     assert all(isinstance(task_package, TaskPackage) for task_package in state.artifacts.task_packages)
     assert isinstance(state.artifacts.implementation_package, ImplementationPackage)
     assert isinstance(state.artifacts.validation_package, ValidationPackage)
-    assert isinstance(state.artifacts.pull_request, dict)
-    assert isinstance(state.artifacts.quality_approval, QualityApproval)
+    assert state.artifacts.pull_request is None
+    assert state.artifacts.quality_approval is None
 
 
 def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
@@ -79,7 +81,6 @@ def test_runtime_artifacts_are_sourced_from_prompt_pipeline() -> None:
         "task_packages": "prompt_pipeline",
         "implementation_package": "prompt_pipeline",
         "validation_package": "prompt_pipeline",
-        "quality_approval": "prompt_pipeline",
     }
     assert state.metadata["prompt_pipeline"]["pm_business_brief"]["target_artifact"] == (
         "BusinessBrief"
@@ -112,18 +113,20 @@ def test_runtime_registers_step_events() -> None:
 
     state = runtime.start_run(project="lummevia-os", issue_id="OS-4")
     event_types = [event.metadata["type"] for event in state.run.events]
-    github_pr_events = [event for event in state.run.events if event.step_name == "github_pr"]
+    workflow_completed_events = [
+        event for event in state.run.events if event.step_name == "workflow_completed"
+    ]
 
     assert "STEP_STARTED" in event_types
     assert "STEP_COMPLETED" in event_types
     assert "LOOP_REENTERED" in event_types
-    assert [event.metadata["type"] for event in github_pr_events] == [
+    assert [event.metadata["type"] for event in workflow_completed_events] == [
         "STEP_STARTED",
         "STEP_COMPLETED",
     ]
 
 
-def test_github_pr_occurs_after_qa_pass_and_before_qc() -> None:
+def test_workflow_completed_occurs_after_last_qa_pass() -> None:
     runtime = DevelopmentRuntime()
 
     state = runtime.start_run(project="lummevia-os", issue_id="OS-4A")
@@ -135,23 +138,16 @@ def test_github_pr_occurs_after_qa_pass_and_before_qc() -> None:
         and event.metadata["type"] == "STEP_COMPLETED"
         and event.metadata.get("validation_status") == "PASSED"
     )
-    github_pr_started_index = next(
+    workflow_completed_started_index = next(
         index
         for index, event in enumerate(events)
-        if event.step_name == "github_pr"
-        and event.metadata["type"] == "STEP_STARTED"
-    )
-    qc_started_index = next(
-        index
-        for index, event in enumerate(events)
-        if event.step_name == "qc_quality_approval"
+        if event.step_name == "workflow_completed"
         and event.metadata["type"] == "STEP_STARTED"
     )
 
-    assert last_qa_completed_index < github_pr_started_index < qc_started_index
-    assert state.artifacts.pull_request is not None
-    assert state.artifacts.pull_request["status"] == "OPEN"
-    assert state.artifacts.pull_request["branch"] == state.artifacts.implementation_package.branch
+    assert last_qa_completed_index < workflow_completed_started_index
+    assert state.metadata["workflow_completed"] is True
+    assert state.metadata["completed_tasks"] == state.metadata["task_count"]
 
 
 def test_founder_approval_occurs_before_po_execution_package() -> None:
@@ -258,7 +254,7 @@ def test_runtime_records_timeline_metadata() -> None:
     assert "WORKFLOW" in state.metadata["timeline_sources"]
     assert "SESSION" in state.metadata["timeline_sources"]
     assert any(
-        event["event_type"] == "QUEUE_CREATED"
+        event["event_type"] == "WORKFLOW_COMPLETED"
         for event in state.metadata["timeline"]["events"]
     )
 
@@ -269,17 +265,17 @@ def test_dev_consumes_first_task_package_and_qa_validates_task_package() -> None
     state = runtime.start_run(project="lummevia-os", issue_id="OS-4D")
 
     assert state.artifacts.current_task_package is not None
-    assert state.artifacts.current_task_package.task_id == state.metadata["current_queue_task_id"]
+    assert state.artifacts.current_task_package.task_id in {
+        task_package.task_id for task_package in state.artifacts.task_packages
+    }
     assert state.artifacts.implementation_package is not None
     assert state.artifacts.validation_package is not None
-    assert state.artifacts.implementation_package.summary.lower().find("task package") != -1
-    assert any(
-        "task package" in scenario.lower()
-        for scenario in state.artifacts.validation_package.scenarios_validated
-    )
+    assert state.artifacts.implementation_package.task_id == state.artifacts.validation_package.task_id
+    assert state.artifacts.implementation_package.implementation_notes
+    assert state.artifacts.validation_package.recommendation is not None
 
 
-def test_runtime_creates_queue_from_task_packages_and_executes_only_first_ready_item() -> None:
+def test_runtime_creates_queue_from_task_packages_and_completes_all_ready_items_sequentially() -> None:
     runtime = DevelopmentRuntime()
 
     state = runtime.start_run(project="lummevia-os", issue_id="OS-4G")
@@ -296,11 +292,7 @@ def test_runtime_creates_queue_from_task_packages_and_executes_only_first_ready_
     assert state.metadata["current_queue_item_id"] in {
         item["queue_item_id"] for item in queue_snapshot["items"]
     }
-    assert running_or_finished[task_ids[0]] == "COMPLETED"
-    assert all(
-        running_or_finished[task_id] in {"QUEUED", "BLOCKED", "READY"}
-        for task_id in task_ids[1:]
-    )
+    assert all(running_or_finished[task_id] == "COMPLETED" for task_id in task_ids)
 
 
 def test_runtime_generates_unique_run_ids() -> None:

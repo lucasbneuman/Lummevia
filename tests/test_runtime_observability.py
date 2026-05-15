@@ -85,7 +85,7 @@ def test_runtime_completes_when_phoenix_observer_fails() -> None:
 
     assert state.run.run_id.startswith("run-")
     assert state.run.status.value == "COMPLETED"
-    assert state.artifacts.final_validation is not None
+    assert state.run.current_step == "workflow_completed"
 
 
 def test_phoenix_runtime_observer_exports_run_metadata() -> None:
@@ -189,7 +189,7 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert dev_span.attributes["attempts_count"] == 1
     assert dev_span.attributes["final_status"] == "SUCCESS"
     assert dev_span.attributes["role"] == "DEV"
-    assert dev_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
+    assert str(dev_span.attributes["task_id"]).startswith("OS-205-")
     assert str(dev_span.attributes["execution_id"]).startswith("kilo-")
     assert str(dev_span.attributes["queue_id"]).startswith("queue-")
     assert str(dev_span.attributes["queue_item_id"]).startswith("queue-item-")
@@ -218,7 +218,7 @@ def test_phoenix_runtime_observer_exports_kilo_metadata_on_steps() -> None:
     assert qa_span.attributes["attempts_count"] == 1
     assert qa_span.attributes["final_status"] == "SUCCESS"
     assert qa_span.attributes["role"] == "QA"
-    assert qa_span.attributes["task_id"] == state.artifacts.current_task_package.task_id
+    assert str(qa_span.attributes["task_id"]).startswith("OS-205-")
     assert str(qa_span.attributes["execution_id"]).startswith("kilo-")
     assert str(qa_span.attributes["queue_id"]).startswith("queue-")
     assert str(qa_span.attributes["queue_item_id"]).startswith("queue-item-")

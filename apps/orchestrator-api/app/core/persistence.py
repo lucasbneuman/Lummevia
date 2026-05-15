@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from lummevia_capabilities import CapabilityRegistry
+from lummevia_core import ApprovedProjectHandoffRegistry
 from lummevia_conversations import ConversationRegistry
 from lummevia_memory import ProjectMemoryRegistry
 from lummevia_planning import AdaptivePlanRegistry
@@ -46,6 +47,9 @@ def configure_operational_persistence(
     )
     ConversationRegistry.default().configure_persistence(
         None if service is None else service.conversations
+    )
+    ApprovedProjectHandoffRegistry.default().configure_persistence(
+        None if service is None else service.handoffs
     )
     ResourceRegistry.default().configure_persistence(
         None if service is None else service.resources
@@ -122,6 +126,13 @@ def rehydrate_registries() -> dict[str, dict[str, Any]]:
         results["conversations"] = {"status": "error", "detail": str(exc)}
 
     try:
+        handoffs = operational_persistence.handoffs.list_handoffs()
+        ApprovedProjectHandoffRegistry.default().rehydrate(handoffs)
+        results["handoffs"] = {"status": "ok", "count": len(handoffs)}
+    except Exception as exc:
+        results["handoffs"] = {"status": "error", "detail": str(exc)}
+
+    try:
         ResourceRegistry.default().rehydrate(
             locks=operational_persistence.resources.list_locks(),
             workspaces=operational_persistence.resources.list_workspaces(),
@@ -188,6 +199,7 @@ def _resolve_snapshot_versions(state) -> list[int]:
         ("queue", state.metadata.get("queue_id")),
         ("session", state.metadata.get("current_session_id")),
         ("conversation", state.metadata.get("thread_id")),
+        ("handoff", state.metadata.get("handoff_id")),
         ("workspace", state.metadata.get("workspace_id")),
         ("dead_letter", state.metadata.get("dead_letter_id")),
         ("adaptive_plan", state.metadata.get("adaptive_plan_id")),

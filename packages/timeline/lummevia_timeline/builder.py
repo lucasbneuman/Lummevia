@@ -487,6 +487,27 @@ def _build_system_events(
                     metadata=metadata,
                 )
             )
+    lifecycle_events = state.metadata.get("lifecycle_events", [])
+    if isinstance(lifecycle_events, list):
+        for raw_event in lifecycle_events:
+            if not isinstance(raw_event, dict):
+                continue
+            metadata = raw_event.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            events.append(
+                TimelineEvent(
+                    event_id=str(raw_event.get("event_id", "")),
+                    workflow_run_id=workflow_run_id,
+                    event_type=str(raw_event.get("event_type", "LIFECYCLE_EVENT")),
+                    source_type=TimelineSourceType.SYSTEM,
+                    source_id=str(metadata.get("task_id") or metadata.get("issue_id") or "lifecycle"),
+                    title=str(raw_event.get("title", "Lifecycle event")),
+                    description=str(raw_event.get("description", "Lifecycle event recorded.")),
+                    created_at=raw_event.get("created_at"),
+                    metadata=metadata,
+                )
+            )
     supervisor_events = state.metadata.get("supervisor_events", [])
     if not isinstance(supervisor_events, list):
         supervisor_events = []

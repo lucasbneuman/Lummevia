@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import Field
@@ -37,12 +38,15 @@ class ExecutionPackage(CoreArtifactModel):
 class ImplementationPackage(CoreArtifactModel):
     issue_id: str
     project: str
+    task_id: str | None = None
     branch: str
     commits: list[str]
     files_changed: list[str]
     tests_run: list[str]
     summary: str
     risks: list[str]
+    implementation_notes: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class TaskPlan(CoreArtifactModel):
@@ -59,6 +63,7 @@ class TaskPackage(CoreArtifactModel):
     issue_id: str
     project: str
     title: str
+    description: str = "Contractual task package"
     objective: str
     target_repo: str
     context_refs: list[str]
@@ -73,11 +78,14 @@ class TaskPackage(CoreArtifactModel):
 class ValidationPackage(CoreArtifactModel):
     issue_id: str
     project: str
+    task_id: str | None = None
     status: ValidationStatus
     bugs_found: list[str]
     scenarios_validated: list[str]
     feedback: str
     risks: list[str]
+    findings: list[str] = Field(default_factory=list)
+    recommendation: str | None = None
 
 
 class QualityApproval(CoreArtifactModel):

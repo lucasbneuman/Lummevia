@@ -85,11 +85,20 @@ class ProjectMemoryRegistry:
         project: str,
         category: MemoryCategory,
     ) -> list[ProjectMemoryRecord]:
-        return [
+        records = [
             record
             for record in self.list_project_memories(project)
             if record.category == category
         ]
+        if category == MemoryCategory.QA_ISSUE:
+            return sorted(
+                records,
+                key=lambda record: (
+                    not record.title.startswith("QA issue"),
+                    -record.created_at.timestamp(),
+                ),
+            )
+        return records
 
     def _persist_record(self, record: ProjectMemoryRecord) -> None:
         if self._persistence is None:

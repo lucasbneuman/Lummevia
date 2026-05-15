@@ -4,6 +4,93 @@ Bootstrap tecnico del runtime inicial del orquestador.
 
 En esta etapa el repositorio ya integra un primer runtime real basado en LangGraph para ejecutar de forma simulada el workflow principal de desarrollo. Todavia no incluye agentes con LLMs reales, prompts reales, providers IA reales ni logica de negocio. Si incluye una instrumentacion inicial real hacia Phoenix para observar `WorkflowRun`, steps, eventos runtime y el loop `DEV ↔ QA`.
 
+## Lifecycle contractual hasta QA
+
+El repositorio ahora soporta el primer lifecycle end-to-end contractual para proyectos aprobados por Founder. El flujo real es:
+
+`Founder approval -> ApprovedProjectHandoff -> workflow_run -> PO decomposition -> Queue -> DEV -> QA -> workflow completed`
+
+### ApprovedProjectHandoff
+
+Cuando una conversacion llega a `ConversationPhase.APPROVED`, el sistema genera un `ApprovedProjectHandoff` persistido con trazabilidad completa entre thread, issue y brief aprobado. El contrato incluye:
+
+- `handoff_id`
+- `thread_id`
+- `issue_id`
+- `project`
+- `approved_brief`
+- `brief_version`
+- `founder_summary`
+- `created_at`
+- `metadata`
+
+### Runtime trigger automatico
+
+El approval ya no depende de disparar manualmente `/runtime/development/run`. El handoff aprobado crea automaticamente un `workflow_run` contractual usando:
+
+- brief aprobado
+- `thread_id`
+- `issue_id`
+- `project`
+- `handoff_id`
+
+La ruta `/runtime/development/run` se mantiene como entrada tecnica para pruebas o ejecucion manual, pero no es la entrada principal del lifecycle real.
+
+### Decomposition, queue y sessions
+
+El nodo PO genera `TaskPackage` deterministas solo para los buckets aplicables:
+
+- `Frontend`
+- `Backend`
+- `Infra`
+- `QA`
+- `Documentation`
+
+Cada task se inserta en la queue real con dependencias, prioridad y estado sincronizado al runtime. La ejecucion crea una session propia por task con metadata minima de trazabilidad:
+
+- `thread_id`
+- `issue_id`
+- `task_id`
+
+### DEV, QA y artifacts
+
+DEV publica `ImplementationPackage` contractuales con resumen, archivos tocados, notas de implementacion y fecha de creacion. QA publica `ValidationPackage` con estado, findings y recomendacion.
+
+El lifecycle exitoso actual termina en `QA PASS`. No ejecuta todavia PR automaticos, merge, deploy, `QC` ni `PO final`.
+
+### Founder visibility en YouTrack
+
+Founder recibe visibilidad resumida mediante comentarios no-verbosos en YouTrack. Se publican solo milestones de alto valor:
+
+- `decomposition created`
+- `task completed`
+- `QA status`
+- `workflow completed`
+
+La publicacion deduplica por issue, evento y task para evitar spam.
+
+### Timeline, Phoenix y endpoints
+
+El timeline incorpora los eventos:
+
+- `PROJECT_HANDOFF_CREATED`
+- `TASK_DECOMPOSED`
+- `IMPLEMENTATION_COMPLETED`
+- `QA_VALIDATED`
+- `WORKFLOW_COMPLETED`
+
+Phoenix exporta metadata de progreso contractual, incluyendo:
+
+- `handoff_id`
+- `task_count`
+- `completed_tasks`
+- `workflow_progress`
+
+Para observabilidad y consulta operativa, la API expone:
+
+- `GET /projects/handoffs`
+- `GET /projects/handoffs/{handoff_id}`
+
 ## Stack local
 
 - `orchestrator-api`: API FastAPI minima con endpoints de salud y metadata.

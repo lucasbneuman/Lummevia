@@ -7,10 +7,10 @@ from lummevia_agents import POAgent
 from lummevia_kilo import KiloExecutionClient, resolve_kilo_mode
 
 from lummevia_runtime.economics import register_prompt_pipeline_cost
-from lummevia_runtime.events import complete_step, start_step
+from lummevia_runtime.events import complete_step, record_lifecycle_event, start_step
 from lummevia_runtime.kilo import build_runtime_planning_task_package, execute_kilo_step
 from lummevia_runtime.queue import initialize_task_queue
-from lummevia_runtime.sessions import add_session_output, create_task_execution_session
+from lummevia_runtime.sessions import add_session_output
 from lummevia_runtime.state import RuntimeState
 
 
@@ -215,13 +215,11 @@ def po_task_packages_node(
         task_packages[0] if task_packages else None,
     )
     if state.artifacts.current_task_package is not None:
-        create_task_execution_session(
-            state,
-            task_package=state.artifacts.current_task_package,
-            step_name=step_name,
-            role=AgentRole.PO,
-            mode=resolve_kilo_mode(AgentRole.PO),
+        state.metadata.setdefault(
+            "primary_task_id",
+            state.artifacts.current_task_package.task_id,
         )
+    if state.artifacts.current_task_package is not None:
         kilo_execution = execute_kilo_step(
             state,
             step_name=step_name,
@@ -243,6 +241,19 @@ def po_task_packages_node(
                 "current_task_id": state.artifacts.current_task_package.task_id,
             },
         )
+    record_lifecycle_event(
+        state,
+        event_type="TASK_DECOMPOSED",
+        title="Task decomposition created",
+        description=(
+            f"PO created {len(task_packages)} task packages for issue {state.run.issue_id}."
+        ),
+        metadata={
+            "issue_id": state.run.issue_id,
+            "task_count": len(task_packages),
+            "task_ids": [task_package.task_id for task_package in task_packages],
+        },
+    )
     state.metadata.setdefault("artifact_sources", {})["task_packages"] = "prompt_pipeline"
     state.metadata.setdefault("prompt_pipeline", {})[step_name] = {
         "target_artifact": "TaskPackage",

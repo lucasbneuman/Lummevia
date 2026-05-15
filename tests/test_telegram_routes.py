@@ -2,7 +2,9 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.core.youtrack import set_youtrack_client_override
+from app.api.routes import runtime as runtime_routes
 from lummevia_conversations import ConversationRegistry, ConversationPhase
+from lummevia_core import ApprovedProjectHandoffRegistry
 from lummevia_integrations import YouTrackClient
 from lummevia_reviews import HumanReviewRegistry
 from main import app
@@ -307,10 +309,17 @@ def test_telegram_webhook_requires_explicit_approval_and_creates_review(monkeypa
     assert body["approved"] is True
     assert body["conversation_phase"] == "APPROVED"
     assert body["review_id"].startswith("review-")
+    assert body["metadata"]["handoff_id"].startswith("handoff-")
+    assert body["metadata"]["workflow_run_id"].startswith("run-")
     thread = ConversationRegistry.default().get_thread(body["thread_id"])
     assert thread.status.value == "APPROVED"
     assert thread.founder_pm_state is not None
     assert thread.founder_pm_state.phase == ConversationPhase.APPROVED
+    handoff = ApprovedProjectHandoffRegistry.default().get_handoff(body["metadata"]["handoff_id"])
+    assert handoff is not None
+    assert handoff.metadata["workflow_run_id"] == body["metadata"]["workflow_run_id"]
+    runtime_state = runtime_routes.runtime_service.get_run(body["metadata"]["workflow_run_id"])
+    assert runtime_state.metadata["handoff_id"] == handoff.handoff_id
     review = HumanReviewRegistry.default().get_review(body["review_id"])
     assert review is not None
     assert review.decision.value == "APPROVED"

@@ -253,25 +253,19 @@ class PromptPipeline:
             context.available_artifacts.get("execution_package")
         )
         issue_slug = context.issue_id.upper()
-        workstreams = [
-            "runtime_state_and_contracts",
-            "documentation_and_tests",
-        ]
+        workstreams = self._determine_task_buckets(execution_package)
         return TaskPlan(
             issue_id=context.issue_id,
             project=context.project,
             workstreams=workstreams,
             task_packages=[
-                f"{issue_slug}-T1",
-                f"{issue_slug}-T2",
+                f"{issue_slug}-{bucket[:3].upper()}-{index + 1}"
+                for index, bucket in enumerate(workstreams)
             ],
             sequencing_notes=[
-                "Create runtime and contract scaffolding first.",
-                "Update documentation and verification after the runtime shape is in place.",
-                (
-                    "Keep the runtime sequential and let DEV execute only the first "
-                    "TaskPackage in this MVP."
-                ),
+                f"Keep bucket ordering deterministic: {', '.join(workstreams)}.",
+                "Run one TaskPackage at a time through the real queue and QA gate.",
+                "Only advance to the next TaskPackage after QA PASS unlocks dependencies.",
             ],
             risks=[
                 "Simulated task packages can drift from future provider-backed prompts",
@@ -290,21 +284,21 @@ class PromptPipeline:
         task_plan = self._artifact_data(context.available_artifacts.get("task_plan"))
         task_id = str(context.metadata.get("task_id", f"{context.issue_id}-T1"))
         task_index = int(context.metadata.get("task_index", 0))
-        task_titles = [
-            "Model PO decomposition artifacts and runtime state",
-            "Document the PO decomposition flow and expand regression tests",
-        ]
-        objectives = [
-            "Represent TaskPlan and TaskPackages in the simulated runtime.",
-            "Reflect the decomposition flow in docs, ADRs, and test coverage.",
-        ]
-        title = task_titles[min(task_index, len(task_titles) - 1)]
-        objective = objectives[min(task_index, len(objectives) - 1)]
+        buckets = task_plan.get("workstreams", []) or ["Backend"]
+        bucket = str(buckets[min(task_index, len(buckets) - 1)])
+        title = f"{bucket} lifecycle task"
+        objective = self._task_objective_for_bucket(bucket)
+        dependencies = [str(previous_task_id) for previous_task_id in task_plan.get("task_packages", [])[:task_index]]
+        priority = "HIGH" if task_index == 0 else "NORMAL"
         return TaskPackage(
             task_id=task_id,
             issue_id=context.issue_id,
             project=context.project,
             title=title,
+            description=(
+                f"Deliver the {bucket} slice of the approved brief through the contractual "
+                "PO -> DEV -> QA lifecycle."
+            ),
             objective=objective,
             target_repo=context.project,
             context_refs=[
@@ -336,6 +330,11 @@ class PromptPipeline:
                 if task_index == 0
                 else "planned"
             ),
+            metadata={
+                "bucket": bucket,
+                "priority": priority,
+                "dependencies": dependencies,
+            },
         )
 
     def _build_implementation_package(
@@ -351,6 +350,7 @@ class PromptPipeline:
         return ImplementationPackage(
             issue_id=context.issue_id,
             project=context.project,
+            task_id=task_id,
             branch=f"runtime/{context.issue_id.lower()}",
             commits=(
                 ["simulated-initial-commit", "simulated-rework-commit"]
@@ -377,6 +377,10 @@ class PromptPipeline:
                 "Prompt wording is placeholder-only",
                 "No real provider or structured LLM parsing exists yet",
             ],
+            implementation_notes=[
+                f"Task bucket: {task_package.get('metadata', {}).get('bucket', 'unknown')}",
+                f"Task objective: {task_package.get('objective', 'not supplied')}",
+            ],
         )
 
     def _build_validation_package(self, context: PromptContext) -> ValidationPackage:
@@ -400,6 +404,7 @@ class PromptPipeline:
         return ValidationPackage(
             issue_id=context.issue_id,
             project=context.project,
+            task_id=task_package.get("task_id", context.issue_id),
             status=status,
             bugs_found=["BUG-DEV-QA-LOOP"] if first_pass else [],
             scenarios_validated=scenarios_validated,
@@ -412,6 +417,12 @@ class PromptPipeline:
                 ["Implementation requires rework before QC"]
                 if first_pass
                 else ["Real provider integration remains untested"]
+            ),
+            findings=["Dependency or flow issue detected"] if first_pass else [],
+            recommendation=(
+                "Rework implementation before advancing to the next task."
+                if first_pass
+                else "Advance the next unlocked task package."
             ),
         )
 
@@ -444,3 +455,39 @@ class PromptPipeline:
         if isinstance(artifact, dict):
             return artifact
         return {}
+
+    def _determine_task_buckets(self, execution_package: dict[str, Any]) -> list[str]:
+        combined_text = " ".join(
+            str(value)
+            for value in execution_package.values()
+            if isinstance(value, (str, list))
+        ).lower()
+        ordered_buckets = [
+            ("Frontend", ("frontend", "ui", "ux", "telegram", "web")),
+            ("Backend", ("backend", "runtime", "queue", "session", "workflow", "api")),
+            ("Infra", ("infra", "docker", "phoenix", "observability", "deployment")),
+            ("QA", ("qa", "validation", "testing", "test")),
+            ("Documentation", ("documentation", "readme", "docs", "adr")),
+        ]
+        selected = [
+            bucket
+            for bucket, keywords in ordered_buckets
+            if any(keyword in combined_text for keyword in keywords)
+        ]
+        if "Backend" not in selected:
+            selected.insert(0, "Backend")
+        if "QA" not in selected:
+            selected.append("QA")
+        if "Documentation" not in selected:
+            selected.append("Documentation")
+        return selected
+
+    def _task_objective_for_bucket(self, bucket: str) -> str:
+        objectives = {
+            "Frontend": "Implement the Founder-visible interface changes required by the approved brief.",
+            "Backend": "Implement the runtime, queue, session, and workflow logic for the approved brief.",
+            "Infra": "Align infrastructure, observability, and environment wiring with the approved brief.",
+            "QA": "Strengthen validation coverage and release gates for the approved brief.",
+            "Documentation": "Document the lifecycle, contracts, and operational visibility for the approved brief.",
+        }
+        return objectives.get(bucket, "Implement the approved brief in a traceable task package.")

@@ -9,6 +9,7 @@ from lummevia_integrations import (
     YouTrackClient,
     YouTrackCommentPayload,
     YouTrackConfigurationError,
+    YouTrackIntegrationError,
 )
 
 from app.core.config import settings
@@ -42,19 +43,25 @@ def load_agent_context_bundle(
         return None
 
     role_value = role.value if isinstance(role, AgentRole) else role
-    return client.get_agent_context(
-        project=project,
-        role=role_value,
-        issue_id=issue_id,
-        issue_query=issue_query,
-    )
+    try:
+        return client.get_agent_context(
+            project=project,
+            role=role_value,
+            issue_id=issue_id,
+            issue_query=issue_query,
+        )
+    except (YouTrackConfigurationError, YouTrackIntegrationError):
+        return None
 
 
 def sync_issue_comment(issue_id: str, body: str) -> None:
     client = get_youtrack_client()
     if not client.is_configured:
         return
-    client.add_comment(issue_id, YouTrackCommentPayload(body=body))
+    try:
+        client.add_comment(issue_id, YouTrackCommentPayload(body=body))
+    except Exception:
+        return
 
 
 def sync_artifact_link(
@@ -68,15 +75,18 @@ def sync_artifact_link(
     client = get_youtrack_client()
     if not client.is_configured:
         return
-    client.link_artifact(
-        issue_id,
-        YouTrackArtifactLink(
-            artifact_type=artifact_type,
-            artifact_id=artifact_id,
-            title=title,
-            url=url,
-        ),
-    )
+    try:
+        client.link_artifact(
+            issue_id,
+            YouTrackArtifactLink(
+                artifact_type=artifact_type,
+                artifact_id=artifact_id,
+                title=title,
+                url=url,
+            ),
+        )
+    except Exception:
+        return
 
 
 def ensure_youtrack_available() -> YouTrackClient:
