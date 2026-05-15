@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -79,11 +79,11 @@ class TelegramWebhookResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-def _validate_secret(secret_token: str | None) -> None:
+def _validate_secret(secret_token: str | None, query_secret: str | None) -> None:
     configured_secret = settings.telegram.webhook_secret
     if configured_secret is None:
         return
-    if secret_token == configured_secret:
+    if secret_token == configured_secret or query_secret == configured_secret:
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -322,8 +322,9 @@ def get_telegram_conversation(thread_id: str) -> ConversationThread:
 def telegram_webhook(
     update: TelegramUpdate,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    secret: str | None = Query(default=None),
 ) -> TelegramWebhookResponse:
-    _validate_secret(x_telegram_bot_api_secret_token)
+    _validate_secret(x_telegram_bot_api_secret_token, secret)
 
     message = update.message
     if message is None or not message.text:

@@ -1,0 +1,118 @@
+services:
+  orchestrator-api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/orchestrator-api.Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV}
+      APP_PORT: ${APP_PORT}
+      APP_NAME: ${APP_NAME}
+      APP_VERSION: ${APP_VERSION}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      RUNTIME_PERSISTENCE_ENABLED: ${RUNTIME_PERSISTENCE_ENABLED}
+      RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      DEEPSEEK_ENABLED: ${DEEPSEEK_ENABLED}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
+      DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS}
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS}
+      YOUTRACK_ENABLED: ${YOUTRACK_ENABLED}
+      YOUTRACK_BASE_URL: ${YOUTRACK_BASE_URL}
+      YOUTRACK_TOKEN: ${YOUTRACK_TOKEN}
+      YOUTRACK_PROJECT_ID: ${YOUTRACK_PROJECT_ID}
+      YOUTRACK_DEFAULT_ASSIGNEE: ${YOUTRACK_DEFAULT_ASSIGNEE}
+      PHOENIX_ENABLED: ${PHOENIX_ENABLED}
+      PHOENIX_HOST: ${PHOENIX_HOST}
+      PHOENIX_PORT: ${PHOENIX_PORT}
+      PHOENIX_BASE_URL: ${PHOENIX_BASE_URL}
+      KILO_ENABLED: ${KILO_ENABLED}
+      KILO_DRY_RUN: ${KILO_DRY_RUN}
+      KILO_CLI_PATH: ${KILO_CLI_PATH}
+      KILO_WORKSPACE_ROOT: ${KILO_WORKSPACE_ROOT}
+      KILO_ALLOWED_REPOS: ${KILO_ALLOWED_REPOS}
+      KILO_DEFAULT_TIMEOUT_SECONDS: ${KILO_DEFAULT_TIMEOUT_SECONDS}
+      KILO_MAX_OUTPUT_BYTES: ${KILO_MAX_OUTPUT_BYTES}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_ORG: ${GITHUB_ORG}
+      MODEL_PM_PROVIDER: ${MODEL_PM_PROVIDER}
+      MODEL_PM_NAME: ${MODEL_PM_NAME}
+      MODEL_PO_PROVIDER: ${MODEL_PO_PROVIDER}
+      MODEL_PO_NAME: ${MODEL_PO_NAME}
+      MODEL_DEV_PROVIDER: ${MODEL_DEV_PROVIDER}
+      MODEL_DEV_NAME: ${MODEL_DEV_NAME}
+      MODEL_QA_PROVIDER: ${MODEL_QA_PROVIDER}
+      MODEL_QA_NAME: ${MODEL_QA_NAME}
+      MODEL_QC_PROVIDER: ${MODEL_QC_PROVIDER}
+      MODEL_QC_NAME: ${MODEL_QC_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - orchestrator_tmp:/tmp/lummevia
+    networks:
+      - lummevia
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - lummevia
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - redis_data:/data
+    networks:
+      - lummevia
+
+volumes:
+  orchestrator_tmp:
+  postgres_data:
+  redis_data:
+
+networks:
+  lummevia:
+    driver: bridge

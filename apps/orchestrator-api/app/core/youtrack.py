@@ -26,6 +26,7 @@ def get_youtrack_client() -> YouTrackClient:
     if _client_override is not None:
         return _client_override
     return YouTrackClient(
+        enabled=settings.youtrack.enabled,
         base_url=settings.youtrack.base_url,
         token=settings.youtrack.token,
     )

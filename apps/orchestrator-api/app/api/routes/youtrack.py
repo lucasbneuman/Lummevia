@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.youtrack import ensure_youtrack_available
+from app.core.config import settings
 from lummevia_integrations import (
     AgentContextBundle,
     YouTrackComment,
@@ -18,6 +19,16 @@ from lummevia_integrations import (
 
 
 router = APIRouter(prefix="/youtrack", tags=["youtrack"])
+
+
+class YouTrackHealthResponse(BaseModel):
+    status: str = Field(min_length=1)
+    configured: bool
+    base_url: str | None = None
+    project_id_configured: bool = False
+    default_assignee_configured: bool = False
+    token_present: bool = False
+    detail: str | None = None
 
 
 class IssueSearchResponse(BaseModel):
@@ -36,6 +47,32 @@ def _client():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+
+
+@router.get("/health", response_model=YouTrackHealthResponse)
+def youtrack_health() -> YouTrackHealthResponse:
+    if not settings.youtrack.enabled:
+        return YouTrackHealthResponse(
+            status="disabled",
+            configured=False,
+        )
+
+    try:
+        client = ensure_youtrack_available()
+    except YouTrackConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    return YouTrackHealthResponse(
+        status="ok",
+        configured=client.is_configured,
+        base_url=client.base_url.removesuffix("/api") if client.base_url is not None else None,
+        project_id_configured=settings.youtrack.project_id is not None,
+        default_assignee_configured=settings.youtrack.default_assignee is not None,
+        token_present=client.token is not None,
+    )
 
 
 @router.get("/issues/{issue_id}", response_model=YouTrackIssue)

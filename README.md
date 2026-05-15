@@ -1715,3 +1715,92 @@ Para correr los tests dentro de Docker:
 docker compose -f infra/compose/docker-compose.yml build orchestrator-api --no-cache
 docker compose -f infra/compose/docker-compose.yml run --rm orchestrator-api pytest -q /app/tests
 ```
+
+## Coolify Deployment Runbook
+
+Objetivo de este runbook:
+
+- desplegar `Lummevia OS` de forma controlada en Coolify
+- mantener `Kilo` apagado por default
+- validar readiness real antes de habilitar webhooks productivos
+
+Servicios a crear en Coolify:
+
+- `orchestrator-api` usando [infra/compose/docker-compose.coolify.yml](/C:/Users/AVALITH/Desktop/Proyectos/Lummevia_OS/infra/compose/docker-compose.coolify.yml)
+- `postgres` con volumen persistente
+- `redis` con volumen persistente
+- `phoenix` externo recomendado como servicio separado o compartido
+
+Variables obligatorias:
+
+- `APP_ENV=production`
+- `APP_PORT=8000`
+- `APP_NAME=lummevia-orchestrator-api`
+- `APP_VERSION`
+- `PUBLIC_BASE_URL=https://<domain>`
+- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+- `REDIS_HOST`, `REDIS_PORT`
+- `RUNTIME_PERSISTENCE_ENABLED=true`
+- `YOUTRACK_ENABLED=true` solo si la integración va a estar activa
+- `TELEGRAM_ENABLED=true` solo si el bot va a estar activo
+- `DEEPSEEK_ENABLED=true` solo si el PM dry-run real va a usar DeepSeek
+- `KILO_ENABLED=false`
+- `KILO_DRY_RUN=true`
+
+Orden de despliegue recomendado:
+
+1. levantar `postgres`
+2. levantar `redis`
+3. levantar `orchestrator-api`
+4. levantar o conectar `phoenix` externo
+5. correr smoke test antes de configurar Telegram
+
+Dominios y webhooks:
+
+- publicar la API en `https://<domain>`
+- webhook esperado de Telegram: `https://<domain>/telegram/webhook`
+- si `TELEGRAM_WEBHOOK_SECRET` está definido, el reverse proxy o Telegram debe enviar el header `X-Telegram-Bot-Api-Secret-Token` o el query param `secret`
+
+Conexión YouTrack:
+
+- variables mínimas: `YOUTRACK_ENABLED=true`, `YOUTRACK_BASE_URL`, `YOUTRACK_TOKEN`
+- permisos mínimos del token: issues read/write, comments read/write, KB read/write si el proyecto usa artículos
+- endpoint seguro de diagnóstico: `GET /youtrack/health`
+
+Phoenix:
+
+- si `PHOENIX_ENABLED=false`, el runtime no debe bloquearse
+- despliegue recomendado: Phoenix externo en Coolify o servicio separado
+- Lummevia debe apuntar con `PHOENIX_BASE_URL`
+
+Kilo:
+
+- dejar `KILO_ENABLED=false` inicialmente
+- mantener `KILO_DRY_RUN=true`
+- no activar ejecución real sin `KILO_WORKSPACE_ROOT` seguro y `KILO_ALLOWED_REPOS`
+
+Smoke test:
+
+```powershell
+python scripts/smoke_coolify.py --base-url https://<domain>
+```
+
+Si YouTrack está activo:
+
+```powershell
+python scripts/smoke_coolify.py --base-url https://<domain> --youtrack-enabled
+```
+
+Logs a revisar:
+
+- logs de `orchestrator-api` para fallos de startup, `/readiness` y persistence
+- logs de `postgres` si falla inicialización o `pg_isready`
+- logs de `redis` si falla `PING`
+- logs de `phoenix` solo si la exportación externa necesita diagnóstico
+
+Rollback básico:
+
+1. pausar webhooks Telegram
+2. redeploy de la versión anterior en Coolify
+3. verificar `GET /health` y `GET /readiness`
+4. correr `python scripts/smoke_coolify.py --base-url https://<domain>`

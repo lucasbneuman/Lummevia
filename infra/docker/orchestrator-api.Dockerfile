@@ -34,6 +34,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY apps/orchestrator-api /app/apps/orchestrator-api
 COPY infra/compose /app/infra/compose
+COPY scripts /app/scripts
 COPY tests /app/tests
 COPY .env.example /app/.env.example
 

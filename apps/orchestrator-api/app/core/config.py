@@ -73,6 +73,7 @@ class AppSettings:
     version: str
     environment: str
     port: int
+    public_base_url: str | None
 
 
 @dataclass(frozen=True)
@@ -109,8 +110,11 @@ class PhoenixSettings:
 
 @dataclass(frozen=True)
 class YouTrackSettings:
+    enabled: bool
     base_url: str | None
     token: str | None
+    project_id: str | None
+    default_assignee: str | None
 
 
 @dataclass(frozen=True)
@@ -125,6 +129,7 @@ class TelegramSettings:
     bot_token: str | None
     webhook_secret: str | None
     bot_username: str | None
+    allowed_chat_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
 
     phoenix_host = _read_string(environment, "PHOENIX_HOST", "phoenix")
     phoenix_port = _read_int(environment, "PHOENIX_PORT", 6006)
+    youtrack_base_url = _read_optional_string(environment, "YOUTRACK_BASE_URL")
+    youtrack_token = _read_optional_string(environment, "YOUTRACK_TOKEN")
+    youtrack_enabled = _read_bool(
+        environment,
+        "YOUTRACK_ENABLED",
+        bool(youtrack_base_url is not None and youtrack_token is not None),
+    )
     kilo_enabled = _read_bool(environment, "KILO_ENABLED", False)
     kilo_cli_path = _read_optional_path(environment, "KILO_CLI_PATH")
     kilo_workspace_root = _read_optional_path(environment, "KILO_WORKSPACE_ROOT")
@@ -227,6 +239,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             version=_read_string(environment, "APP_VERSION", "0.1.0"),
             environment=_read_string(environment, "APP_ENV", "development"),
             port=_read_int(environment, "APP_PORT", 8000),
+            public_base_url=_read_optional_string(environment, "PUBLIC_BASE_URL"),
         ),
         postgres=postgres_settings,
         redis=RedisSettings(
@@ -244,8 +257,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             ),
         ),
         youtrack=YouTrackSettings(
-            base_url=_read_optional_string(environment, "YOUTRACK_BASE_URL"),
-            token=_read_optional_string(environment, "YOUTRACK_TOKEN"),
+            enabled=youtrack_enabled,
+            base_url=youtrack_base_url,
+            token=youtrack_token,
+            project_id=_read_optional_string(environment, "YOUTRACK_PROJECT_ID"),
+            default_assignee=_read_optional_string(
+                environment, "YOUTRACK_DEFAULT_ASSIGNEE"
+            ),
         ),
         github=GitHubSettings(
             token=_read_optional_string(environment, "GITHUB_TOKEN"),
@@ -256,6 +274,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             bot_token=_read_optional_string(environment, "TELEGRAM_BOT_TOKEN"),
             webhook_secret=_read_optional_string(environment, "TELEGRAM_WEBHOOK_SECRET"),
             bot_username=_read_optional_string(environment, "TELEGRAM_BOT_USERNAME"),
+            allowed_chat_ids=_read_csv(environment, "TELEGRAM_ALLOWED_CHAT_IDS"),
         ),
         deepseek=DeepSeekSettings(
             enabled=_read_bool(environment, "DEEPSEEK_ENABLED", False),
