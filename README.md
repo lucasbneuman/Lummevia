@@ -1,14 +1,125 @@
 # Lummevia OS
 
-Bootstrap tecnico del runtime inicial del orquestador.
+Lummevia OS es un sistema operativo cognitivo AI-native para coordinar desarrollo autonomo multi-proyecto con trazabilidad, ownership claro y validacion continua.
 
-En esta etapa el repositorio ya integra un primer runtime real basado en LangGraph para ejecutar de forma simulada el workflow principal de desarrollo. Todavia no incluye agentes con LLMs reales, prompts reales, providers IA reales ni logica de negocio. Si incluye una instrumentacion inicial real hacia Phoenix para observar `WorkflowRun`, steps, eventos runtime y el loop `DEV ↔ QA`.
+Su proposito es transformar una intencion humana en ejecucion verificable: un flujo donde Founder, PM, PO, DEV, QA, QC y las capas de runtime trabajan con artefactos explicitos, contexto controlado y evidencia observable.
 
-## Lifecycle contractual hasta QA
+## Problema que resuelve
 
-El repositorio ahora soporta el primer lifecycle end-to-end contractual para proyectos aprobados por Founder. El flujo real es:
+Los flujos tradicionales de desarrollo, especialmente cuando incorporan IA, suelen romperse por problemas de coordinacion antes que por falta de generacion de codigo:
 
-`Founder approval -> ApprovedProjectHandoff -> workflow_run -> PO decomposition -> Queue -> DEV -> QA -> workflow completed`
+- se pierde contexto entre conversaciones, tickets, repositorios y ejecuciones
+- se mezclan responsabilidades de negocio, producto, arquitectura, implementacion y QA
+- se duplican decisiones o se guardan en lugares incorrectos
+- cuesta reconstruir por que una tarea se hizo, que contexto consumio y como fue validada
+- los agentes IA pueden operar con prompts demasiado grandes, ownership difuso o fuentes de verdad equivocadas
+
+Lummevia OS existe para reducir esa friccion. No intenta ser solo un chatbot ni un generador automatico de codigo: modela el sistema completo que convierte decisiones humanas en trabajo tecnico trazable.
+
+## Para que esta pensado
+
+Lummevia OS esta pensado para equipos que quieren operar desarrollo asistido por IA sin perder control humano, trazabilidad ni separacion de responsabilidades.
+
+Casos naturales:
+
+- coordinar proyectos donde una intencion inicial debe convertirse en brief, plan, tareas, implementacion y validacion
+- mantener memoria operacional en YouTrack sin duplicar la verdad tecnica del repositorio
+- ejecutar workflows multi-agente con checkpoints claros y artefactos auditables
+- observar prompts, decisiones, costos estimados, latencia, errores y estado runtime desde Phoenix
+- preparar una ejecucion futura con agentes y herramientas reales sin acoplar el producto a un provider o modelo especifico
+
+## Capacidades principales
+
+Lummevia OS organiza el desarrollo alrededor de capacidades separadas:
+
+- **Orquestacion de workflows**: LangGraph modela el runtime, los pasos, los loops y el estado de ejecucion.
+- **Alineacion negocio-producto**: Founder y PM iteran hasta producir un `BusinessBrief` aprobado antes del handoff tecnico.
+- **Descomposicion tecnica controlada**: PO transforma el brief aprobado en `ExecutionPackage`, `TaskPlan` y `TaskPackages` pequenos.
+- **Ejecucion trazable**: DEV produce `ImplementationPackage`; QA produce `ValidationPackage`; QC y PO final quedan modelados en el flujo contractual.
+- **Memoria operacional**: YouTrack concentra briefs, issues, comentarios, artefactos y coordinacion activa.
+- **Verdad tecnica local**: el repositorio conserva codigo, arquitectura, ADRs, tests y contratos.
+- **Observabilidad**: Phoenix recibe trazas, spans, metadata de runtime, sesiones, queue, reviews, costos estimados y fallbacks.
+- **Routing de modelos**: el Model Router desacopla roles, providers y modelos mediante configuracion por rol, proyecto y entorno.
+- **Prompt governance**: templates versionados, evaluaciones, baselines, regression datasets y promociones con review humano.
+- **Control operacional**: queue, sessions, resource locks, supervisor, planning adaptativo, strategy, learning, economics y persistencia operacional.
+
+## Como funciona a alto nivel
+
+El flujo completo documentado es:
+
+```text
+Founder
+-> PM conversation loop
+-> Business Brief draft
+-> Founder approval
+-> Business Brief approved
+-> PO
+-> Execution Package
+-> Task Plan
+-> Task Packages iterativos
+-> DEV
+-> Implementation Package
+-> QA
+-> Validation Package
+-> PR
+-> QC
+-> Quality Approval
+-> PO final
+-> merge / cierre
+```
+
+La arquitectura separa las fuentes de verdad:
+
+| Capa | Responsabilidad |
+|---|---|
+| YouTrack | memoria operacional y coordinacion |
+| Repositorio | verdad tecnica local |
+| LangGraph runtime | ejecucion de workflows |
+| Phoenix | observabilidad y trazabilidad |
+| GitHub | evidencia tecnica de branches, commits y PRs |
+
+## Estado actual del producto
+
+El repositorio ya implementa una primera base contractual y ejecutable del sistema. La madurez actual se separa deliberadamente entre capacidades disponibles, capacidades preparadas y capacidades fuera de alcance.
+
+### Disponible hoy
+
+- Runtime LangGraph ejecutable para el workflow de desarrollo con estado serializable y eventos.
+- Conversacion `Founder <-> PM` con draft de `BusinessBrief`, aprobacion explicita y handoff aprobado.
+- `ApprovedProjectHandoff` persistido con trazabilidad entre thread, issue y brief aprobado.
+- Trigger automatico de `workflow_run` desde un handoff aprobado; `/runtime/development/run` queda como entrada tecnica/manual.
+- Descomposicion PO en `TaskPackages` deterministas para buckets como `Frontend`, `Backend`, `Infra`, `QA` y `Documentation`.
+- Task queue, sessions, timeline, reviews, memory, capabilities, resource locks, supervisor, planning, strategy, learning, economics y persistence como capas contractuales iniciales.
+- Integracion real inicial con YouTrack para contexto operativo y comentarios de hitos.
+- Instrumentacion inicial real hacia Phoenix para observar `WorkflowRun`, steps, eventos runtime, queue, sessions, reviews y progreso.
+- API FastAPI con endpoints de diagnostico, runtime, persistence, evaluations, reviews, queues, timelines, planning, strategy, learning, economics y mas.
+
+### Preparado o en progreso
+
+- Kilo adapter con sandbox controlado y fake client por default.
+- Ejecucion real limitada y opt-in para diagnostico, sin tocar repos productivos por defecto.
+- Model execution con `FakeModelProvider` y dry-run controlado de PM con DeepSeek cuando se habilita.
+- GitHub como integracion contractual y placeholder para evidencia futura de branches, commits y PRs.
+- Persistencia operacional por snapshots en Postgres cuando `RUNTIME_PERSISTENCE_ENABLED=true`.
+- Metadata de costos, tokens, fallback y latencia preparada para observabilidad mas completa.
+
+### Fuera de alcance actual
+
+- Agentes productivos con LLM real para todo el flujo.
+- Prompts productivos definitivos y parsing real general de respuestas LLM.
+- Ejecucion real completa de Kilo CLI sobre repos productivos.
+- PR, merge, deploy o cambios Git automaticos en produccion.
+- Workers distribuidos, paralelismo real, locking distribuido o event sourcing completo.
+- RAG real, embeddings, vector DB, memoria semantica avanzada o agentes autonomos de memory.
+- Autonomia destructiva o autoaplicacion de decisiones sensibles sin review humano.
+
+## Lifecycle contractual actual hasta QA
+
+Para proyectos aprobados por Founder, el lifecycle operativo actual prioriza el camino:
+
+```text
+Founder approval -> ApprovedProjectHandoff -> workflow_run -> PO decomposition -> Queue -> DEV -> QA -> workflow completed
+```
 
 ### ApprovedProjectHandoff
 
@@ -56,7 +167,7 @@ Cada task se inserta en la queue real con dependencias, prioridad y estado sincr
 
 DEV publica `ImplementationPackage` contractuales con resumen, archivos tocados, notas de implementacion y fecha de creacion. QA publica `ValidationPackage` con estado, findings y recomendacion.
 
-El lifecycle exitoso actual termina en `QA PASS`. No ejecuta todavia PR automaticos, merge, deploy, `QC` ni `PO final`.
+El lifecycle exitoso actual termina operativamente en `QA PASS` para el camino de handoff aprobado. Los pasos posteriores (`github_pr`, `QC`, `PO final`, merge y deploy) existen como contrato o simulacion segun la capa, pero no operan todavia como automatizacion productiva end-to-end.
 
 ### Founder visibility en YouTrack
 
