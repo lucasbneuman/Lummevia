@@ -224,6 +224,18 @@ def test_coolify_compose_exists_with_expected_services_and_no_hardcoded_secrets(
     assert "sk-" not in compose_file
 
 
+def test_orchestrator_image_includes_coolify_healthcheck_tool() -> None:
+    dockerfile = (
+        Path(__file__).resolve().parents[1]
+        / "infra"
+        / "docker"
+        / "orchestrator-api.Dockerfile"
+    ).read_text(encoding="utf-8")
+
+    assert "apt-get install" in dockerfile
+    assert "curl" in dockerfile
+
+
 def test_remote_dev_compose_uses_host_tunnel_without_local_state_services() -> None:
     compose_file = (
         Path(__file__).resolve().parents[1]

@@ -5,6 +5,10 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /app/requirements.txt
 COPY packages/agents /app/packages/agents
 COPY packages/capabilities /app/packages/capabilities
@@ -34,6 +38,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY apps/orchestrator-api /app/apps/orchestrator-api
 COPY infra/compose /app/infra/compose
+COPY infra/docker /app/infra/docker
 COPY scripts /app/scripts
 COPY tests /app/tests
 COPY .env.example /app/.env.example
