@@ -217,6 +217,9 @@ def test_coolify_compose_exists_with_expected_services_and_no_hardcoded_secrets(
     assert "YOUTRACK_TOKEN: ${YOUTRACK_TOKEN}" in compose_file
     assert "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}" in compose_file
     assert "REDIS_PASSWORD: ${REDIS_PASSWORD}" in compose_file
+    assert "redis-server --appendonly yes --requirepass" in compose_file
+    assert "redis-cli -a" in compose_file
+    assert "REDIS_PASSWORD" in compose_file
     assert "token-123" not in compose_file
     assert "sk-" not in compose_file
 
