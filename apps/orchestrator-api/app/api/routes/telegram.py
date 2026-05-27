@@ -91,6 +91,13 @@ def _validate_secret(secret_token: str | None, query_secret: str | None) -> None
     )
 
 
+def _is_allowed_chat(chat_id: int) -> bool:
+    allowed_chat_ids = settings.telegram.allowed_chat_ids
+    if not allowed_chat_ids:
+        return True
+    return str(chat_id) in allowed_chat_ids
+
+
 def _client():
     try:
         return ensure_youtrack_available()
@@ -343,6 +350,17 @@ def telegram_webhook(
                 "ignored_reason": "missing_message_context",
                 "telegram_update_id": update.update_id,
                 "telegram_message_id": message.message_id,
+            },
+        )
+
+    if not _is_allowed_chat(message.chat.id):
+        return TelegramWebhookResponse(
+            action="ignored",
+            metadata={
+                "ignored_reason": "chat_not_allowed",
+                "telegram_update_id": update.update_id,
+                "telegram_message_id": message.message_id,
+                "telegram_chat_id": message.chat.id,
             },
         )
 

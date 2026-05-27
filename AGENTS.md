@@ -36,6 +36,7 @@ Leer según corresponda:
 - `docs/04-integraciones/youtrack.md`
 - `docs/04-integraciones/github.md`
 - `docs/04-integraciones/phoenix.md`
+- `docs/04-integraciones/telegram.md`
 
 ### Decisiones arquitectónicas
 

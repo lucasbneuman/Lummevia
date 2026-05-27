@@ -56,6 +56,7 @@ def info() -> dict[str, object]:
         "version": settings.app_version,
         "environment": settings.app_env,
         "public_base_url": settings.app.public_base_url,
+        "public_api_url": settings.app.public_api_url,
         "integrations": {
             "telegram_enabled": settings.telegram.enabled,
             "youtrack_enabled": settings.youtrack.enabled,
@@ -109,6 +110,19 @@ def _check_redis() -> dict[str, object]:
             (settings.redis.host, settings.redis.port),
             timeout=2,
         ) as connection:
+            if settings.redis.password is not None:
+                encoded_password = settings.redis.password.encode("utf-8")
+                auth_command = (
+                    b"*2\r\n$4\r\nAUTH\r\n$"
+                    + str(len(encoded_password)).encode("ascii")
+                    + b"\r\n"
+                    + encoded_password
+                    + b"\r\n"
+                )
+                connection.sendall(auth_command)
+                auth_reply = connection.recv(128)
+                if not auth_reply.startswith(b"+OK"):
+                    return {"status": "error", "detail": "Redis AUTH failed."}
             connection.sendall(b"*1\r\n$4\r\nPING\r\n")
             reply = connection.recv(16)
     except Exception as exc:
@@ -138,14 +152,14 @@ def _check_telegram_readiness() -> dict[str, object]:
     missing = []
     if settings.telegram.bot_token is None:
         missing.append("TELEGRAM_BOT_TOKEN")
-    if settings.app.public_base_url is None:
-        missing.append("PUBLIC_BASE_URL")
+    if settings.app.effective_public_api_url is None:
+        missing.append("PUBLIC_API_URL or PUBLIC_BASE_URL")
     if missing:
         return {
             "status": "error",
             "detail": f"Telegram is enabled but missing: {', '.join(missing)}.",
         }
-    webhook_url = settings.app.public_base_url.rstrip("/") + "/telegram/webhook"
+    webhook_url = settings.app.effective_public_api_url.rstrip("/") + "/telegram/webhook"
     return {
         "status": "ok",
         "webhook_url": webhook_url,

@@ -13,10 +13,13 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.app.environment == "development"
     assert settings.app.port == 8000
     assert settings.app.public_base_url is None
+    assert settings.app.public_api_url is None
+    assert settings.app.effective_public_api_url is None
     assert settings.postgres.host == "postgres"
     assert settings.postgres.port == 5432
     assert settings.redis.host == "redis"
     assert settings.redis.port == 6379
+    assert settings.redis.password is None
     assert settings.phoenix.enabled is True
     assert settings.phoenix.host == "phoenix"
     assert settings.phoenix.port == 6006
@@ -60,6 +63,7 @@ def test_settings_load_safe_values_from_env() -> None:
             "APP_ENV": "test",
             "APP_PORT": "9000",
             "PUBLIC_BASE_URL": "https://lummevia.example.com",
+            "PUBLIC_API_URL": "https://api.lummevia.example.com",
             "POSTGRES_HOST": "db.internal",
             "POSTGRES_PORT": "5544",
             "POSTGRES_DB": "lummevia_test",
@@ -67,6 +71,7 @@ def test_settings_load_safe_values_from_env() -> None:
             "POSTGRES_PASSWORD": "secret-password",
             "REDIS_HOST": "cache.internal",
             "REDIS_PORT": "6380",
+            "REDIS_PASSWORD": "redis-secret",
             "PHOENIX_ENABLED": "false",
             "PHOENIX_HOST": "phoenix.internal",
             "PHOENIX_PORT": "7007",
@@ -104,6 +109,8 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.app.environment == "test"
     assert settings.app.port == 9000
     assert settings.app.public_base_url == "https://lummevia.example.com"
+    assert settings.app.public_api_url == "https://api.lummevia.example.com"
+    assert settings.app.effective_public_api_url == "https://api.lummevia.example.com"
     assert settings.postgres.host == "db.internal"
     assert settings.postgres.port == 5544
     assert settings.postgres.database == "lummevia_test"
@@ -111,6 +118,7 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.postgres.password == "secret-password"
     assert settings.redis.host == "cache.internal"
     assert settings.redis.port == 6380
+    assert settings.redis.password == "redis-secret"
     assert settings.phoenix.enabled is False
     assert settings.phoenix.host == "phoenix.internal"
     assert settings.phoenix.port == 7007
@@ -224,6 +232,7 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "APP_NAME=",
         "APP_VERSION=",
         "PUBLIC_BASE_URL=",
+        "PUBLIC_API_URL=",
         "POSTGRES_HOST=",
         "POSTGRES_PORT=",
         "POSTGRES_DB=",
@@ -231,6 +240,18 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "POSTGRES_PASSWORD=",
         "REDIS_HOST=",
         "REDIS_PORT=",
+        "REDIS_PASSWORD=",
+        "SSH_TUNNEL_HOST=",
+        "SSH_TUNNEL_USER=",
+        "SSH_TUNNEL_PORT=",
+        "SSH_TUNNEL_IDENTITY_FILE=",
+        "SSH_TUNNEL_POSTGRES_REMOTE_HOST=",
+        "SSH_TUNNEL_POSTGRES_REMOTE_PORT=",
+        "SSH_TUNNEL_POSTGRES_LOCAL_PORT=",
+        "SSH_TUNNEL_REDIS_REMOTE_HOST=",
+        "SSH_TUNNEL_REDIS_REMOTE_PORT=",
+        "SSH_TUNNEL_REDIS_LOCAL_PORT=",
+        "REMOTE_DEV_PHOENIX_ENABLED=",
         "PHOENIX_ENABLED=",
         "PHOENIX_HOST=",
         "PHOENIX_PORT=",
@@ -283,6 +304,7 @@ def test_compose_passes_deepseek_and_model_router_variables_without_hardcoded_se
 
     expected_entries = [
         "PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}",
+        "PUBLIC_API_URL: ${PUBLIC_API_URL:-}",
         "YOUTRACK_ENABLED: ${YOUTRACK_ENABLED:-false}",
         "YOUTRACK_BASE_URL: ${YOUTRACK_BASE_URL:-}",
         "YOUTRACK_TOKEN: ${YOUTRACK_TOKEN:-}",
@@ -295,6 +317,7 @@ def test_compose_passes_deepseek_and_model_router_variables_without_hardcoded_se
         "TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS:-}",
         "DEEPSEEK_ENABLED: ${DEEPSEEK_ENABLED:-false}",
         "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}",
+        "REDIS_PASSWORD: ${REDIS_PASSWORD:-}",
         "DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}",
         "DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS:-60}",
         "MODEL_PM_PROVIDER: ${MODEL_PM_PROVIDER:-DEEPSEEK}",

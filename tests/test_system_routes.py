@@ -25,6 +25,7 @@ def test_info_returns_runtime_metadata() -> None:
     assert response.json()["version"] == settings.app_version
     assert response.json()["environment"] == settings.app_env
     assert response.json()["public_base_url"] == settings.app.public_base_url
+    assert response.json()["public_api_url"] == settings.app.public_api_url
     assert response.json()["integrations"] == {
         "telegram_enabled": settings.telegram.enabled,
         "youtrack_enabled": settings.youtrack.enabled,

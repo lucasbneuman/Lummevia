@@ -74,6 +74,11 @@ class AppSettings:
     environment: str
     port: int
     public_base_url: str | None
+    public_api_url: str | None
+
+    @property
+    def effective_public_api_url(self) -> str | None:
+        return self.public_api_url or self.public_base_url
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,7 @@ class PostgresSettings:
 class RedisSettings:
     host: str
     port: int
+    password: str | None
 
 
 @dataclass(frozen=True)
@@ -240,11 +246,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             environment=_read_string(environment, "APP_ENV", "development"),
             port=_read_int(environment, "APP_PORT", 8000),
             public_base_url=_read_optional_string(environment, "PUBLIC_BASE_URL"),
+            public_api_url=_read_optional_string(environment, "PUBLIC_API_URL"),
         ),
         postgres=postgres_settings,
         redis=RedisSettings(
             host=_read_string(environment, "REDIS_HOST", "redis"),
             port=_read_int(environment, "REDIS_PORT", 6379),
+            password=_read_optional_string(environment, "REDIS_PASSWORD"),
         ),
         phoenix=PhoenixSettings(
             enabled=_read_bool(environment, "PHOENIX_ENABLED", True),

@@ -1,9 +1,10 @@
 services:
   orchestrator-api:
-    container_name: lummevia-orchestrator-api
+    container_name: lummevia-orchestrator-api-remote-dev
     build:
       context: ../..
       dockerfile: infra/docker/orchestrator-api.Dockerfile
+    network_mode: host
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_PORT: ${APP_PORT:-8000}
@@ -11,16 +12,17 @@ services:
       APP_VERSION: ${APP_VERSION:-0.1.0}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-}
-      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: ${SSH_TUNNEL_POSTGRES_LOCAL_PORT:-15432}
       POSTGRES_DB: ${POSTGRES_DB:-lummevia}
       POSTGRES_USER: ${POSTGRES_USER:-lummevia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lummevia}
-      RUNTIME_PERSISTENCE_ENABLED: ${RUNTIME_PERSISTENCE_ENABLED:-true}
+      RUNTIME_PERSISTENCE_ENABLED: ${RUNTIME_PERSISTENCE_ENABLED:-false}
       RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:-}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: ${SSH_TUNNEL_REDIS_LOCAL_PORT:-16379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      PHOENIX_ENABLED: ${REMOTE_DEV_PHOENIX_ENABLED:-false}
       PHOENIX_HOST: ${PHOENIX_HOST:-phoenix}
       PHOENIX_PORT: ${PHOENIX_PORT:-6006}
       PHOENIX_BASE_URL: ${PHOENIX_BASE_URL:-http://phoenix:6006}
@@ -55,72 +57,9 @@ services:
       KILO_DEFAULT_TIMEOUT_SECONDS: ${KILO_DEFAULT_TIMEOUT_SECONDS:-300}
       KILO_ALLOWED_REPOS: ${KILO_ALLOWED_REPOS:-}
       KILO_MAX_OUTPUT_BYTES: ${KILO_MAX_OUTPUT_BYTES:-32768}
-    ports:
-      - "${APP_PORT:-8000}:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      phoenix:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health')"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 10s
-
-  postgres:
-    container_name: lummevia-postgres
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-lummevia}
-      POSTGRES_USER: ${POSTGRES_USER:-lummevia}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lummevia}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../postgres/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lummevia} -d ${POSTGRES_DB:-lummevia}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  redis:
-    container_name: lummevia-redis
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  phoenix:
-    container_name: lummevia-phoenix
-    image: arizephoenix/phoenix:version-15.5.1
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PHOENIX_PORT: ${PHOENIX_PORT:-6006}
-      PHOENIX_SQL_DATABASE_URL: postgresql://${POSTGRES_USER:-lummevia}:${POSTGRES_PASSWORD:-lummevia}@postgres:5432/${POSTGRES_DB:-lummevia}
-    ports:
-      - "${PHOENIX_PORT:-6006}:6006"
-      - "4317:4317"
-    volumes:
-      - phoenix_data:/mnt/data
-
-volumes:
-  postgres_data:
-  redis_data:
-  phoenix_data:

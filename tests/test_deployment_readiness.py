@@ -98,6 +98,38 @@ def test_readiness_fails_clearly_when_enabled_services_are_missing_config(monkey
     assert body["checks"]["kilo"]["status"] == "error"
 
 
+def test_telegram_readiness_prefers_public_api_url(monkeypatch) -> None:
+    monkeypatch.setattr(
+        system_routes,
+        "settings",
+        load_settings(
+            {
+                "APP_ENV": "test",
+                "RUNTIME_PERSISTENCE_ENABLED": "false",
+                "TELEGRAM_ENABLED": "true",
+                "TELEGRAM_BOT_TOKEN": "telegram-token",
+                "PUBLIC_BASE_URL": "https://lummevia.example.com",
+                "PUBLIC_API_URL": "https://api.lummevia.example.com",
+                "YOUTRACK_ENABLED": "false",
+                "DEEPSEEK_ENABLED": "false",
+                "PHOENIX_ENABLED": "false",
+                "KILO_ENABLED": "false",
+            }
+        ),
+    )
+    persistence_runtime.configure_operational_persistence(None)
+
+    response = client.get("/readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["checks"]["telegram"]["status"] == "ok"
+    assert (
+        body["checks"]["telegram"]["webhook_url"]
+        == "https://api.lummevia.example.com/telegram/webhook"
+    )
+
+
 def test_telegram_webhook_can_use_query_secret_and_ignore_incomplete_payload(monkeypatch) -> None:
     monkeypatch.setattr(
         telegram_routes,
@@ -184,6 +216,32 @@ def test_coolify_compose_exists_with_expected_services_and_no_hardcoded_secrets(
     assert "TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}" in compose_file
     assert "YOUTRACK_TOKEN: ${YOUTRACK_TOKEN}" in compose_file
     assert "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}" in compose_file
+    assert "REDIS_PASSWORD: ${REDIS_PASSWORD}" in compose_file
+    assert "token-123" not in compose_file
+    assert "sk-" not in compose_file
+
+
+def test_remote_dev_compose_uses_host_tunnel_without_local_state_services() -> None:
+    compose_file = (
+        Path(__file__).resolve().parents[1]
+        / "infra"
+        / "compose"
+        / "docker-compose.remote-dev.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "orchestrator-api:" in compose_file
+    assert "network_mode: host" in compose_file
+    assert "POSTGRES_HOST: 127.0.0.1" in compose_file
+    assert "POSTGRES_PORT: ${SSH_TUNNEL_POSTGRES_LOCAL_PORT:-15432}" in compose_file
+    assert "REDIS_HOST: 127.0.0.1" in compose_file
+    assert "REDIS_PORT: ${SSH_TUNNEL_REDIS_LOCAL_PORT:-16379}" in compose_file
+    assert "REDIS_PASSWORD: ${REDIS_PASSWORD:-}" in compose_file
+    assert "PHOENIX_ENABLED: ${REMOTE_DEV_PHOENIX_ENABLED:-false}" in compose_file
+    assert "\n  postgres:" not in compose_file
+    assert "\n  redis:" not in compose_file
+    assert "TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}" in compose_file
+    assert "YOUTRACK_TOKEN: ${YOUTRACK_TOKEN:-}" in compose_file
+    assert "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}" in compose_file
     assert "token-123" not in compose_file
     assert "sk-" not in compose_file
 

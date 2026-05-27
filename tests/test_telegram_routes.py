@@ -426,6 +426,44 @@ def test_telegram_webhook_rejects_invalid_secret(monkeypatch) -> None:
     assert response.json()["detail"] == "Invalid Telegram webhook secret."
 
 
+def test_telegram_webhook_ignores_disallowed_chat(monkeypatch) -> None:
+    from app.core import config as config_module
+    from app.api.routes import telegram as telegram_routes
+
+    monkeypatch.setattr(
+        config_module,
+        "settings",
+        config_module.load_settings(
+            {
+                "TELEGRAM_WEBHOOK_SECRET": "secret-token",
+                "TELEGRAM_ALLOWED_CHAT_IDS": "7001",
+            }
+        ),
+    )
+    monkeypatch.setattr(telegram_routes, "settings", config_module.settings)
+
+    response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+        json={
+            "update_id": 11,
+            "message": {
+                "message_id": 110,
+                "date": 1710000000,
+                "chat": {"id": 9999, "type": "private"},
+                "from": {"id": 44, "is_bot": False, "first_name": "Ana", "username": "ana"},
+                "text": "/lummevia project=LUM\ncrear app para reservas medicas",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["action"] == "ignored"
+    assert body["metadata"]["ignored_reason"] == "chat_not_allowed"
+    assert body["metadata"]["telegram_chat_id"] == 9999
+
+
 def test_telegram_webhook_ignores_incomplete_payload(monkeypatch) -> None:
     from app.core import config as config_module
     from app.api.routes import telegram as telegram_routes

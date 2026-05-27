@@ -1141,6 +1141,12 @@ Hoy Phoenix y YouTrack ya tienen integracion real inicial. GitHub sigue en place
 Copy-Item .env.example .env
 ```
 
+En Linux:
+
+```bash
+cp .env.example .env
+```
+
 2. Configurar las variables minimas del runtime en `.env`.
 
 Variables base:
@@ -1226,6 +1232,46 @@ docker compose -f infra/compose/docker-compose.yml up --build
 ```
 
 Ese stack levanta Phoenix local dentro de Docker Compose para desarrollo. Para un entorno compartido con Phoenix desplegado en Coolify, la API debe configurarse con `PHOENIX_BASE_URL` apuntando al servicio externo y no necesita otra instalaciÃ³n de Phoenix dentro de este repositorio.
+
+### Desarrollo local con Postgres y Redis remotos
+
+`infra/compose/docker-compose.remote-dev.yml` mantiene `orchestrator-api` local y consume Postgres y Redis por un tunel SSH abierto en el host Linux. Este modo usa `network_mode: host`; esta pensado para Linux/Omarchy y no levanta Postgres, Redis ni Phoenix locales.
+
+Antes de usarlo, confirmar que Postgres y Redis en Coolify son recursos de desarrollo aislados. Si son productivos o compartidos, crear recursos de desarrollo separados: con `RUNTIME_PERSISTENCE_ENABLED=true` la API crea tablas y puede escribir snapshots operacionales en Postgres.
+
+El servidor SSH debe alcanzar ambos servicios remotos. Completar estas variables en `.env` con los nombres o IPs internos vistos desde esa sesion SSH:
+
+- `SSH_TUNNEL_HOST`, `SSH_TUNNEL_USER`, `SSH_TUNNEL_PORT`
+- `SSH_TUNNEL_IDENTITY_FILE` cuando la clave no se resuelve por `ssh-agent` o `~/.ssh/config`
+- `SSH_TUNNEL_POSTGRES_REMOTE_HOST`, `SSH_TUNNEL_POSTGRES_REMOTE_PORT`
+- `SSH_TUNNEL_REDIS_REMOTE_HOST`, `SSH_TUNNEL_REDIS_REMOTE_PORT`
+- `SSH_TUNNEL_POSTGRES_LOCAL_PORT=15432`
+- `SSH_TUNNEL_REDIS_LOCAL_PORT=16379`
+- `REMOTE_DEV_PHOENIX_ENABLED=false`
+
+Dejar los puertos locales del tunel solo en loopback; no hace falta publicar Postgres ni Redis a Internet. En una terminal, abrir el tunel:
+
+```bash
+./scripts/dev_remote_tunnel.sh
+```
+
+En otra terminal, levantar la API local contra esos forwards:
+
+```bash
+docker compose --env-file .env -f infra/compose/docker-compose.remote-dev.yml up --build
+```
+
+En este modo Compose fuerza `POSTGRES_HOST=127.0.0.1`, `REDIS_HOST=127.0.0.1` y los puertos locales del tunel. Mantener `REMOTE_DEV_PHOENIX_ENABLED=false` mientras se valida solo conectividad Postgres/Redis, o habilitarlo y configurar `PHOENIX_BASE_URL` si ya existe un Phoenix externo accesible.
+
+Primero validar con `RUNTIME_PERSISTENCE_ENABLED=false`:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/readiness
+curl http://localhost:8000/persistence/health
+```
+
+Cuando los datos remotos ya sean seguros para escritura, cambiar `RUNTIME_PERSISTENCE_ENABLED=true`, reiniciar `orchestrator-api` y repetir los checks. Si se corta el tunel, `/health` debe reportar el fallo de Redis y tambien el de Postgres cuando la persistencia este activa.
 
 ## Endpoints disponibles
 
@@ -1811,6 +1857,22 @@ docker compose -f infra/compose/docker-compose.yml down
 docker compose -f infra/compose/docker-compose.yml ps
 ```
 
+En Linux:
+
+```bash
+docker compose -f infra/compose/docker-compose.yml up --build
+docker compose -f infra/compose/docker-compose.yml down
+docker compose -f infra/compose/docker-compose.yml ps
+```
+
+Para el modo remoto en Linux:
+
+```bash
+./scripts/dev_remote_tunnel.sh
+docker compose --env-file .env -f infra/compose/docker-compose.remote-dev.yml up --build
+docker compose --env-file .env -f infra/compose/docker-compose.remote-dev.yml down
+```
+
 ## Tests
 
 Para correr los tests localmente, usa un entorno con Python y las dependencias instaladas desde `requirements.txt`:
@@ -1848,7 +1910,8 @@ Variables obligatorias:
 - `APP_PORT=8000`
 - `APP_NAME=lummevia-orchestrator-api`
 - `APP_VERSION`
-- `PUBLIC_BASE_URL=https://<domain>`
+- `PUBLIC_API_URL=https://<api-domain>`
+- `PUBLIC_BASE_URL=https://<base-domain>` como fallback si no hay frontend separado
 - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `REDIS_HOST`, `REDIS_PORT`
 - `RUNTIME_PERSISTENCE_ENABLED=true`
@@ -1866,11 +1929,23 @@ Orden de despliegue recomendado:
 4. levantar o conectar `phoenix` externo
 5. correr smoke test antes de configurar Telegram
 
+Preflight desde desarrollo local:
+
+1. clasificar los Postgres y Redis usados por el tunel como recursos de desarrollo antes de habilitar escrituras locales
+2. abrir `scripts/dev_remote_tunnel.sh` y levantar `docker-compose.remote-dev.yml`
+3. verificar `GET /health`, `GET /readiness` y `GET /persistence/health` localmente
+4. repetir el preflight con `RUNTIME_PERSISTENCE_ENABLED=true` solo sobre datos dev-safe si el deploy activara persistencia
+5. despues del deploy, correr el smoke test contra la URL publica
+
 Dominios y webhooks:
 
 - publicar la API en `https://<domain>`
 - webhook esperado de Telegram: `https://<domain>/telegram/webhook`
+- si hay frontend separado, usar `PUBLIC_API_URL` para el dominio de API; `PUBLIC_BASE_URL` queda reservado como base pública general
 - si `TELEGRAM_WEBHOOK_SECRET` está definido, el reverse proxy o Telegram debe enviar el header `X-Telegram-Bot-Api-Secret-Token` o el query param `secret`
+- registrar el webhook con `python scripts/telegram_webhook.py set --drop-pending-updates`
+- inspeccionar el webhook con `python scripts/telegram_webhook.py info`
+- guía técnica: [docs/04-integraciones/telegram.md](docs/04-integraciones/telegram.md)
 
 Conexión YouTrack:
 
