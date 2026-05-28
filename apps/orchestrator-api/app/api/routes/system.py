@@ -204,6 +204,7 @@ def _check_phoenix_readiness() -> dict[str, object]:
     return {
         "status": "ok",
         "base_url": settings.phoenix.base_url,
+        "api_key_configured": settings.phoenix.api_key is not None,
         "non_blocking_export": True,
     }
 

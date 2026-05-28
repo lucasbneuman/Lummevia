@@ -24,6 +24,7 @@ def test_settings_use_expected_defaults_when_env_is_missing() -> None:
     assert settings.phoenix.host == "phoenix"
     assert settings.phoenix.port == 6006
     assert settings.phoenix.base_url == "http://phoenix:6006"
+    assert settings.phoenix.api_key is None
     assert settings.youtrack.enabled is False
     assert settings.youtrack.base_url is None
     assert settings.youtrack.token is None
@@ -76,6 +77,7 @@ def test_settings_load_safe_values_from_env() -> None:
             "PHOENIX_HOST": "phoenix.internal",
             "PHOENIX_PORT": "7007",
             "PHOENIX_BASE_URL": "http://phoenix.internal:7007",
+            "PHOENIX_API_KEY": "phoenix-api-key",
             "YOUTRACK_ENABLED": "true",
             "YOUTRACK_BASE_URL": "https://youtrack.example.com",
             "YOUTRACK_TOKEN": "yt-token",
@@ -123,6 +125,7 @@ def test_settings_load_safe_values_from_env() -> None:
     assert settings.phoenix.host == "phoenix.internal"
     assert settings.phoenix.port == 7007
     assert settings.phoenix.base_url == "http://phoenix.internal:7007"
+    assert settings.phoenix.api_key == "phoenix-api-key"
     assert settings.youtrack.enabled is True
     assert settings.youtrack.base_url == "https://youtrack.example.com"
     assert settings.youtrack.token == "yt-token"
@@ -256,6 +259,7 @@ def test_env_example_contains_expected_configuration_variables() -> None:
         "PHOENIX_HOST=",
         "PHOENIX_PORT=",
         "PHOENIX_BASE_URL=",
+        "PHOENIX_API_KEY=",
         "YOUTRACK_ENABLED=",
         "YOUTRACK_BASE_URL=",
         "YOUTRACK_TOKEN=",
@@ -315,6 +319,7 @@ def test_compose_passes_deepseek_and_model_router_variables_without_hardcoded_se
         "TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}",
         "TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}",
         "TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS:-}",
+        "PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}",
         "DEEPSEEK_ENABLED: ${DEEPSEEK_ENABLED:-false}",
         "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}",
         "REDIS_PASSWORD: ${REDIS_PASSWORD:-}",

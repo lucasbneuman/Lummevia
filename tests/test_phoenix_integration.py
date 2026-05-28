@@ -40,6 +40,20 @@ def test_phoenix_client_builds_otlp_endpoint_from_base_url() -> None:
     assert client.endpoint == "http://phoenix.internal:7007/v1/traces"
 
 
+def test_phoenix_client_builds_authorization_header_from_api_key() -> None:
+    client = PhoenixClient(api_key=" phoenix-system-key ", enabled=False)
+
+    assert client.exporter_headers == {
+        "authorization": "Bearer phoenix-system-key",
+    }
+
+
+def test_phoenix_client_omits_authorization_header_without_api_key() -> None:
+    client = PhoenixClient(api_key="", enabled=False)
+
+    assert client.exporter_headers == {}
+
+
 def test_phoenix_trace_ref_accepts_valid_payload() -> None:
     trace_ref = PhoenixTraceRef(trace_id="trace-001")
 

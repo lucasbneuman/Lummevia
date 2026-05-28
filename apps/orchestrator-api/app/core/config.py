@@ -112,6 +112,7 @@ class PhoenixSettings:
     host: str
     port: int
     base_url: str
+    api_key: str | None
 
 
 @dataclass(frozen=True)
@@ -258,6 +259,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             enabled=_read_bool(environment, "PHOENIX_ENABLED", True),
             host=phoenix_host,
             port=phoenix_port,
+            api_key=_read_optional_string(environment, "PHOENIX_API_KEY"),
             base_url=_read_string(
                 environment,
                 "PHOENIX_BASE_URL",

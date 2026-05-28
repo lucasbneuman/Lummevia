@@ -54,6 +54,7 @@ def _build_phoenix_client() -> PhoenixClient:
     return PhoenixClient(
         base_url=settings.phoenix.base_url,
         enabled=settings.phoenix.enabled,
+        api_key=settings.phoenix.api_key,
         service_name=settings.app_name,
         environment=settings.app_env,
     )

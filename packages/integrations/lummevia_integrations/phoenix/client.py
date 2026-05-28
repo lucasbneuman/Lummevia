@@ -21,6 +21,7 @@ class PhoenixClient:
         *,
         base_url: str = "http://phoenix:6006",
         enabled: bool = True,
+        api_key: str | None = None,
         service_name: str = "lummevia-orchestrator-api",
         environment: str = "development",
         tracer_provider: TracerProvider | None = None,
@@ -29,6 +30,8 @@ class PhoenixClient:
         self.base_url = base_url.rstrip("/")
         self.endpoint = f"{self.base_url}/v1/traces"
         self.enabled = enabled
+        self.api_key = api_key
+        self.exporter_headers = self._build_exporter_headers(api_key)
         self._tracer_provider = tracer_provider
 
         if not self.enabled:
@@ -36,7 +39,10 @@ class PhoenixClient:
             return
 
         if self._tracer_provider is None:
-            exporter = span_exporter or OTLPSpanExporter(endpoint=self.endpoint)
+            exporter = span_exporter or OTLPSpanExporter(
+                endpoint=self.endpoint,
+                headers=self.exporter_headers,
+            )
             self._tracer_provider = TracerProvider(
                 resource=Resource.create(
                     {
@@ -52,6 +58,15 @@ class PhoenixClient:
     @property
     def tracer_provider(self) -> TracerProvider | None:
         return self._tracer_provider
+
+    @staticmethod
+    def _build_exporter_headers(api_key: str | None) -> dict[str, str]:
+        if api_key is None:
+            return {}
+        stripped_api_key = api_key.strip()
+        if not stripped_api_key:
+            return {}
+        return {"authorization": f"Bearer {stripped_api_key}"}
 
     @contextmanager
     def start_as_current_span(
