@@ -464,6 +464,80 @@ def test_telegram_webhook_rejects_invalid_secret(monkeypatch) -> None:
     assert response.json()["detail"] == "Invalid Telegram webhook secret."
 
 
+def test_telegram_webhook_ignores_empty_body(monkeypatch) -> None:
+    from app.core import config as config_module
+    from app.api.routes import telegram as telegram_routes
+
+    monkeypatch.setattr(
+        telegram_routes,
+        "settings",
+        config_module.load_settings({"TELEGRAM_WEBHOOK_SECRET": "secret-token"}),
+    )
+
+    response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["action"] == "ignored"
+    assert body["metadata"]["ignored_reason"] == "missing_request_body"
+
+
+def test_telegram_webhook_replies_with_usage_when_project_is_missing(monkeypatch) -> None:
+    from app.core import config as config_module
+    from app.api.routes import telegram as telegram_routes
+
+    monkeypatch.setattr(
+        telegram_routes,
+        "settings",
+        config_module.load_settings(
+            {
+                "TELEGRAM_WEBHOOK_SECRET": "secret-token",
+                "TELEGRAM_BOT_TOKEN": "telegram-token",
+            }
+        ),
+    )
+    sent_messages: list[tuple[int, str]] = []
+
+    def fake_send_message(chat_id: int, text: str) -> bool:
+        sent_messages.append((chat_id, text))
+        return True
+
+    monkeypatch.setattr(telegram_routes, "_send_telegram_message", fake_send_message)
+
+    response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+        json={
+            "update_id": 12,
+            "message": {
+                "message_id": 120,
+                "date": 1710000000,
+                "chat": {"id": 7001, "type": "private"},
+                "from": {"id": 44, "is_bot": False, "first_name": "Ana"},
+                "text": "/lummevia",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["action"] == "ignored"
+    assert body["metadata"]["ignored_reason"] == "missing_project"
+    assert body["metadata"]["telegram_response_sent"] is True
+    assert sent_messages == [
+        (
+            7001,
+            "Falta project=<shortName>.\n\n"
+            "Ejemplo:\n"
+            "/lummevia project=LUM\n"
+            "crear app para reservas medicas",
+        )
+    ]
+
+
 def test_telegram_webhook_ignores_disallowed_chat(monkeypatch) -> None:
     from app.core import config as config_module
     from app.api.routes import telegram as telegram_routes

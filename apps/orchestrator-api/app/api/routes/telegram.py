@@ -4,9 +4,10 @@ from datetime import UTC, datetime
 import json
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request as UrlRequest, urlopen
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from pydantic import ValidationError
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -111,7 +112,7 @@ def _send_telegram_message(chat_id: int, text: str) -> bool:
         "text": text[:4096],
         "disable_web_page_preview": True,
     }
-    request = Request(
+    request = UrlRequest(
         f"https://api.telegram.org/bot{bot_token}/sendMessage",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
@@ -353,12 +354,30 @@ def get_telegram_conversation(thread_id: str) -> ConversationThread:
 
 
 @router.post("/webhook", response_model=TelegramWebhookResponse)
-def telegram_webhook(
-    update: TelegramUpdate,
+async def telegram_webhook(
+    request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
     secret: str | None = Query(default=None),
 ) -> TelegramWebhookResponse:
     _validate_secret(x_telegram_bot_api_secret_token, secret)
+
+    raw_body = await request.body()
+    if not raw_body:
+        return TelegramWebhookResponse(
+            action="ignored",
+            metadata={"ignored_reason": "missing_request_body"},
+        )
+
+    try:
+        update = TelegramUpdate.model_validate_json(raw_body)
+    except (ValueError, ValidationError) as exc:
+        return TelegramWebhookResponse(
+            action="ignored",
+            metadata={
+                "ignored_reason": "invalid_update_payload",
+                "error": str(exc),
+            },
+        )
 
     message = update.message
     if message is None or not message.text:
@@ -394,9 +413,22 @@ def telegram_webhook(
     command, metadata, body = _parse_command(message.text)
     project = metadata.get("project")
     if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Telegram command must include project=<shortName>.",
+        telegram_response_sent = _send_telegram_message(
+            message.chat.id,
+            (
+                "Falta project=<shortName>.\n\n"
+                "Ejemplo:\n"
+                "/lummevia project=LUM\n"
+                "crear app para reservas medicas"
+            ),
+        )
+        return TelegramWebhookResponse(
+            action="ignored",
+            metadata={
+                **_build_thread_metadata(message, update),
+                "ignored_reason": "missing_project",
+                "telegram_response_sent": telegram_response_sent,
+            },
         )
 
     issue_id = _resolve_or_create_issue(
