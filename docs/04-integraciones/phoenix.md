@@ -185,9 +185,9 @@ password: valor de PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD
 
 Después del primer ingreso, crear una System API Key en Phoenix para que el orquestador pueda exportar trazas con auth activa.
 
-## Conexión pendiente del orquestador
+## Conexión del orquestador
 
-Para conectar la API ya desplegada con Phoenix externo:
+Para conectar o revalidar la API desplegada con Phoenix externo:
 
 1. Crear una System API Key en Phoenix.
 2. Cargar estas variables en el deploy Coolify del orquestador:
@@ -200,11 +200,63 @@ PHOENIX_BASE_URL=https://phoenix.lummevia.com
 PHOENIX_API_KEY=<system-api-key>
 ```
 
-3. Redeployar el orquestador.
+3. Publicar el código en `main` y redeployar el orquestador.
 4. Validar `/readiness`; el check Phoenix debe reportar `status=ok`, `base_url=https://phoenix.lummevia.com` y `api_key_configured=true`.
 5. Ejecutar un flujo mínimo del runtime que genere spans.
 6. Confirmar en Phoenix que aparecen trazas bajo el servicio `lummevia-orchestrator-api`.
 7. Si no aparecen trazas, revisar logs del orquestador y confirmar que el endpoint OTLP HTTP efectivo sea `https://phoenix.lummevia.com/v1/traces`.
+
+## Estado productivo validado
+
+Validado el 2026-05-28.
+
+Código desplegado:
+
+```text
+d340656 Enable Phoenix API key export
+```
+
+Deploy Coolify validado:
+
+```text
+nggo0c08k08w888s4cskc804
+```
+
+Container productivo validado:
+
+```text
+lssw8gk08scso4okcgs8wg00-223553712295
+```
+
+Readiness público validado:
+
+```json
+{
+  "phoenix": {
+    "status": "ok",
+    "base_url": "https://phoenix.lummevia.com",
+    "api_key_configured": true,
+    "non_blocking_export": true
+  }
+}
+```
+
+Smoke runtime validado:
+
+```text
+run_id: run-1caf9209-e446-4058-a7b2-ab960c3f4d8e
+issue_id: OS-PHX-PROD-SMOKE-2
+status: COMPLETED
+```
+
+Resultado observado:
+
+- el runtime completó el workflow
+- Phoenix recibió spans del run validado
+- no quedaron errores recientes `401 Invalid token` en logs del orquestador después del deploy `d340656`
+- los spans quedaron registrados en Phoenix con nombres como `step:workflow_completed`, `step:qa_validation` y `step:dev_implementation`
+
+Nota operativa: si vuelve a aparecer `Failed to export span batch code: 401, reason: Invalid token`, revisar primero que el deploy productivo esté corriendo un commit que incluya soporte para `PHOENIX_API_KEY` y que `/readiness` reporte `api_key_configured=true`.
 
 ## Estado actual
 
