@@ -33,12 +33,15 @@ from lummevia_conversations import (
 from lummevia_integrations import (
     YouTrackCommentPayload,
     YouTrackConfigurationError,
+    YouTrackIntegrationError,
     YouTrackIssueCreatePayload,
+    YouTrackProject,
 )
 from lummevia_reviews import HumanReviewRegistry, ReviewDecision, ReviewType
 
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
+_pending_telegram_starts: dict[int, dict[str, Any]] = {}
 
 
 class TelegramChat(BaseModel):
@@ -126,6 +129,10 @@ def _send_telegram_message(chat_id: int, text: str) -> bool:
     return body.get("ok") is True
 
 
+def clear_pending_telegram_starts() -> None:
+    _pending_telegram_starts.clear()
+
+
 def _client():
     try:
         return ensure_youtrack_available()
@@ -152,10 +159,16 @@ def _parse_command(text: str) -> tuple[str, dict[str, str], str]:
     metadata: dict[str, str] = {}
     for token in parts[1:]:
         if "=" not in token:
+            metadata.setdefault("_argument", token.strip())
             continue
         key, value = token.split("=", 1)
         if key and value:
-            metadata[key.strip().lower()] = value.strip()
+            normalized_key = key.strip().lower()
+            if normalized_key == "projetc":
+                metadata["project"] = value.strip()
+                metadata["_project_key_typo"] = "projetc"
+            else:
+                metadata[normalized_key] = value.strip()
 
     if command not in {"/lummevia", "/approve"}:
         command = "/lummevia"
@@ -185,7 +198,12 @@ def _resolve_or_create_issue(
     return created_issue.issue_id
 
 
-def _find_existing_thread(*, project: str, issue_id: str, chat_id: int) -> ConversationThread | None:
+def _find_existing_thread(
+    *,
+    project: str,
+    issue_id: str,
+    chat_id: int,
+) -> ConversationThread | None:
     registry = ConversationRegistry.default()
     for thread in registry.list_threads():
         state = thread.founder_pm_state
@@ -201,6 +219,47 @@ def _find_existing_thread(*, project: str, issue_id: str, chat_id: int) -> Conve
     return None
 
 
+def _has_pending_draft(thread: ConversationThread) -> bool:
+    state = thread.founder_pm_state
+    if state is None:
+        return False
+    return (
+        bool(state.metadata.get("brief_draft"))
+        or state.phase == ConversationPhase.PENDING_APPROVAL
+    )
+
+
+def _pending_approval_threads(
+    *,
+    chat_id: int,
+    project: str | None = None,
+    issue_id: str | None = None,
+) -> list[ConversationThread]:
+    threads = []
+    for thread in _telegram_threads():
+        state = thread.founder_pm_state
+        if state is None or state.telegram_chat_id != chat_id:
+            continue
+        if project is not None and thread.project != project:
+            continue
+        if issue_id is not None and thread.issue_id != issue_id:
+            continue
+        if _has_pending_draft(thread):
+            threads.append(thread)
+    return threads
+
+
+def _format_pending_approval_choices(threads: list[ConversationThread]) -> str:
+    lines = [
+        "Hay mas de un Business Brief pendiente. Indicame cual aprobar:",
+        "",
+    ]
+    for thread in threads:
+        lines.append(f"- {thread.issue_id} ({thread.project})")
+    lines.extend(["", "Ejemplo:", f"/approve issue={threads[0].issue_id}"])
+    return "\n".join(lines)
+
+
 def _telegram_threads() -> list[ConversationThread]:
     return [
         thread
@@ -208,6 +267,204 @@ def _telegram_threads() -> list[ConversationThread]:
         if thread.founder_pm_state is not None
         and thread.founder_pm_state.telegram_chat_id is not None
     ]
+
+
+def _list_youtrack_projects() -> list[YouTrackProject]:
+    return sorted(
+        _client().list_projects(),
+        key=lambda project: project.short_name.casefold(),
+    )
+
+
+def _format_project_selection_message(projects: list[YouTrackProject]) -> str:
+    if not projects:
+        return "No encontre proyectos activos en YouTrack para seleccionar."
+    lines = ["Sobre que proyecto queres trabajar?", ""]
+    for project in projects:
+        lines.append(f"- {project.short_name} - {project.name}")
+    lines.extend(["", "Responde con el codigo del proyecto, por ejemplo: LUM"])
+    return "\n".join(lines)
+
+
+def _project_by_short_name(
+    projects: list[YouTrackProject],
+    short_name: str,
+) -> YouTrackProject | None:
+    normalized = short_name.strip().casefold()
+    for project in projects:
+        if project.short_name.casefold() == normalized:
+            return project
+    return None
+
+
+def _project_selection_value(metadata: dict[str, str], body: str) -> str | None:
+    for candidate in (metadata.get("project"), metadata.get("_argument")):
+        if candidate is not None and candidate.strip():
+            return candidate.strip()
+    first_line = body.strip().splitlines()[0].strip() if body.strip() else ""
+    if first_line and " " not in first_line and "=" not in first_line:
+        return first_line
+    return None
+
+
+def _request_project_selection(
+    *,
+    message: TelegramMessage,
+    update: TelegramUpdate,
+    initial_intent: str,
+) -> TelegramWebhookResponse:
+    try:
+        projects = _list_youtrack_projects()
+        response_text = _format_project_selection_message(projects)
+        ignored_reason = None
+    except (YouTrackConfigurationError, YouTrackIntegrationError) as exc:
+        projects = []
+        response_text = (
+            "No pude consultar los proyectos de YouTrack. "
+            f"Detalle operativo: {exc}"
+        )
+        ignored_reason = "youtrack_projects_unavailable"
+
+    chat_id = message.chat.id if message.chat is not None else None
+    if chat_id is not None and projects:
+        _pending_telegram_starts[chat_id] = {
+            "status": "AWAITING_PROJECT",
+            "initial_intent": initial_intent,
+            "project_short_names": [project.short_name for project in projects],
+            "telegram_update_id": update.update_id,
+            "telegram_message_id": message.message_id,
+        }
+    telegram_response_sent = _send_telegram_message(chat_id or 0, response_text)
+    return TelegramWebhookResponse(
+        action="project_selection_requested",
+        metadata={
+            **_build_thread_metadata(message, update),
+            "ignored_reason": ignored_reason,
+            "project_count": len(projects),
+            "telegram_response_sent": telegram_response_sent,
+        },
+    )
+
+
+def _request_intent(
+    *,
+    project: str,
+    message: TelegramMessage,
+    update: TelegramUpdate,
+    metadata: dict[str, str],
+) -> TelegramWebhookResponse:
+    chat_id = message.chat.id if message.chat is not None else None
+    if chat_id is not None:
+        _pending_telegram_starts[chat_id] = {
+            "status": "AWAITING_INTENT",
+            "project": project,
+            "telegram_update_id": update.update_id,
+            "telegram_message_id": message.message_id,
+        }
+    telegram_response_sent = _send_telegram_message(
+        chat_id or 0,
+        (
+            f"Listo, trabajamos sobre {project}. "
+            "Contame que queres construir o resolver."
+        ),
+    )
+    return TelegramWebhookResponse(
+        action="intent_requested",
+        project=project,
+        metadata={
+            **_build_thread_metadata(message, update),
+            "project_key_typo": metadata.get("_project_key_typo"),
+            "telegram_response_sent": telegram_response_sent,
+        },
+    )
+
+
+def _resolve_project_from_pending_selection(
+    *,
+    message: TelegramMessage,
+    update: TelegramUpdate,
+    metadata: dict[str, str],
+    body: str,
+) -> tuple[str | None, str, TelegramWebhookResponse | None]:
+    chat_id = message.chat.id if message.chat is not None else None
+    if chat_id is None:
+        return None, body, None
+
+    pending = _pending_telegram_starts.get(chat_id)
+    if pending is None:
+        return None, body, None
+
+    if pending.get("status") == "AWAITING_INTENT":
+        project = str(pending.get("project") or "")
+        if not project:
+            _pending_telegram_starts.pop(chat_id, None)
+            return None, body, None
+        intent = body.strip() or metadata.get("_argument", "").strip()
+        if not intent:
+            return project, body, _request_intent(
+                project=project,
+                message=message,
+                update=update,
+                metadata=metadata,
+            )
+        _pending_telegram_starts.pop(chat_id, None)
+        return project, intent, None
+
+    candidate = _project_selection_value(metadata, body)
+    if candidate is None:
+        return None, body, _request_project_selection(
+            message=message,
+            update=update,
+            initial_intent=str(pending.get("initial_intent") or ""),
+        )
+
+    try:
+        projects = _list_youtrack_projects()
+    except (YouTrackConfigurationError, YouTrackIntegrationError) as exc:
+        telegram_response_sent = _send_telegram_message(
+            chat_id,
+            (
+                "No pude validar el proyecto contra YouTrack. "
+                f"Detalle operativo: {exc}"
+            ),
+        )
+        return None, body, TelegramWebhookResponse(
+            action="project_selection_requested",
+            metadata={
+                **_build_thread_metadata(message, update),
+                "ignored_reason": "youtrack_projects_unavailable",
+                "telegram_response_sent": telegram_response_sent,
+            },
+        )
+
+    project = _project_by_short_name(projects, candidate)
+    if project is None:
+        telegram_response_sent = _send_telegram_message(
+            chat_id,
+            "No reconozco ese proyecto.\n\n" + _format_project_selection_message(projects),
+        )
+        return None, body, TelegramWebhookResponse(
+            action="project_selection_requested",
+            metadata={
+                **_build_thread_metadata(message, update),
+                "ignored_reason": "unknown_project",
+                "project_candidate": candidate,
+                "project_count": len(projects),
+                "telegram_response_sent": telegram_response_sent,
+            },
+        )
+
+    initial_intent = str(pending.get("initial_intent") or "").strip()
+    if not initial_intent:
+        return project.short_name, body, _request_intent(
+            project=project.short_name,
+            message=message,
+            update=update,
+            metadata=metadata,
+        )
+
+    _pending_telegram_starts.pop(chat_id, None)
+    return project.short_name, initial_intent, None
 
 
 def _build_thread_metadata(message: TelegramMessage, update: TelegramUpdate) -> dict[str, Any]:
@@ -389,7 +646,12 @@ async def telegram_webhook(
             },
         )
 
-    if message.chat is None or message.chat.id is None or message.from_user is None or message.from_user.id is None:
+    if (
+        message.chat is None
+        or message.chat.id is None
+        or message.from_user is None
+        or message.from_user.id is None
+    ):
         return TelegramWebhookResponse(
             action="ignored",
             metadata={
@@ -412,36 +674,89 @@ async def telegram_webhook(
 
     command, metadata, body = _parse_command(message.text)
     project = metadata.get("project")
-    if project is None:
-        telegram_response_sent = _send_telegram_message(
-            message.chat.id,
-            (
-                "Falta project=<shortName>.\n\n"
-                "Ejemplo:\n"
-                "/lummevia project=LUM\n"
-                "crear app para reservas medicas"
-            ),
+    registry = ConversationRegistry.default()
+    existing_thread: ConversationThread | None = None
+
+    if command == "/approve":
+        candidate_threads = _pending_approval_threads(
+            chat_id=message.chat.id,
+            project=project,
+            issue_id=metadata.get("issue"),
         )
-        return TelegramWebhookResponse(
-            action="ignored",
-            metadata={
-                **_build_thread_metadata(message, update),
-                "ignored_reason": "missing_project",
-                "telegram_response_sent": telegram_response_sent,
-            },
+        if project is None and metadata.get("issue") is None:
+            if not candidate_threads:
+                telegram_response_sent = _send_telegram_message(
+                    message.chat.id,
+                    "No hay Business Brief pendiente de aprobacion para este chat.",
+                )
+                return TelegramWebhookResponse(
+                    action="approval_context_required",
+                    metadata={
+                        **_build_thread_metadata(message, update),
+                        "ignored_reason": "no_pending_approval",
+                        "telegram_response_sent": telegram_response_sent,
+                    },
+                )
+            if len(candidate_threads) > 1:
+                telegram_response_sent = _send_telegram_message(
+                    message.chat.id,
+                    _format_pending_approval_choices(candidate_threads),
+                )
+                return TelegramWebhookResponse(
+                    action="approval_context_required",
+                    metadata={
+                        **_build_thread_metadata(message, update),
+                        "ignored_reason": "multiple_pending_approvals",
+                        "pending_approval_count": len(candidate_threads),
+                        "telegram_response_sent": telegram_response_sent,
+                    },
+                )
+        if len(candidate_threads) == 1:
+            existing_thread = candidate_threads[0]
+            project = existing_thread.project
+            metadata["issue"] = existing_thread.issue_id
+
+    if project is None:
+        pending_project, pending_body, pending_response = _resolve_project_from_pending_selection(
+            message=message,
+            update=update,
+            metadata=metadata,
+            body=body,
+        )
+        if pending_response is not None:
+            return pending_response
+        project = pending_project
+        body = pending_body
+
+    if project is None:
+        return _request_project_selection(
+            message=message,
+            update=update,
+            initial_intent=body,
         )
 
-    issue_id = _resolve_or_create_issue(
-        project=project,
-        issue_id=metadata.get("issue"),
-        body=body,
-    )
-    registry = ConversationRegistry.default()
-    existing_thread = _find_existing_thread(
-        project=project,
-        issue_id=issue_id,
-        chat_id=message.chat.id,
-    )
+    if not body and command == "/lummevia" and metadata.get("issue") is None:
+        return _request_intent(
+            project=project,
+            message=message,
+            update=update,
+            metadata=metadata,
+        )
+
+    issue_id = metadata.get("issue")
+    if existing_thread is None:
+        issue_id = _resolve_or_create_issue(
+            project=project,
+            issue_id=issue_id,
+            body=body,
+        )
+        existing_thread = _find_existing_thread(
+            project=project,
+            issue_id=issue_id,
+            chat_id=message.chat.id,
+        )
+    else:
+        issue_id = existing_thread.issue_id
 
     if existing_thread is None:
         founder_pm_state = build_initial_founder_pm_state(
@@ -490,6 +805,7 @@ async def telegram_webhook(
             "source": "telegram",
             "command": command,
             "conversation_event": "FOUNDER_RESPONSE_RECEIVED",
+            "project_key_typo": metadata.get("_project_key_typo"),
         },
     )
 
@@ -499,8 +815,7 @@ async def telegram_webhook(
         issue_id=issue_id,
         telegram_chat_id=message.chat.id,
     )
-    has_pending_draft = bool(state.metadata.get("brief_draft")) or state.phase == ConversationPhase.PENDING_APPROVAL
-    if has_pending_draft and (
+    if _has_pending_draft(thread) and (
         command == "/approve" or is_explicit_approval(founder_message)
     ):
         review_id = _create_review_for_approval(thread)
@@ -597,7 +912,7 @@ async def telegram_webhook(
             (
                 (decision.last_pm_message or "Business Brief draft creado.")
                 + "\n\nPara aprobarlo, responde:\n"
-                f"/approve project={project} issue={issue_id}\napruebo"
+                "/approve"
             ),
         )
         return _response_for_thread(

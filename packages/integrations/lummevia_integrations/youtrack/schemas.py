@@ -18,6 +18,14 @@ class YouTrackIssueRef(YouTrackBaseSchema):
     project: str = Field(min_length=1)
 
 
+class YouTrackProject(YouTrackBaseSchema):
+    id: str | None = None
+    short_name: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    archived: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class YouTrackIssueCustomField(YouTrackBaseSchema):
     name: str = Field(min_length=1)
     value: Any = None

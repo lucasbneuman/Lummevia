@@ -24,6 +24,7 @@ from lummevia_integrations.youtrack.schemas import (
     YouTrackIssueUpdatePayload,
     YouTrackKnowledgeDocument,
     YouTrackKnowledgeDocumentUpsertPayload,
+    YouTrackProject,
 )
 
 ISSUE_FIELDS = (
@@ -34,6 +35,7 @@ ISSUE_FIELDS = (
 )
 COMMENT_FIELDS = "id,text"
 ARTICLE_FIELDS = "id,idReadable,summary,content,project(shortName),parentArticle(id),tags(name)"
+PROJECT_FIELDS = "id,name,shortName,archived"
 
 
 class YouTrackClient:
@@ -232,8 +234,27 @@ class YouTrackClient:
             article_data["url"] = article_url
         return YouTrackKnowledgeDocument.model_validate(article_data)
 
+    def _parse_project(self, payload: dict[str, Any]) -> YouTrackProject:
+        short_name = payload.get("shortName") or payload.get("short_name") or payload.get("id")
+        name = payload.get("name") or short_name or "Unknown project"
+        return YouTrackProject.model_validate(
+            {
+                "id": payload.get("id"),
+                "short_name": short_name or "UNKNOWN",
+                "name": name,
+                "archived": bool(payload.get("archived", False)),
+                "metadata": {
+                    key: value
+                    for key, value in payload.items()
+                    if key not in {"id", "name", "shortName", "short_name", "archived"}
+                },
+            }
+        )
+
     @staticmethod
-    def _build_issue_custom_fields(payload: YouTrackIssueUpdatePayload | YouTrackIssueCreatePayload) -> list[dict[str, Any]]:
+    def _build_issue_custom_fields(
+        payload: YouTrackIssueUpdatePayload | YouTrackIssueCreatePayload,
+    ) -> list[dict[str, Any]]:
         custom_fields: list[dict[str, Any]] = []
         for name, value in payload.custom_fields.items():
             custom_fields.append({"name": name, "value": value})
@@ -269,6 +290,25 @@ class YouTrackClient:
             },
         )
         return [self._parse_issue(item) for item in payload or []]
+
+    def list_projects(
+        self,
+        *,
+        include_archived: bool = False,
+        limit: int = 100,
+    ) -> list[YouTrackProject]:
+        payload = self._request(
+            "GET",
+            "/admin/projects",
+            params={
+                "fields": PROJECT_FIELDS,
+                "$top": limit,
+            },
+        )
+        projects = [self._parse_project(item) for item in payload or []]
+        if include_archived:
+            return projects
+        return [project for project in projects if not project.archived]
 
     def add_comment(self, issue_id: str, payload: YouTrackCommentPayload) -> YouTrackComment:
         comment_payload = self._request(

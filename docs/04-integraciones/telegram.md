@@ -32,18 +32,39 @@ Founder approval
 handoff al runtime
 ```
 
-El endpoint espera mensajes de texto con este formato:
+El comando principal inicia una conversación guiada:
+
+```text
+/lummevia
+```
+
+El PM lista los proyectos activos de YouTrack. El Founder responde con el
+`shortName` del proyecto:
+
+```text
+LUM
+```
+
+Luego el PM pide la intención o respuesta del Founder y usa YouTrack como
+contexto operacional para iterar el Business Brief.
+
+También se mantiene el formato explícito para compatibilidad operativa:
 
 ```text
 /lummevia project=<shortName> [issue=<ISSUE-ID>]
 texto de intención o respuesta del Founder
 ```
 
-Para aprobar un brief pendiente:
+Para aprobar el único brief pendiente del chat:
 
 ```text
-/approve project=<shortName> issue=<ISSUE-ID>
-apruebo
+/approve
+```
+
+Si hay más de un brief pendiente, el bot pide desambiguar con:
+
+```text
+/approve issue=<ISSUE-ID>
 ```
 
 ## Variables de configuración
@@ -94,14 +115,16 @@ python scripts/smoke_coolify.py --base-url "$PUBLIC_API_URL" --telegram-secret "
 Luego enviar un mensaje al bot:
 
 ```text
-/lummevia project=LUM
-crear app para reservas medicas
+/lummevia
 ```
 
 El resultado esperado es:
+- lista de proyectos activos de YouTrack
+- selección de proyecto por `shortName`
 - issue creado o actualizado en YouTrack
 - comentario con la respuesta del Founder
 - respuesta del bot en Telegram con preguntas del PM, draft o confirmacion
+- aprobación final con `/approve`
 - conversación visible en `GET /telegram/conversations`
 
 ## Reglas

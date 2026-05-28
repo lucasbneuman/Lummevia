@@ -170,6 +170,31 @@ def test_youtrack_client_reads_issue_and_searches_related_context() -> None:
     assert context.sources[0].source_id == "LUM-101"
 
 
+def test_youtrack_client_lists_active_projects() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/admin/projects":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": "0-1", "shortName": "LUM", "name": "Lummevia OS", "archived": False},
+                    {"id": "0-2", "shortName": "OLD", "name": "Old project", "archived": True},
+                ],
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    client = YouTrackClient(
+        base_url="https://youtrack.example.com",
+        token="token-123",
+        transport=_build_transport(handler),
+    )
+
+    projects = client.list_projects()
+
+    assert len(projects) == 1
+    assert projects[0].short_name == "LUM"
+    assert projects[0].name == "Lummevia OS"
+
+
 def test_youtrack_client_can_create_update_and_comment_on_issues() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/youtrack/api/issues" and request.method == "POST":

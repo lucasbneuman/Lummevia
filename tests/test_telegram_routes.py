@@ -51,6 +51,19 @@ def test_telegram_send_message_uses_bot_api(monkeypatch) -> None:
     assert captured["timeout"] == 10
 
 
+def test_telegram_parse_command_accepts_project_typo() -> None:
+    from app.api.routes import telegram as telegram_routes
+
+    command, metadata, body = telegram_routes._parse_command(
+        "/lummevia projetc=LUM\ncrear app"
+    )
+
+    assert command == "/lummevia"
+    assert metadata["project"] == "LUM"
+    assert metadata["_project_key_typo"] == "projetc"
+    assert body == "crear app"
+
+
 def test_telegram_webhook_creates_issue_and_pm_questions_from_founder_intent(monkeypatch) -> None:
     from app.core import config as config_module
     from app.api.routes import telegram as telegram_routes
@@ -336,7 +349,7 @@ def test_telegram_webhook_requires_explicit_approval_and_creates_review(monkeypa
                 "date": 1710000005,
                 "chat": {"id": 7001, "type": "private"},
                 "from": {"id": 44, "is_bot": False, "first_name": "Ana", "username": "ana"},
-                "text": "/approve project=LUM issue=LUM-888",
+                "text": "/approve",
             },
         },
     )
@@ -361,7 +374,58 @@ def test_telegram_webhook_requires_explicit_approval_and_creates_review(monkeypa
     review = HumanReviewRegistry.default().get_review(body["review_id"])
     assert review is not None
     assert review.decision.value == "APPROVED"
-    assert any("Founder approved the Business Brief from Telegram" in payload for payload in comments)
+    assert any(
+        "Founder approved the Business Brief from Telegram" in payload
+        for payload in comments
+    )
+
+
+def test_telegram_webhook_approve_without_pending_brief_returns_helpful_message(
+    monkeypatch,
+) -> None:
+    from app.core import config as config_module
+    from app.api.routes import telegram as telegram_routes
+
+    monkeypatch.setattr(
+        telegram_routes,
+        "settings",
+        config_module.load_settings(
+            {
+                "TELEGRAM_WEBHOOK_SECRET": "secret-token",
+                "TELEGRAM_BOT_TOKEN": "telegram-token",
+            }
+        ),
+    )
+    sent_messages: list[tuple[int, str]] = []
+
+    def fake_send_message(chat_id: int, text: str) -> bool:
+        sent_messages.append((chat_id, text))
+        return True
+
+    monkeypatch.setattr(telegram_routes, "_send_telegram_message", fake_send_message)
+
+    response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+        json={
+            "update_id": 16,
+            "message": {
+                "message_id": 133,
+                "date": 1710000003,
+                "chat": {"id": 7001, "type": "private"},
+                "from": {"id": 44, "is_bot": False, "first_name": "Ana"},
+                "text": "/approve",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["action"] == "approval_context_required"
+    assert body["metadata"]["ignored_reason"] == "no_pending_approval"
+    assert sent_messages == [
+        (7001, "No hay Business Brief pendiente de aprobacion para este chat.")
+    ]
 
 
 def test_telegram_conversation_endpoints_list_and_get_threads(monkeypatch) -> None:
@@ -485,7 +549,7 @@ def test_telegram_webhook_ignores_empty_body(monkeypatch) -> None:
     assert body["metadata"]["ignored_reason"] == "missing_request_body"
 
 
-def test_telegram_webhook_replies_with_usage_when_project_is_missing(monkeypatch) -> None:
+def test_telegram_webhook_lists_projects_when_project_is_missing(monkeypatch) -> None:
     from app.core import config as config_module
     from app.api.routes import telegram as telegram_routes
 
@@ -496,6 +560,8 @@ def test_telegram_webhook_replies_with_usage_when_project_is_missing(monkeypatch
             {
                 "TELEGRAM_WEBHOOK_SECRET": "secret-token",
                 "TELEGRAM_BOT_TOKEN": "telegram-token",
+                "YOUTRACK_BASE_URL": "https://youtrack.example.com",
+                "YOUTRACK_TOKEN": "token-123",
             }
         ),
     )
@@ -506,6 +572,25 @@ def test_telegram_webhook_replies_with_usage_when_project_is_missing(monkeypatch
         return True
 
     monkeypatch.setattr(telegram_routes, "_send_telegram_message", fake_send_message)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/admin/projects":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": "0-1", "shortName": "LUM", "name": "Lummevia OS", "archived": False},
+                    {"id": "0-2", "shortName": "OLD", "name": "Old project", "archived": True},
+                ],
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    set_youtrack_client_override(
+        YouTrackClient(
+            base_url="https://youtrack.example.com",
+            token="token-123",
+            transport=httpx.MockTransport(handler),
+        )
+    )
 
     response = client.post(
         "/telegram/webhook",
@@ -524,18 +609,145 @@ def test_telegram_webhook_replies_with_usage_when_project_is_missing(monkeypatch
 
     assert response.status_code == 200
     body = response.json()
-    assert body["action"] == "ignored"
-    assert body["metadata"]["ignored_reason"] == "missing_project"
+    assert body["action"] == "project_selection_requested"
+    assert body["metadata"]["project_count"] == 1
     assert body["metadata"]["telegram_response_sent"] is True
     assert sent_messages == [
         (
             7001,
-            "Falta project=<shortName>.\n\n"
-            "Ejemplo:\n"
-            "/lummevia project=LUM\n"
-            "crear app para reservas medicas",
+            "Sobre que proyecto queres trabajar?\n\n"
+            "- LUM - Lummevia OS\n\n"
+            "Responde con el codigo del proyecto, por ejemplo: LUM",
         )
     ]
+
+
+def test_telegram_webhook_selects_project_then_creates_issue_from_intent(monkeypatch) -> None:
+    from app.core import config as config_module
+    from app.api.routes import telegram as telegram_routes
+
+    monkeypatch.setattr(
+        telegram_routes,
+        "settings",
+        config_module.load_settings(
+            {
+                "TELEGRAM_WEBHOOK_SECRET": "secret-token",
+                "TELEGRAM_BOT_TOKEN": "telegram-token",
+                "YOUTRACK_BASE_URL": "https://youtrack.example.com",
+                "YOUTRACK_TOKEN": "token-123",
+            }
+        ),
+    )
+    sent_messages: list[tuple[int, str]] = []
+
+    def fake_send_message(chat_id: int, text: str) -> bool:
+        sent_messages.append((chat_id, text))
+        return True
+
+    monkeypatch.setattr(telegram_routes, "_send_telegram_message", fake_send_message)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/admin/projects":
+            return httpx.Response(
+                200,
+                json=[{"id": "0-1", "shortName": "LUM", "name": "Lummevia OS", "archived": False}],
+            )
+        if request.url.path == "/api/issues":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "2-601",
+                    "idReadable": "LUM-601",
+                    "summary": "crear app para reservas medicas",
+                    "description": "crear app para reservas medicas",
+                    "project": {"shortName": "LUM"},
+                    "customFields": [],
+                    "tags": [],
+                },
+            )
+        if request.url.path == "/api/issues/LUM-601":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "2-601",
+                    "idReadable": "LUM-601",
+                    "summary": "crear app para reservas medicas",
+                    "description": "crear app para reservas medicas",
+                    "project": {"shortName": "LUM"},
+                    "customFields": [],
+                    "tags": [],
+                },
+            )
+        if request.url.path == "/api/articles":
+            return httpx.Response(200, json=[])
+        if request.url.path == "/api/issues/LUM-601/comments":
+            return httpx.Response(200, json={"id": "4-601", "text": "Comment"})
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    set_youtrack_client_override(
+        YouTrackClient(
+            base_url="https://youtrack.example.com",
+            token="token-123",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+
+    start_response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+        json={
+            "update_id": 13,
+            "message": {
+                "message_id": 130,
+                "date": 1710000000,
+                "chat": {"id": 7001, "type": "private"},
+                "from": {"id": 44, "is_bot": False, "first_name": "Ana"},
+                "text": "/lummevia",
+            },
+        },
+    )
+    project_response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+        json={
+            "update_id": 14,
+            "message": {
+                "message_id": 131,
+                "date": 1710000001,
+                "chat": {"id": 7001, "type": "private"},
+                "from": {"id": 44, "is_bot": False, "first_name": "Ana"},
+                "text": "LUM",
+            },
+        },
+    )
+    intent_response = client.post(
+        "/telegram/webhook",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+        json={
+            "update_id": 15,
+            "message": {
+                "message_id": 132,
+                "date": 1710000002,
+                "chat": {"id": 7001, "type": "private"},
+                "from": {"id": 44, "is_bot": False, "first_name": "Ana"},
+                "text": "crear app para reservas medicas",
+            },
+        },
+    )
+
+    assert start_response.status_code == 200
+    assert start_response.json()["action"] == "project_selection_requested"
+    assert project_response.status_code == 200
+    assert project_response.json()["action"] == "intent_requested"
+    assert intent_response.status_code == 200
+    body = intent_response.json()
+    assert body["action"] == "pm_questions"
+    assert body["project"] == "LUM"
+    assert body["issue_id"] == "LUM-601"
+    assert sent_messages[1] == (
+        7001,
+        "Listo, trabajamos sobre LUM. Contame que queres construir o resolver.",
+    )
 
 
 def test_telegram_webhook_ignores_disallowed_chat(monkeypatch) -> None:

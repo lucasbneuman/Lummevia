@@ -39,6 +39,7 @@ from lummevia_integrations.youtrack import (
     YouTrackIssueUpdatePayload,
     YouTrackKnowledgeDocument,
     YouTrackKnowledgeDocumentUpsertPayload,
+    YouTrackProject,
 )
 
 __all__ = [
@@ -78,4 +79,5 @@ __all__ = [
     "YouTrackIssueUpdatePayload",
     "YouTrackKnowledgeDocument",
     "YouTrackKnowledgeDocumentUpsertPayload",
+    "YouTrackProject",
 ]
