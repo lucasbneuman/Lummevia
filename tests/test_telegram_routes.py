@@ -13,6 +13,44 @@ from main import app
 client = TestClient(app)
 
 
+def test_telegram_send_message_uses_bot_api(monkeypatch) -> None:
+    from app.core import config as config_module
+    from app.api.routes import telegram as telegram_routes
+
+    monkeypatch.setattr(
+        telegram_routes,
+        "settings",
+        config_module.load_settings({"TELEGRAM_BOT_TOKEN": "telegram-token"}),
+    )
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self) -> bytes:
+            return b'{"ok": true}'
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["body"] = request.data.decode()
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(telegram_routes, "urlopen", fake_urlopen)
+
+    sent = telegram_routes._send_telegram_message(7001, "Hola")
+
+    assert sent is True
+    assert captured["url"] == "https://api.telegram.org/bottelegram-token/sendMessage"
+    assert '"chat_id": 7001' in captured["body"]
+    assert '"text": "Hola"' in captured["body"]
+    assert captured["timeout"] == 10
+
+
 def test_telegram_webhook_creates_issue_and_pm_questions_from_founder_intent(monkeypatch) -> None:
     from app.core import config as config_module
     from app.api.routes import telegram as telegram_routes

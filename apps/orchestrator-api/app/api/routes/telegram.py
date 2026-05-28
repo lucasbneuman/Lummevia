@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -96,6 +99,30 @@ def _is_allowed_chat(chat_id: int) -> bool:
     if not allowed_chat_ids:
         return True
     return str(chat_id) in allowed_chat_ids
+
+
+def _send_telegram_message(chat_id: int, text: str) -> bool:
+    bot_token = settings.telegram.bot_token
+    if bot_token is None:
+        return False
+
+    payload = {
+        "chat_id": chat_id,
+        "text": text[:4096],
+        "disable_web_page_preview": True,
+    }
+    request = Request(
+        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+        return False
+    return body.get("ok") is True
 
 
 def _client():
@@ -461,6 +488,13 @@ def telegram_webhook(
         registry.save_thread(thread)
         _sync_approval(issue_id, thread.thread_id, message.message_id, review_id)
         handoff, runtime_state = create_or_get_handoff_and_run(thread_id=thread.thread_id)
+        telegram_response_sent = _send_telegram_message(
+            message.chat.id,
+            (
+                "Aprobacion recibida. El Business Brief quedo aprobado y "
+                "se creo el handoff tecnico."
+            ),
+        )
         return _response_for_thread(
             action="approved",
             project=project,
@@ -472,6 +506,7 @@ def telegram_webhook(
                 **_build_thread_metadata(message, update),
                 "handoff_id": handoff.handoff_id,
                 "workflow_run_id": runtime_state.run.run_id,
+                "telegram_response_sent": telegram_response_sent,
             },
         )
 
@@ -506,6 +541,10 @@ def telegram_webhook(
 
     if decision.phase == ConversationPhase.PM_QUESTIONS:
         _sync_pm_questions(issue_id, decision.last_pm_message or "")
+        telegram_response_sent = _send_telegram_message(
+            message.chat.id,
+            decision.last_pm_message or "Necesito mas contexto para avanzar.",
+        )
         return _response_for_thread(
             action="pm_questions",
             project=project,
@@ -515,11 +554,20 @@ def telegram_webhook(
             metadata={
                 **_build_thread_metadata(message, update),
                 "youtrack_context_loaded": bool(youtrack_context),
+                "telegram_response_sent": telegram_response_sent,
             },
         )
 
     if decision.brief_draft is not None:
         _sync_brief_draft(issue_id, decision.brief_draft)
+        telegram_response_sent = _send_telegram_message(
+            message.chat.id,
+            (
+                (decision.last_pm_message or "Business Brief draft creado.")
+                + "\n\nPara aprobarlo, responde:\n"
+                f"/approve project={project} issue={issue_id}\napruebo"
+            ),
+        )
         return _response_for_thread(
             action="pending_approval",
             project=project,
@@ -530,9 +578,14 @@ def telegram_webhook(
                 **_build_thread_metadata(message, update),
                 "youtrack_context_loaded": bool(youtrack_context),
                 "brief_draft_created_at": decision.metadata.get("draft_created_at"),
+                "telegram_response_sent": telegram_response_sent,
             },
         )
 
+    telegram_response_sent = _send_telegram_message(
+        message.chat.id,
+        f"Recibido. Actualice la conversacion para {issue_id}.",
+    )
     return _response_for_thread(
         action="captured",
         project=project,
@@ -542,5 +595,6 @@ def telegram_webhook(
         metadata={
             **_build_thread_metadata(message, update),
             "youtrack_context_loaded": bool(youtrack_context),
+            "telegram_response_sent": telegram_response_sent,
         },
     )

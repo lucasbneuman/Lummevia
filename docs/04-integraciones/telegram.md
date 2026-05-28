@@ -101,7 +101,7 @@ crear app para reservas medicas
 El resultado esperado es:
 - issue creado o actualizado en YouTrack
 - comentario con la respuesta del Founder
-- preguntas del PM o draft de Business Brief
+- respuesta del bot en Telegram con preguntas del PM, draft o confirmacion
 - conversación visible en `GET /telegram/conversations`
 
 ## Reglas
